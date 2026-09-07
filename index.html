@@ -38,9 +38,15 @@
 *{box-sizing:border-box;min-width:0}
 html{-webkit-text-size-adjust:100%}
 body{
-  margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+  margin:0; color:var(--ink); font-family:var(--sans);
   font-size:15px; line-height:1.45; -webkit-font-smoothing:antialiased;
   font-variant-numeric:tabular-nums; overflow-x:hidden;
+  /* elevacao radial atras do heroi: uma unica respiracao, nao um degrade decorativo */
+  background:
+    radial-gradient(120% 62% at 50% -8%, #131A22 0%, rgba(19,26,34,0) 62%),
+    var(--bg);
+  background-attachment:fixed;
+  min-height:100svh;
 }
 button,input,select,textarea{font:inherit;color:inherit;font-variant-numeric:tabular-nums}
 button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
@@ -68,6 +74,15 @@ button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
 }
 .pill b{color:var(--ink);font-weight:500}
 main{padding:0 var(--pad) 128px;max-width:760px;margin:0 auto}
+/* no desktop o conteudo vira duas colunas: acaba o vazio da direita */
+@media (min-width:1000px){
+  main{max-width:1140px}
+  #s-resumo.on{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
+    gap:0 44px;align-items:start}
+  #s-resumo > .col-a{grid-column:1}
+  #s-resumo > .col-b{grid-column:2}
+  #s-resumo > .col-b .hdr:first-child{margin-top:20px}
+}
 section{display:none} section.on{display:block}
 
 .hdr{
@@ -104,22 +119,37 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   stroke-linecap:round;stroke-linejoin:round}
 @media (max-width:359px){nav button{padding:9px 11px} nav button.on .lb{display:none}}
 
-/* ---------------- resumo ---------------- */
-.hero{padding:30px 0 4px}
+/* ---------------- resumo: a trajetoria e o heroi ---------------- */
+.arco{margin:14px 0 0;position:relative}
+.arco svg{display:block;width:100%;height:auto}
+.arco .marca{
+  position:absolute;bottom:4px;font-size:10.5px;color:var(--ink-3);
+  transform:translateX(-50%);white-space:nowrap;pointer-events:none;
+  text-shadow:0 1px 3px var(--bg), 0 0 6px var(--bg);
+}
+.hero{padding:20px 0 0;display:grid;gap:20px}
 .hero .val{
-  font-family:var(--serif);font-size:clamp(42px,13.5vw,62px);line-height:.95;
-  letter-spacing:-.015em;display:flex;align-items:baseline;gap:.12em;
+  font-family:var(--serif);font-size:clamp(40px,12vw,58px);line-height:.92;
+  letter-spacing:-.018em;display:flex;align-items:baseline;gap:.1em;
 }
-.hero .cur{font-size:.34em;color:var(--ink-3);letter-spacing:.03em}
-.hero .cap{color:var(--ink-3);font-size:12.5px;margin-top:12px}
-.hero .delta{
-  margin-top:18px;display:inline-flex;align-items:baseline;gap:9px;
-  padding:8px 14px 8px 12px;border-radius:999px;font-size:13.5px;
-  border:1px solid var(--line-2);background:var(--surface);
+.hero .cur{font-size:.32em;color:var(--ink-3);letter-spacing:.03em}
+.hero .cap{color:var(--ink-3);font-size:12.5px;margin-top:10px;line-height:1.5}
+.hero .cap b{color:var(--ink-2);font-weight:500}
+/* os fatos se separam por FIO, nao por caixa: a estrutura carrega a informacao */
+.fatos{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  border-top:1px solid var(--line);
 }
-.hero .delta b{font-weight:600;font-size:15px}
-.hero .delta.up{border-color:var(--tif-d);background:var(--tif-g)}
-.hero .delta.down{border-color:var(--clay);background:var(--clay-g)}
+.fato{padding:14px 0 0;border-left:1px solid var(--line);padding-left:16px}
+.fato:first-child{border-left:0;padding-left:0}
+.fato .k{font-size:11px;color:var(--ink-3);margin-bottom:4px}
+.fato .v{font-size:15.5px;letter-spacing:-.01em}
+.fato .v small{font-size:12px;color:var(--ink-3);font-weight:400}
+@media (max-width:520px){
+  .fato{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:12px}
+  .fato:first-child{border-top:0;padding-top:14px}
+  .fatos{grid-template-columns:1fr;gap:12px}
+}
 
 .nota{
   margin:22px 0 0;padding:15px 16px;border-radius:var(--r);
@@ -332,6 +362,24 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{
 .lg-erro{color:var(--clay);font-size:13px;margin-top:14px;min-height:19px}
 .lg-pe{color:var(--ink-4);font-size:11.5px;margin-top:22px;text-align:center}
 
+/* ---------------- convite de instalacao ---------------- */
+#instalar{
+  position:fixed;left:50%;transform:translateX(-50%);z-index:45;
+  bottom:calc(80px + env(safe-area-inset-bottom));
+  width:min(440px, calc(100vw - 24px));
+  background:rgba(24,29,36,.96);backdrop-filter:blur(16px) saturate(1.3);
+  border:1px solid var(--line-2);border-radius:14px;padding:14px 16px;
+  box-shadow:0 12px 36px rgba(0,0,0,.55);display:none;gap:12px;align-items:center;
+}
+#instalar.on{display:flex}
+#instalar .ico{width:34px;height:34px;border-radius:9px;flex:none;
+  background:linear-gradient(150deg,var(--tif),var(--ouro));opacity:.9}
+#instalar .tx{flex:1;min-width:0;font-size:13px;line-height:1.45;color:var(--ink-2)}
+#instalar .tx b{color:var(--ink);font-weight:600;display:block;font-size:14px}
+#instalar .bts{display:flex;gap:6px;flex:none}
+body.instalado{}
+body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
+
 /* ---------------- avisos ---------------- */
 .aviso{border:1px solid var(--sand);background:var(--sand-g);color:var(--sand);
   border-radius:var(--r);padding:11px 14px;font-size:13px;margin:16px 0}
@@ -391,6 +439,15 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{
     <button data-tab="plano"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M9.5 9.5V20"/></svg><span class="lb">Plano</span></button>
     <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 7h8M17 7h3M4 12h3M12 12h8M4 17h10M19 17h1"/><circle cx="14.5" cy="7" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><circle cx="16.5" cy="17" r="2.2"/></svg><span class="lb">Ajustes</span></button>
   </nav>
+</div>
+
+<div id="instalar">
+  <span class="ico" aria-hidden="true"></span>
+  <span class="tx"><b>Instalar o Finanças</b><span id="inst-txt">Abre em tela cheia, sem a barra do navegador.</span></span>
+  <span class="bts">
+    <button class="btn mini pri" id="inst-ok">Instalar</button>
+    <button class="btn mini plain" id="inst-nao">Agora não</button>
+  </span>
 </div>
 
 <div class="sheet-bg" id="sheet-bg"><div class="sheet" id="sheet"></div></div>
@@ -848,40 +905,114 @@ function renderResumo(){
   const fechados = proj.filter(m => !m.aberto);
   const ult = fechados[fechados.length-1];
   const fim = proj[proj.length-1];
-
-  let hero;
-  if (ult){
-    const d = ult.diferenca;
-    hero =
-      '<div class="hero">' +
-        '<div class="val"><span class="cur">R$</span>' + esc(fmtn(ult.realizado)) + '</div>' +
-        '<div class="cap">patrimônio apurado em ' + rotuloL(ult.competencia) + '</div>' +
-        '<div class="delta ' + (d>=0?"up":"down") + '">' +
-          '<b class="' + (d>=0?"pos":"neg") + '">' + esc(fmtsin(d)) + '</b>' +
-          '<span class="d2">' + (d>=0?"acima":"abaixo") + ' do plano · ' + fmtpct(ult.variacao) + '</span>' +
-        '</div>' +
-      '</div>';
-  } else {
-    hero = '<div class="hero"><div class="val"><span class="cur">R$</span>' +
-      esc(fmtn(proj.length ? proj[0].saldoInicial : 0)) +
-      '</div><div class="cap">ponto de partida — nenhum mês apurado</div></div>';
-  }
-
   const anos = [...new Set(proj.map(m => m.competencia.slice(0,4)))];
   if (!anos.includes(anoSel)) anoSel = anos.includes(compHoje().slice(0,4)) ? compHoje().slice(0,4) : anos[0];
 
-  el.innerHTML = avisoTravado() + hero + leitura() + kpis(fechados, fim) +
-    '<div class="hdr"><h2>Mês a mês</h2>' +
-      '<span class="seg" id="seg-ano">' + anos.map(a =>
-        '<button data-a="' + a + '"' + (a===anoSel?' class="on"':'') + '>' + a + '</button>').join("") +
-      '</span></div>' +
-    '<div class="grafwrap" id="graf"></div>' +
-    '<div class="regua">' + listaAno(anoSel) + '</div>';
+  const d = ult ? ult.diferenca : null;
+  const heroi =
+    '<div class="arco" id="arco"></div>' +
+    '<div class="hero"><div>' +
+      '<div class="val"><span class="cur">R$</span>' +
+        esc(fmtn(ult ? ult.realizado : (proj[0] ? proj[0].saldoInicial : 0))) + '</div>' +
+      '<div class="cap">' + (ult
+        ? 'apurado em ' + rotuloL(ult.competencia) + ' — <b class="' + (d>=0?"pos":"neg") + '">' +
+          esc(fmtsin(d)) + '</b> ' + (d>=0 ? "acima" : "abaixo") + ' do plano, ' + fmtpct(ult.variacao)
+        : 'ponto de partida — nenhum mês apurado ainda') + '</div>' +
+    '</div></div>' +
+    fatos(fechados, fim);
 
+  el.innerHTML = avisoTravado() +
+    '<div class="col-a">' + heroi + leitura() + '</div>' +
+    '<div class="col-b">' +
+      '<div class="hdr"><h2>Mês a mês</h2>' +
+        '<span class="seg" id="seg-ano">' + anos.map(a =>
+          '<button data-a="' + a + '"' + (a===anoSel?' class="on"':'') + '>' + a + '</button>').join("") +
+        '</span></div>' +
+      '<div class="grafwrap" id="graf"></div>' +
+      '<div class="regua">' + listaAno(anoSel) + '</div>' +
+    '</div>';
+
+  desenharArco();
   desenharCombo(anoSel);
   el.querySelectorAll("#seg-ano button").forEach(b => b.onclick = () => { anoSel = b.dataset.a; render(); });
   el.querySelectorAll("[data-comp]").forEach(b => b.onclick = () => folhaMes(b.dataset.comp));
 }
+
+function fatos(fechados, fim){
+  const c = compromissos();
+  const linhas = [
+    ["Projeção " + rotulo(fim.competencia), fmt(fim.previsao), ""],
+    ["Meses apurados", fechados.length, "<small> de " + proj.length + "</small>"],
+  ];
+  if (c) linhas.push(["A pagar até " + rotulo(c.ultimo),
+                      '<span class="abr">' + fmt(c.restante) + "</span>",
+                      "<small> em " + c.n + " compromisso" + (c.n>1?"s":"") + "</small>"]);
+  return '<div class="fatos">' + linhas.map(l =>
+    '<div class="fato"><div class="k">' + l[0] + '</div>' +
+    '<div class="v">' + l[1] + l[2] + '</div></div>').join("") + '</div>';
+}
+
+// O ARCO: os 48 meses em forma pura -- sem eixo, sem grade, sem rotulo.
+// E a assinatura do app, nao um instrumento de leitura; quem mede e o
+// grafico da aba Patrimonio. A linha se desenha UMA vez, na primeira carga.
+let arcoJaAnimou = false;
+function desenharArco(){
+  const box = document.getElementById("arco");
+  if (!box || proj.length < 2) return;
+  const W = Math.max(280, Math.round(box.getBoundingClientRect().width) || 340);
+  const H = Math.round(Math.min(200, Math.max(140, W * 0.42)));
+  const PT = 12, PB = 18;
+  const vals = proj.flatMap(p => [p.previsao, p.realizado].filter(v => !vazio(v)));
+  let mx = Math.max.apply(null, vals), mn = Math.min.apply(null, vals);
+  const folga = (mx - mn) * 0.12 || 1; mx += folga; mn -= folga;
+  const x = i => (i/(proj.length-1)) * W;
+  const y = v => PT + (1 - (v-mn)/((mx-mn)||1)) * (H-PT-PB);
+
+  // area do plano: a faixa tiffany por baixo, quieta
+  const dPlano = proj.map((p,i) => (i?"L":"M") + x(i).toFixed(1) + " " + y(p.previsao).toFixed(1)).join(" ");
+  const areaPlano = dPlano + " L" + W + " " + H + " L0 " + H + " Z";
+  // linha do apurado: o ouro, so onde ha realidade
+  const reais = proj.map((p,i)=>({p,i})).filter(o => !o.p.aberto);
+  const dReal = reais.map((o,k) => (k?"L":"M") + x(o.i).toFixed(1) + " " + y(o.p.realizado).toFixed(1)).join(" ");
+  const ult = reais[reais.length-1];
+  const iHoje = proj.findIndex(p => p.competencia === compHoje());
+
+  box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" ' +
+    'role="img" aria-label="Trajetória do patrimônio: plano e apurado, ' +
+      rotulo(proj[0].competencia) + ' a ' + rotulo(proj[proj.length-1].competencia) + '">' +
+    defsOuro("A") +
+    '<path d="' + areaPlano + '" fill="var(--tif)" opacity=".085"/>' +
+    '<path d="' + dPlano + '" fill="none" stroke="var(--tif)" stroke-width="1.4" opacity=".55" ' +
+      'vector-effect="non-scaling-stroke"/>' +
+    (iHoje > 0 ? '<line x1="' + x(iHoje).toFixed(1) + '" y1="' + PT + '" x2="' + x(iHoje).toFixed(1) +
+      '" y2="' + (H-PB) + '" stroke="var(--sand)" stroke-dasharray="2 4" opacity=".55"/>' : "") +
+    (dReal ? '<g filter="url(#bA)"><path id="arco-linha" d="' + dReal + '" fill="none" ' +
+      'stroke="url(#gA)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" ' +
+      'vector-effect="non-scaling-stroke"/></g>' +
+      '<circle cx="' + x(ult.i).toFixed(1) + '" cy="' + y(ult.p.realizado).toFixed(1) +
+      '" r="4.2" fill="var(--ouro)" stroke="var(--bg)" stroke-width="2"/>' : "") +
+    '</svg>' +
+    '<span class="marca" style="left:2px;transform:none">' + rotulo(proj[0].competencia) + '</span>' +
+    (iHoje > 0 ? '<span class="marca" style="left:' + ((x(iHoje)/W)*100).toFixed(1) + '%">hoje</span>' : "") +
+    '<span class="marca" style="right:2px;left:auto;transform:none">' +
+      rotulo(proj[proj.length-1].competencia) + '</span>';
+
+  // O unico movimento nao pedido da interface, e so na primeira carga.
+  // Web Animations API em vez de classe CSS: a animacao comeca no instante da
+  // insercao. Com classe, um segundo render reconstroi o SVG e a animacao se
+  // perde antes de rodar -- foi o que aconteceu na primeira tentativa.
+  const linha = box.querySelector("#arco-linha");
+  if (linha && !arcoJaAnimou && !matchMedia("(prefers-reduced-motion: reduce)").matches){
+    arcoJaAnimou = true;
+    const comp = linha.getTotalLength();
+    linha.style.strokeDasharray = comp;
+    linha.animate(
+      [{ strokeDashoffset: comp }, { strokeDashoffset: 0 }],
+      { duration: 950, easing: "cubic-bezier(.33,.9,.35,1)", fill: "both" }
+    );
+  }
+}
+
 
 // Barras verticais = previsto, linha = apurado. Ver a linha passar por cima
 // ou por baixo do topo da barra e o que responde "fechei acima ou abaixo?"
@@ -938,6 +1069,7 @@ function desenharCombo(ano){
   box.querySelectorAll("[data-comp]").forEach(r => r.onclick = () => folhaMes(r.dataset.comp));
 }
 
+
 function listaAno(ano){
   const ms = proj.filter(m => m.competencia.slice(0,4) === ano);
   if (!ms.length) return "";
@@ -956,6 +1088,7 @@ function listaAno(ano){
   }
   return out;
 }
+
 
 function folhaMes(comp){
   const m = mesProj(comp);
@@ -1011,18 +1144,6 @@ function leitura(){
     'Você fechou acima do plano em <b>' + acima + ' dos ' + s.length + ' meses</b> comparáveis, ' +
     'sobrando <b>' + fmt(media) + ' por mês</b> em média (oscilando ' + fmt(dp) + ').<br>' +
     'No mesmo ritmo, ' + rotuloL(fim.competencia) + ' fecha perto de <b>' + fmt(ajustada) + '</b>.' +
-  '</div>';
-}
-function kpis(fechados, fim){
-  const c = compromissos();
-  return '<div class="kpis">' +
-    '<div class="kpi"><div class="k">Projeção ' + rotulo(fim.competencia) + '</div>' +
-      '<div class="v">' + esc(fmt(fim.previsao)) + '</div></div>' +
-    '<div class="kpi"><div class="k">Meses apurados</div>' +
-      '<div class="v">' + fechados.length + ' <span class="d3 t13">de ' + proj.length + '</span></div></div>' +
-    (c ? '<div class="kpi wide"><div class="k">' + c.n + ' compromisso' + (c.n>1?"s":"") +
-         ' em aberto, último em ' + rotulo(c.ultimo) + '</div>' +
-         '<div class="v abr">' + esc(fmt(c.restante)) + ' a pagar</div></div>' : "") +
   '</div>';
 }
 function compromissos(){
@@ -1129,6 +1250,7 @@ async function aplicarCelula(inp){
     if (cat && cat.calculo !== "manual") toast(cat.nome + " congelado em " + rotulo(mesAtual));
     render();
     // confirma na propria celula: gravou. Sem toast, que viraria spam ao editar varias.
+    tremer();
     const nova = document.querySelector('#s-mes .p-cel[data-cat="' + catId + '"]');
     if (nova){ nova.classList.add("salvo"); setTimeout(() => nova.classList.remove("salvo"), 800); }
   } catch(e){ inp.value = fmtn(antes); }
@@ -1673,6 +1795,7 @@ function editarNaTabela(td){
     td.className = classeAntes; td.textContent = fmtn(v);
     try {
       await definirPlano(comp, cat, v);
+      tremer();
       const rolagem = el2().scrollLeft, alto = window.scrollY;
       render();
       const box = el2(); if (box) box.scrollLeft = rolagem;
@@ -1916,7 +2039,9 @@ async function iniciar(){
   const hoje = compHoje();
   mesAtual = estado.competencias.includes(hoje) ? hoje
            : (estado.competencias[estado.competencias.length-1] || hoje);
-  reprojetar(); render();
+  reprojetar();
+  const alvo = abaDaURL();
+  if (alvo && alvo !== "resumo") irPara(alvo); else render();
 }
 
 // esconder a barra ao rolar — limitador por relógio, NAO rAF
@@ -1933,15 +2058,72 @@ window.addEventListener("scroll", () => {
   }
 }, { passive:true });
 
-let redimT = null;
+// Redesenhar so quando a LARGURA muda. O navegador dispara resize tambem
+// quando a barra de rolagem aparece/some (mudanca so de altura) -- e cada
+// redesenho reconstruia os SVGs a toa e matava a animacao do arco no meio.
+let redimT = null, ultimaLargura = window.innerWidth;
 window.addEventListener("resize", () => {
+  if (window.innerWidth === ultimaLargura) return;
+  ultimaLargura = window.innerWidth;
   clearTimeout(redimT);
   redimT = setTimeout(() => {
     if (!estado.categorias.length) return;
-    if (aba === "resumo") desenharCombo(anoSel);
+    if (aba === "resumo"){ desenharArco(); desenharCombo(anoSel); }
     if (aba === "patrimonio") desenharEvolucao();
   }, 180);
 });
+
+// ============================================================
+// PWA
+// ============================================================
+const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+if (instalado) document.body.classList.add("instalado");
+
+// vibrar de leve ao gravar: no celular instalado isso e o que separa
+// "site" de "app". Silencioso onde nao existe.
+function tremer(ms){ try { if (navigator.vibrate) navigator.vibrate(ms || 8); } catch(e){} }
+
+// atalhos do manifest (?ir=mes) e deep link
+function abaDaURL(){
+  const q = new URLSearchParams(location.search).get("ir");
+  return ["resumo","mes","patrimonio","plano","ajustes"].includes(q) ? q : null;
+}
+
+// convite de instalacao: discreto, dispensavel, e a dispensa e lembrada
+let promptInstalar = null;
+const CH_INST = "fin_instalar_dispensado";
+function mostrarConvite(iOS){
+  if (instalado) return;
+  try { if (localStorage.getItem(CH_INST)) return; } catch(e){}
+  const cx = document.getElementById("instalar");
+  if (iOS){
+    document.getElementById("inst-txt").textContent =
+      "No iPhone: toque em Compartilhar e depois em Adicionar à Tela de Início.";
+    document.getElementById("inst-ok").style.display = "none";
+    document.getElementById("inst-nao").textContent = "Entendi";
+  }
+  cx.classList.add("on");
+}
+window.addEventListener("beforeinstallprompt", ev => {
+  ev.preventDefault(); promptInstalar = ev;
+  setTimeout(() => mostrarConvite(false), 2500);
+});
+document.getElementById("inst-ok").onclick = async () => {
+  document.getElementById("instalar").classList.remove("on");
+  if (!promptInstalar) return;
+  promptInstalar.prompt();
+  const r = await promptInstalar.userChoice.catch(() => null);
+  promptInstalar = null;
+  if (r && r.outcome === "accepted") toast("Instalado");
+  else try { localStorage.setItem(CH_INST, "1"); } catch(e){}
+};
+document.getElementById("inst-nao").onclick = () => {
+  document.getElementById("instalar").classList.remove("on");
+  try { localStorage.setItem(CH_INST, "1"); } catch(e){}
+};
+// iOS nao tem beforeinstallprompt: instrucao manual, uma vez so
+const ehIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+if (ehIOS && !instalado) setTimeout(() => mostrarConvite(true), 3500);
 
 if (tokenAtual()) iniciar();
 if ("serviceWorker" in navigator){
