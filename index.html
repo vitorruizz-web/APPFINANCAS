@@ -273,7 +273,6 @@ table.plano td.z{color:var(--dim2)}
     <input id="lg-senha" type="password" autocomplete="current-password">
   </label>
   <button class="btn pri" id="lg-entrar">Entrar</button>
-  <button class="btn ghost" id="lg-criar" style="width:100%;margin-top:9px">Criar conta</button>
   <div class="erro" id="lg-erro"></div>
 </div>
 
@@ -1577,24 +1576,27 @@ document.getElementById("sheet-bg").addEventListener("click", ev => {
 // ============================================================
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => irPara(b.dataset.tab));
 
-async function entrar(criando){
+// O cadastro esta DESLIGADO no painel do Supabase (so existe uma conta), entao
+// nao ha caminho de signup aqui: ele so poderia falhar.
+async function entrar(){
   const email = document.getElementById("lg-email").value.trim();
   const senha = document.getElementById("lg-senha").value;
   const erro = document.getElementById("lg-erro");
   erro.textContent = "";
   if (!email || !senha){ erro.textContent = "Informe e-mail e senha."; return; }
   try {
-    const s = await authFetch(criando ? "signup" : "token?grant_type=password", { email, password: senha });
-    if (!s.access_token){ erro.textContent = "Confirme o e-mail antes de entrar."; return; }
+    const s = await authFetch("token?grant_type=password", { email, password: senha });
+    if (!s.access_token){ erro.textContent = "Não foi possível entrar."; return; }
     guardarSessao(s);
     await iniciar();
   } catch (e){
-    erro.textContent = criando ? "Não foi possível criar a conta: " + e.message : "E-mail ou senha não conferem.";
+    erro.textContent = /fetch|network|Failed/i.test(e.message)
+      ? "Sem conexão com o servidor."
+      : "E-mail ou senha não conferem.";
   }
 }
 document.getElementById("lg-entrar").onclick = () => entrar(false);
-document.getElementById("lg-criar").onclick = () => entrar(true);
-document.getElementById("lg-senha").addEventListener("keydown", e => { if (e.key === "Enter") entrar(false); });
+document.getElementById("lg-senha").addEventListener("keydown", e => { if (e.key === "Enter") entrar(); });
 
 async function iniciar(){
   let u;

@@ -6,7 +6,7 @@
 
 Uso:
   python tools/importar_planilha.py --test     roda os testes do importador
-  python tools/importar_planilha.py --gerar    gera os dois arquivos
+  python tools/importar_planilha.py --gerar --email voce@exemplo.com
 """
 import json
 import os
@@ -20,7 +20,9 @@ from openpyxl.utils import column_index_from_string as col_idx
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLANILHA = os.path.join(os.path.expanduser("~"), "Desktop", "Planejamento Financeiro 2025.xlsx")
 ABA = "PJ (2)"
-EMAIL_PADRAO = "ti@proautokimium.com.br"
+# O e-mail do dono NAO fica no codigo: o repositorio e publico.
+# Passe com --email; o seed resolve o user_id por ele.
+EMAIL_PADRAO = None
 
 # coluna da planilha -> (categoria, tipo)
 COLMAP = {
@@ -359,7 +361,7 @@ def test_importacao():
     ok(fech[-1] == "2026-08-01", "ultimo mes fechado = %s" % fech[-1])
 
     # as automaticas saem do seed a partir de 09/2026, mas ficam na fixture
-    seed = gerar_seed(d, EMAIL_PADRAO)
+    seed = gerar_seed(d, "teste@exemplo.com")
     ok("'2026-09-01','Rendimentos'" not in seed.replace(" ", ""), "Rendimentos 09/2026 fora do seed")
     ok("'2026-08-01','Rendimentos'" not in seed.replace(" ", "") or True, "")
     ok(d["plano"]["2026-09-01"].get("Rendimentos") is not None, "Rendimentos 09/2026 na fixture")
@@ -386,6 +388,8 @@ def main():
         email = EMAIL_PADRAO
         if "--email" in sys.argv:
             email = sys.argv[sys.argv.index("--email") + 1]
+        if not email:
+            raise SystemExit("informe o dono do seed:  --email voce@exemplo.com")
         d = importar()
         os.makedirs(os.path.join(RAIZ, "db"), exist_ok=True)
         os.makedirs(os.path.join(RAIZ, "tests"), exist_ok=True)
