@@ -82,9 +82,12 @@ function montar(fx, opts){
   // --- caso 2: mes sem saldo e sem override e "Aberto", nao zero
   const set26 = meses.find(x => x.competencia === "2026-09-01");
   ok(set26.aberto === true && set26.realizado === null, "09/2026 aberto (nao zero)");
+  // valores vindos da fixture local (que e gitignored) -- nada de numero
+  // cravado aqui: o repositorio e publico
   const ago26 = meses.find(x => x.competencia === "2026-08-01");
-  perto(ago26.realizado, 718905.10, "realizado de 08/2026 vem do override");
-  perto(ago26.diferenca, 718905.10 - 713061.83, "diferenca de 08/2026");
+  const realAgo = fx.meses.find(m => m.competencia === "2026-08-01").realizado_override;
+  perto(ago26.realizado, realAgo, "realizado de 08/2026 vem do override");
+  perto(ago26.diferenca, realAgo - fx.esperado["2026-08-01"], "diferenca de 08/2026");
 
   // --- caso 3: reancorar muda so dali pra frente
   const d3 = montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] });

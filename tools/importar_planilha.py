@@ -325,7 +325,13 @@ def gerar_fixtures(d):
 # -------------------------------------------------------------------- teste
 
 def test_importacao():
+    """As expectativas saem da PROPRIA planilha, nao de numeros cravados.
+
+    Fora ser melhor teste (sem numero magico), isso mantem valor financeiro
+    real fora do repositorio, que e publico.
+    """
     d = importar()
+    ws = openpyxl.load_workbook(PLANILHA, data_only=True)[ABA]
     falhas = []
 
     def ok(cond, msg):
@@ -333,17 +339,19 @@ def test_importacao():
             falhas.append(msg)
 
     ok(len(d["esperado"]) == 48, "esperava 48 meses, veio %d" % len(d["esperado"]))
-    ok(abs(d["esperado"]["2025-01-01"] - 557684.43) < 0.01, "previsao 01/2025")
-    ok(abs(d["esperado"]["2028-12-01"] - 1257130.60) < 0.01, "previsao 12/2028")
+    # a Previsao importada tem de ser exatamente a coluna AB da linha certa
+    ok(abs(d["esperado"]["2025-01-01"] - ws["AB3"].value) < 0.01, "previsao 01/2025 = AB3")
+    ok(abs(d["esperado"]["2028-12-01"] - ws["AB54"].value) < 0.01, "previsao 12/2028 = AB54")
 
     anc = [m["competencia"] for m in d["meses"] if m["saldo_inicial_override"] is not None]
     ok(anc == ["2025-01-01", "2026-01-01"], "ancoras manuais: %s" % anc)
     si = [m for m in d["meses"] if m["competencia"] == "2026-01-01"][0]["saldo_inicial_override"]
-    ok(abs(si - 756000.0) < 0.01, "ancora de 01/2026 = %s" % si)
+    ok(abs(si - ws["C16"].value) < 0.01, "ancora de 01/2026 = C16")
 
     # 06/2026: Ilha Bela (3220) + Viagem (239.25) somam na mesma categoria
     v = d["plano"]["2026-06-01"]["Viagens"]
-    ok(abs(v["valor"] - 3459.25) < 0.01, "Viagens 06/2026 = %s" % v["valor"])
+    esperado_viagens = (ws["O22"].value or 0) + (ws["P22"].value or 0)   # Ilha Bela + Viagem
+    ok(abs(v["valor"] - esperado_viagens) < 0.01, "Viagens 06/2026 = O22+P22")
     ok(v["obs"] == "Ilha Bela", "obs de Viagens 06/2026 = %r" % v["obs"])
 
     ok("Rendimentos" in d["plano"]["2026-08-01"], "Rendimentos presente em 08/2026")
