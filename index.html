@@ -232,6 +232,26 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   box-shadow:0 0 7px rgba(240,194,74,.65)}
 .legenda .sw-tra{height:0;width:14px;border-top:2px dashed var(--tif);opacity:.8}
 .legenda .sw-hoje{height:0;width:12px;border-top:2px dashed var(--sand)}
+
+/* ---------------- identidade por conta ----------------
+   A cor aqui carrega informacao (qual conta), entao ela aparece -- e segue a
+   CONTA, nunca o tamanho dela: um mes em que a conta cai no ranking nao pode
+   repintar o grafico. A rampa esta no bloco <contas> e foi validada contra o
+   fundo #0A0D11 (CVD dE 12,8 / visao normal 23,2 / contraste >= 3:1). */
+.pt{width:8px;height:8px;border-radius:2px;flex:none;display:inline-block}
+.lrow .nm .tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbar{padding:9px 0 10px;border-bottom:1px solid var(--line)}
+.cbar + .hdr{margin-top:22px}
+.cb-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}
+.cb-nm{display:flex;align-items:center;gap:7px;font-size:13.5px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.cb-v{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.cb-v b{color:var(--ink);font-weight:500;margin-left:5px}
+.cb-trilha{height:6px;border-radius:3px;background:var(--sunken);overflow:hidden}
+.cb-fill{height:100%;border-radius:3px;min-width:3px}
+.cel.dupla{display:flex;flex-direction:column;align-items:flex-end;gap:1px;
+  line-height:1.25;font-size:13.5px;width:auto;padding:5px 0}
+.cel.dupla b{font-weight:400}
 .legenda b{font-weight:500}
 
 /* --- a régua: 48 meses, valor EXATO, com a trilha embaixo --- */
@@ -282,7 +302,7 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
 .lrow:last-child{border-bottom:0}
 .lrow .nm{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   display:flex;align-items:center;gap:6px}
-.lrow .nm:hover{color:var(--steel)}
+.lrow button.nm:hover{color:var(--steel)}
 .lrow .nm .fx{color:var(--steel);font-size:11px}
 .lrow .rl{font-size:11.5px;color:var(--ink-3);text-align:right;white-space:nowrap}
 .lrow .rl b{color:var(--tif);font-weight:500}
@@ -646,6 +666,137 @@ window.MOTOR = (function () {
 })();
 /*</motor>*/
 
+/*<contas>*/
+// ============================================================
+// CONTAS -- agregacoes por conta. Funcao pura: recebe as contas e um mapa
+// {competencia: {contaId: saldo}} e devolve composicao, serie empilhada e
+// variacao. Sem DOM, sem `estado`, sem rede -- por isso da para testar em
+// tests/test_motor.html sem subir o app.
+//
+// Ate 08/2026 o realizado vem da planilha (fin_months.realizado_override) e o
+// motor da prioridade a ele. De 09/2026 em diante nao ha override: o realizado
+// E a soma dos saldos que passam por aqui.
+// ============================================================
+window.CONTAS = (function () {
+
+  // A rampa saiu da paleta do app e foi VALIDADA (os seis checks do metodo de
+  // dataviz) contra o fundo #0A0D11: pior par adjacente CVD dE 12,8 (alvo 8),
+  // visao normal dE 23,2 (piso 15), contraste >= 3:1 nas seis, todas dentro da
+  // banda de luminancia do modo escuro. A ORDEM e o mecanismo de seguranca para
+  // daltonismo, nao enfeite -- reordenar exige revalidar.
+  const RAMPA = ["#009D8D", "#CD632D", "#905FC0", "#B28E00", "#4181D2", "#CC527F"];
+  const COR_OUTRAS = "#5E6874";  // --ink-3: "Outras" nao e identidade, e resto
+
+  const ordenar = contas => (contas || []).filter(c => c && c.ativo !== false)
+    .slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0) ||
+                            String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+
+  // A conta so entra na soma do patrimonio a partir de `inicio`. Assim cadastrar
+  // uma conta hoje NAO reescreve o passado, e o mes ja fechado continua valendo
+  // o realizado que estava la.
+  function valeEm(conta, comp) {
+    if (!conta) return true;
+    if (conta.considera_patrimonio === false) return false;
+    if (conta.inicio && comp < conta.inicio) return false;
+    return true;
+  }
+
+  const doMes = (contas, comp) => ordenar(contas).filter(c => valeEm(c, comp));
+
+  // Contas que deviam ter saldo neste mes e estao em branco.
+  function faltando(contas, saldos, comp) {
+    const sal = (saldos && saldos[comp]) || {};
+    return doMes(contas, comp).filter(c => sal[c.id] === undefined || sal[c.id] === null);
+  }
+
+  // Um mes so vale como apurado com TODAS as contas preenchidas. Preencher 3 de
+  // 6 gravaria um patrimonio subestimado e ja pintaria o ponto no grafico como
+  // se o mes tivesse fechado. Saldo ZERO conta como preenchido.
+  function mesCompleto(contas, saldos, comp) {
+    return doMes(contas, comp).length > 0 && faltando(contas, saldos, comp).length === 0;
+  }
+
+  // Os saldos que o motor pode usar: so mes completo, so conta valida no mes.
+  function paraMotor(contas, saldos) {
+    const out = {};
+    for (const comp in (saldos || {})) {
+      if (!mesCompleto(contas, saldos, comp)) continue;
+      out[comp] = {};
+      for (const c of doMes(contas, comp)) out[comp][c.id] = +saldos[comp][c.id];
+    }
+    return out;
+  }
+
+  const apurados = (contas, saldos) => Object.keys(paraMotor(contas, saldos)).sort();
+
+  // A cor segue a CONTA (ordem de cadastro), nunca o tamanho dela: um mes em que
+  // a conta cai no ranking nao pode repintar o grafico. Passando de 6 contas, as
+  // excedentes ficam sem cor propria e viram "Outras" nos graficos -- cor
+  // repetida faria duas contas se confundirem.
+  function paleta(contas) {
+    const ord = ordenar(contas), cor = {};
+    const coloridas = ord.length > RAMPA.length ? RAMPA.length - 1 : ord.length;
+    ord.forEach((c, i) => { cor[c.id] = i < coloridas ? RAMPA[i] : COR_OUTRAS; });
+    return cor;
+  }
+
+  // Quanto cada conta representa do patrimonio do mes, maior primeiro.
+  function composicao(contas, saldos, comp) {
+    const sal = (saldos && saldos[comp]) || {}, cor = paleta(contas);
+    const linhas = doMes(contas, comp)
+      .filter(c => sal[c.id] !== undefined && sal[c.id] !== null)
+      .map(c => ({ id: c.id, nome: c.nome, cor: cor[c.id], saldo: +sal[c.id] }));
+    const total = linhas.reduce((a, l) => a + l.saldo, 0);
+    for (const l of linhas) l.pct = total ? l.saldo / total : 0;
+    return linhas.sort((a, b) => b.saldo - a.saldo);
+  }
+
+  // Serie empilhada: uma faixa por conta, na ORDEM DAS CONTAS, com um valor em
+  // cada mes apurado (zero antes de a conta existir).
+  function serie(contas, saldos) {
+    const comps = apurados(contas, saldos), ord = ordenar(contas), cor = paleta(contas);
+    const proprias = ord.length > RAMPA.length ? ord.slice(0, RAMPA.length - 1) : ord;
+    const restantes = ord.slice(proprias.length);
+    const valores = c => comps.map(k => {
+      const v = (saldos[k] || {})[c.id];
+      return (v === undefined || v === null || !valeEm(c, k)) ? 0 : +v;
+    });
+    const series = proprias.map(c => ({ id: c.id, nome: c.nome, cor: cor[c.id], valores: valores(c) }));
+    if (restantes.length) series.push({
+      id: "outras", nome: "Outras", cor: COR_OUTRAS,
+      valores: comps.map((_, i) => restantes.reduce((a, c) => a + valores(c)[i], 0)),
+    });
+    return { competencias: comps, series: series,
+             totais: comps.map((_, i) => series.reduce((a, s) => a + s.valores[i], 0)) };
+  }
+
+  // Quanto cada conta mexeu contra o mes apurado ANTERIOR (nao o mes de
+  // calendario anterior: um mes em branco no meio nao invalida a comparacao).
+  function variacao(contas, saldos, comp) {
+    const comps = apurados(contas, saldos), i = comps.indexOf(comp);
+    if (i < 1) return { anterior: null, total: null, contas: [] };
+    const ant = comps[i - 1], aq = saldos[comp] || {}, la = saldos[ant] || {};
+    const cor = paleta(contas);
+    const linhas = doMes(contas, comp).map(c => {
+      const saldo = +aq[c.id] || 0, anterior = +la[c.id] || 0, delta = saldo - anterior;
+      return { id: c.id, nome: c.nome, cor: cor[c.id], saldo: saldo, anterior: anterior,
+               delta: delta, pct: anterior ? delta / anterior : null };
+    });
+    const de = linhas.reduce((a, l) => a + l.anterior, 0);
+    const para = linhas.reduce((a, l) => a + l.saldo, 0);
+    const delta = para - de;
+    for (const l of linhas) l.fatia = delta ? l.delta / delta : null;
+    return { anterior: ant, contas: linhas.sort((a, b) => b.delta - a.delta),
+             total: { de: de, para: para, delta: delta, pct: de ? delta / de : null } };
+  }
+
+  return { RAMPA: RAMPA, COR_OUTRAS: COR_OUTRAS, valeEm: valeEm, faltando: faltando,
+           mesCompleto: mesCompleto, paraMotor: paraMotor, apurados: apurados,
+           paleta: paleta, composicao: composicao, serie: serie, variacao: variacao };
+})();
+/*</contas>*/
+
+
 // ============================================================
 // CONFIGURACAO
 // ============================================================
@@ -862,30 +1013,28 @@ function horizonte(){
   estado.competencias = comps;
 }
 
-// A conta só entra na soma do patrimônio a partir do mês em que passou a existir
-// para o app (`inicio`). Assim cadastrar uma conta hoje NÃO reescreve o passado —
-// e o mês já fechado continua valendo o realizado que estava lá.
-function contaValeEm(conta, comp){
-  if (!conta) return true;
-  if (conta.considera_patrimonio === false) return false;
-  if (conta.inicio && comp < conta.inicio) return false;
-  return true;
+// A regra de "a conta vale a partir de `inicio`" mora no bloco <contas>, que é
+// testado. Aqui fica só o atalho e a conversão das linhas do banco em números.
+const contaValeEm = CONTAS.valeEm;
+function saldosNum(){
+  const out = {};
+  for (const c in estado.balances){
+    out[c] = {};
+    for (const k in estado.balances[c]) out[c][k] = +estado.balances[c][k].saldo;
+  }
+  return out;
 }
+const mesCompleto  = comp => CONTAS.mesCompleto(estado.contas, saldosNum(), comp);
+const contasFaltando = comp => CONTAS.faltando(estado.contas, saldosNum(), comp);
 function dadosMotor(){
   const plano = {};
   for (const c in estado.plano){
     plano[c] = {};
     for (const k in estado.plano[c]) plano[c][k] = +estado.plano[c][k].valor;
   }
-  const balances = {};
-  for (const c in estado.balances){
-    balances[c] = {};
-    for (const k in estado.balances[c]){
-      if (contaValeEm(estado.contas.find(x => x.id === k), c))
-        balances[c][k] = +estado.balances[c][k].saldo;
-    }
-    if (!Object.keys(balances[c]).length) delete balances[c];
-  }
+  // Só mês COMPLETO vira realizado: com 4 de 6 contas preenchidas o app somaria
+  // as 4 e apresentaria um patrimônio subestimado como se o mês tivesse fechado.
+  const balances = CONTAS.paraMotor(estado.contas, saldosNum());
   return { categorias: estado.categorias, regras: estado.regras, plano: plano,
            meses: estado.meses, balances: balances, parcelas: estado.parcelas,
            competencias: estado.competencias };
@@ -1035,9 +1184,9 @@ function ligarExcel(){
     const q = b.dataset.x;
     if (q === "resumo")     exportarXLSX([abaResumo], "Financas resumo " + anoSel);
     else if (q === "mes")   exportarXLSX([abaMes], "Financas " + rotulo(mesAtual).replace("/","-"));
-    else if (q === "patrimonio") exportarXLSX([abaPatrimonio], "Financas patrimonio");
+    else if (q === "patrimonio") exportarXLSX([abaPatrimonio, abaContasMes], "Financas patrimonio");
     else if (q === "plano") exportarXLSX([abaPlano], "Financas plano");
-    else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaCompromissos], "Financas completo");
+    else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos], "Financas completo");
   });
 }
 const avisoTravado = () => dadosTravados
@@ -1669,74 +1818,40 @@ function listaCompromissos(){
 // ============================================================
 function renderPatrimonio(){
   const el = document.getElementById("s-patrimonio");
-  const m = mesProj(mesAtual);
-  const sal = estado.balances[mesAtual] || {};
-  let out = avisoTravado() +
-    '<div class="mnav"><button id="p-ant" aria-label="Mês anterior">' + ICO.ant + '</button>' +
+  const ativas = estado.contas.filter(c => c.ativo !== false);
+  const nav = '<div class="mnav"><button id="p-ant" aria-label="Mês anterior">' + ICO.ant + '</button>' +
     '<span class="lbl">' + rotuloL(mesAtual) + '</span>' +
     '<button id="p-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
 
-  const ativas = estado.contas.filter(c => c.ativo !== false);
   if (!ativas.length){
-    out += '<div class="vazio"><b>Nenhuma conta cadastrada.</b><br>' +
+    el.innerHTML = avisoTravado() + nav +
+      '<div class="vazio"><b>Nenhuma conta cadastrada.</b><br>' +
       'Cadastre suas contas e o app soma o patrimônio sozinho —<br>sem reescrever os meses que já estão apurados.</div>' +
       '<div class="acoes"><button class="btn pri" id="nova-conta">Cadastrar conta</button></div>';
-    el.innerHTML = out;
-    document.getElementById("p-ant").onclick = () => { mesAtual = somaMes(mesAtual,-1); render(); };
-    document.getElementById("p-prox").onclick = () => { mesAtual = somaMes(mesAtual,1); render(); };
-    document.getElementById("nova-conta").onclick = () => folhaConta(null);
+    ligarNavPat(el);
     return;
   }
 
-  const noMes = ativas.filter(c => contaValeEm(c, mesAtual));
-  const total = noMes.reduce((a,c) => a + (sal[c.id] ? +sal[c.id].saldo : 0), 0);
-  const temSaldo = noMes.some(c => sal[c.id]);
-  const info = estado.meses[mesAtual] || {};
+  const modo = estado.settings.patModo || "apontar";
+  el.innerHTML = avisoTravado() + nav +
+    '<div class="hdr"><h2>' + (modo === "apontar" ? "Saldo por conta" : "Análise por conta") + '</h2>' +
+    '<span class="seg" id="seg-pat">' +
+      [["apontar","Apontar"],["analise","Análise"]].map(k =>
+        '<button data-m="' + k[0] + '"' + (k[0] === modo ? ' class="on"' : '') + '>' + k[1] + '</button>').join("") +
+    '</span></div><div class="rule"></div>' +
+    (modo === "apontar" ? blocoApontar(ativas) : blocoAnalise(ativas));
 
-  out += '<div class="hdr"><h2>Saldo por conta</h2><span class="aux">no fim do mês</span></div><div class="rule"></div>';
-  for (const c of ativas){
-    const vale = contaValeEm(c, mesAtual);
-    const b = sal[c.id];
-    const pct = (total > 0 && b && vale) ? ((+b.saldo)/total*100) : 0;
-    out += '<div class="lrow">' +
-      '<button class="nm ed-conta" data-id="' + c.id + '">' + esc(c.nome) + '</button>' +
-      '<span class="rl">' + (vale ? (pct ? pct.toFixed(0) + "%" : "") :
-        '<span class="d3">a partir de ' + rotulo(c.inicio) + '</span>') + '</span>' +
-      (vale ? '<input class="cel s-cel" data-conta="' + c.id + '" value="' + esc(b?fmtn(b.saldo):"") +
-        '" placeholder="—" inputmode="decimal" aria-label="Saldo de ' + esc(c.nome) + '">'
-        : '<span class="cel zero" style="text-align:right">—</span>') +
-    '</div>';
-  }
-
-  out += '<div class="tot">' +
-    '<div class="destaque"><span>Soma das contas</span><span>' + (temSaldo ? esc(fmt(total)) : "—") + '</span></div>' +
-    '<div><span>Previsão do mês</span><span>' + esc(fmt(m ? m.previsao : null)) + '</span></div>';
-  if (!vazio(info.realizado_override) && !temSaldo){
-    out += '<div><span>Apurado (valor histórico)</span><span>' + esc(fmt(info.realizado_override)) + '</span></div>' +
-           '<div><span class="d3 t12" style="line-height:1.5">Este mês foi apurado antes das contas existirem. ' +
-           'O valor original é mantido; preencher saldos aqui passa a valer no lugar dele.</span><span></span></div>';
-  } else if (m && !m.aberto){
-    out += '<div><span>Diferença</span><span class="' + (m.diferenca>=0?"pos":"neg") + '">' +
-      esc(fmtsin(m.diferenca)) + ' <span class="d3 t12">' + fmtpct(m.variacao) + '</span></span></div>';
-  } else {
-    out += '<div><span>Situação</span><span class="abr">em aberto</span></div>';
-  }
-  out += '</div>';
-
-  const hist = proj.filter(x => !x.aberto);
-  if (hist.length > 1){
-    out += '<div class="hdr"><h2>Evolução do patrimônio</h2><span class="aux">' +
-      rotulo(proj[0].competencia) + ' → ' + rotulo(proj[proj.length-1].competencia) +
-      '</span></div><div class="rule"></div><div class="grafwrap" id="evol"></div>';
-  }
-  out += '<div class="acoes"><button class="btn" id="nova-conta">Nova conta</button>' +
-         '<button class="btn plain xls" data-x="patrimonio">Excel</button></div>';
-
-  el.innerHTML = out;
-  desenharEvolucao();
-  document.getElementById("p-ant").onclick = () => { mesAtual = somaMes(mesAtual,-1); render(); };
-  document.getElementById("p-prox").onclick = () => { mesAtual = somaMes(mesAtual,1); render(); };
-  document.getElementById("nova-conta").onclick = () => folhaConta(null);
+  if (modo === "apontar") desenharEvolucao(); else desenharAnalise();
+  ligarNavPat(el);
+  el.querySelectorAll("#seg-pat button").forEach(b => b.onclick = () => {
+    estado.settings.patModo = b.dataset.m; gravarPrefs(); render();
+  });
+}
+function ligarNavPat(el){
+  document.getElementById("p-ant").onclick  = () => { mesAtual = somaMes(mesAtual,-1); render(); };
+  document.getElementById("p-prox").onclick = () => { mesAtual = somaMes(mesAtual, 1); render(); };
+  const nc = document.getElementById("nova-conta");
+  if (nc) nc.onclick = () => folhaConta(null);
   el.querySelectorAll(".ed-conta").forEach(b =>
     b.onclick = () => folhaConta(estado.contas.find(c => c.id === b.dataset.id)));
   el.querySelectorAll(".s-cel").forEach(inp => {
@@ -1748,6 +1863,280 @@ function renderPatrimonio(){
     });
     inp.addEventListener("keydown", ev => { if (ev.key === "Enter") inp.blur(); });
   });
+  const cp = document.getElementById("p-copiar");
+  if (cp) cp.onclick = copiarMesAnterior;
+  el.querySelectorAll(".ir-mes").forEach(b =>
+    b.onclick = () => { mesAtual = b.dataset.comp; render(); });
+}
+
+// ---------------------------------------------------------------- APONTAR
+function blocoApontar(ativas){
+  const saldos = saldosNum(), sal = saldos[mesAtual] || {};
+  const m = mesProj(mesAtual), info = estado.meses[mesAtual] || {};
+  const noMes = ativas.filter(c => contaValeEm(c, mesAtual));
+  const falta = CONTAS.faltando(estado.contas, saldos, mesAtual);
+  const soma = noMes.reduce((a,c) => a + (+sal[c.id] || 0), 0);
+  const cor = CONTAS.paleta(estado.contas);
+  const tem = id => sal[id] !== undefined && sal[id] !== null;
+
+  let out = "";
+  for (const c of ativas){
+    const vale = contaValeEm(c, mesAtual);
+    out += '<div class="lrow">' +
+      '<button class="nm ed-conta" data-id="' + c.id + '">' +
+        '<i class="pt" style="background:' + cor[c.id] + '"></i><span class="tx">' + esc(c.nome) + '</span></button>' +
+      '<span class="rl">' + (vale
+        ? (tem(c.id) && soma > 0 ? (sal[c.id]/soma*100).toFixed(0) + "%" : "")
+        : '<span class="d3">a partir de ' + rotulo(c.inicio) + '</span>') + '</span>' +
+      (vale
+        ? '<input class="cel s-cel" data-conta="' + c.id + '" value="' + esc(tem(c.id) ? fmtn(sal[c.id]) : "") +
+          '" placeholder="—" inputmode="decimal" aria-label="Saldo de ' + esc(c.nome) + '">'
+        : '<span class="cel zero" style="text-align:right">—</span>') +
+    '</div>';
+  }
+
+  out += '<div class="tot">';
+  if (!noMes.length){
+    // Mes anterior ao inicio das contas: quem manda e o realizado da planilha.
+    out += '<div class="destaque"><span>Apurado</span><span>' + esc(fmt(info.realizado_override)) + '</span></div>' +
+      '<div><span>Previsão do mês</span><span>' + esc(fmt(m ? m.previsao : null)) + '</span></div>' +
+      '<div><span class="d3 t12" style="line-height:1.5">' + (vazio(info.realizado_override)
+        ? 'Nenhuma conta vale neste mês.'
+        : 'Este mês foi apurado antes de as contas existirem: o valor vem da planilha e continua valendo.') +
+      '</span><span></span></div>';
+  } else if (falta.length){
+    out += '<div><span>Contas preenchidas</span><span class="abr">' +
+        (noMes.length - falta.length) + ' de ' + noMes.length + '</span></div>' +
+      '<div><span>Parcial até aqui</span><span class="d2">' + esc(fmt(soma)) + '</span></div>' +
+      '<div><span class="d3 t12" style="line-height:1.5">Falta ' +
+        esc(falta.map(c => c.nome).join(", ")) + '. O mês só vira patrimônio apurado com todas as ' +
+        'contas preenchidas — somar parte delas registraria um patrimônio menor do que o real.' +
+      '</span><span></span></div>';
+  } else {
+    out += '<div class="destaque"><span>Patrimônio apurado</span><span>' + esc(fmt(soma)) + '</span></div>' +
+      '<div><span>Previsão do mês</span><span>' + esc(fmt(m ? m.previsao : null)) + '</span></div>';
+    out += (m && !m.aberto)
+      ? '<div><span>Diferença</span><span class="' + (m.diferenca>=0?"pos":"neg") + '">' +
+        esc(fmtsin(m.diferenca)) + ' <span class="d3 t12">' + fmtpct(m.variacao) + '</span></span></div>'
+      : '<div><span>Situação</span><span class="abr">em aberto</span></div>';
+  }
+  out += '</div>';
+
+  const ant = somaMes(mesAtual, -1);
+  const podeCopiar = falta.length && Object.keys(saldos[ant] || {}).length;
+  out += '<div class="acoes">' +
+    (podeCopiar ? '<button class="btn" id="p-copiar">Copiar de ' + rotulo(ant) + '</button>' : "") +
+    '<button class="btn" id="nova-conta">Nova conta</button>' +
+    '<button class="btn plain xls" data-x="patrimonio">Excel</button></div>';
+
+  if (proj.filter(x => !x.aberto).length > 1){
+    out += '<div class="hdr"><h2>Evolução do patrimônio</h2><span class="aux">' +
+      rotulo(proj[0].competencia) + ' → ' + rotulo(proj[proj.length-1].competencia) +
+      '</span></div><div class="rule"></div><div class="grafwrap" id="evol"></div>';
+  }
+  return out;
+}
+
+// Traz os saldos do mes anterior para so editar o que mudou. Nao sobrescreve
+// conta que ja tem valor neste mes.
+async function copiarMesAnterior(){
+  const saldos = saldosNum(), ant = saldos[somaMes(mesAtual,-1)] || {};
+  const alvo = CONTAS.faltando(estado.contas, saldos, mesAtual).filter(c => ant[c.id] !== undefined);
+  if (!alvo.length){ toast("Não há saldo no mês anterior para copiar"); return; }
+  for (const c of alvo) await definirSaldo(mesAtual, c.id, ant[c.id]);
+  render();
+  toast(alvo.length + (alvo.length > 1 ? " contas copiadas" : " conta copiada"));
+}
+
+// ---------------------------------------------------------------- ANALISE
+let _analise = null;   // o que os graficos precisam, montado durante o render
+function blocoAnalise(ativas){
+  const saldos = saldosNum();
+  const comps = CONTAS.apurados(estado.contas, saldos);
+  _analise = null;
+  if (!comps.length){
+    return '<div class="vazio"><b>Nenhum mês apurado ainda.</b><br>' +
+      'Preencha o saldo de <b>todas</b> as contas em Apontar e a análise nasce aqui.</div>';
+  }
+  // O mes em foco e o selecionado; se ele ainda nao foi apurado, o ultimo que foi.
+  const foco = comps.includes(mesAtual) ? mesAtual : comps[comps.length-1];
+  const comp = CONTAS.composicao(estado.contas, saldos, foco);
+  const varia = CONTAS.variacao(estado.contas, saldos, foco);
+  _analise = { comps: comps, foco: foco, serie: CONTAS.serie(estado.contas, saldos) };
+
+  const total = comp.reduce((a,c) => a + c.saldo, 0);
+  let out = "";
+  if (foco !== mesAtual){
+    out += '<div class="aviso">' + rotuloL(mesAtual) + ' ainda não foi apurado. ' +
+      'A análise abaixo é de <b>' + rotuloL(foco) + '</b>.</div>';
+  }
+
+  // --- 1. composicao do mes
+  out += '<div class="hdr"><h2>Composição</h2><span class="aux">' + rotulo(foco) +
+    ' · ' + esc(fmt(total)) + '</span></div><div class="rule"></div>';
+  for (const c of comp){
+    out += '<div class="cbar"><div class="cb-top">' +
+      '<span class="cb-nm"><i class="pt" style="background:' + c.cor + '"></i>' + esc(c.nome) + '</span>' +
+      '<span class="cb-v">' + esc(fmt(c.saldo)) + ' <b>' + (c.pct*100).toFixed(0) + '%</b></span></div>' +
+      '<div class="cb-trilha"><div class="cb-fill" style="width:' + (c.pct*100).toFixed(2) +
+        '%;background:' + c.cor + '"></div></div></div>';
+  }
+
+  // --- 2. variacao contra o mes apurado anterior
+  out += '<div class="hdr"><h2>Variação</h2><span class="aux">' +
+    (varia.anterior ? "contra " + rotulo(varia.anterior) : "primeiro mês apurado") +
+    '</span></div><div class="rule"></div>';
+  if (!varia.anterior){
+    out += '<div class="vazio t13">Sem mês anterior apurado para comparar. ' +
+      'A partir do segundo mês esta seção mostra quanto cada conta rendeu.</div>';
+  } else {
+    const t = varia.total;
+    out += '<div class="tot" style="margin-top:0"><div class="destaque"><span>Patrimônio</span>' +
+      '<span class="' + (t.delta>=0?"pos":"neg") + '">' + esc(fmtsin(t.delta)) +
+      ' <span class="d3 t12">' + fmtpct(t.pct) + '</span></span></div></div>';
+    for (const c of varia.contas){
+      out += '<div class="lrow">' +
+        '<span class="nm"><i class="pt" style="background:' + c.cor + '"></i><span class="tx">' + esc(c.nome) + '</span></span>' +
+        '<span class="rl">' + (c.fatia === null || c.delta === 0 ? "" :
+          (c.fatia<0?'−':'') + Math.abs(c.fatia*100).toFixed(0) + '% da variação') + '</span>' +
+        '<span class="cel dupla ' + (c.delta>0?"pos":c.delta<0?"neg":"zero") + '">' +
+          esc(fmtsin(c.delta)) + '<b class="d3 t11">' + (c.pct === null ? "" : fmtpct(c.pct)) +
+        '</b></span></div>';
+    }
+  }
+
+  // --- 3. evolucao empilhada
+  out += '<div class="hdr"><h2>Evolução por conta</h2><span class="aux">' +
+    (comps.length > 1 ? rotulo(comps[0]) + " → " + rotulo(comps[comps.length-1]) : "") +
+    '</span></div><div class="rule"></div>';
+  out += comps.length > 1
+    ? '<div class="grafwrap" id="pilha"></div>'
+    : '<div class="vazio t13">A partir do segundo mês apurado o app empilha as contas ' +
+      'e mostra de onde veio o crescimento.</div>';
+
+  // --- 4. trajetoria de cada conta
+  out += '<div class="hdr"><h2>Trajetória de cada conta</h2><span class="aux">' +
+    (comps.length > 2 ? "uma linha por conta" : "") + '</span></div><div class="rule"></div>';
+  out += comps.length > 2
+    ? '<div class="grafwrap" id="linhas"></div>'
+    : '<div class="vazio t13">Com três meses apurados dá para comparar a trajetória ' +
+      'de cada conta lado a lado.</div>';
+
+  out += '<div class="acoes"><button class="btn plain xls" data-x="patrimonio">Excel</button></div>';
+  return out;
+}
+
+function desenharAnalise(){
+  if (!_analise) return;
+  desenharPilha();
+  desenharLinhas();
+}
+
+// Escala comum aos dois graficos por conta: largura MEDIDA do container --
+// viewBox fixo com preserveAspectRatio="none" esmaga o texto pela metade.
+function eixoConta(box, H, mx, mn){
+  const W = Math.max(280, Math.round(box.getBoundingClientRect().width) || 340);
+  const PL = 46, PR = 12, PT = 14, PB = 26, n = _analise.comps.length;
+  return { W:W, H:H, PL:PL, PR:PR, PT:PT, PB:PB,
+    x: i => n < 2 ? PL : PL + (i/(n-1)) * (W-PL-PR),
+    y: v => PT + (1 - (v-mn)/((mx-mn)||1)) * (H-PT-PB) };
+}
+function gradeConta(e, mx, mn){
+  let g = "";
+  for (let k = 0; k <= 4; k++){
+    const v = mn + (mx-mn)*k/4, yy = e.y(v);
+    g += '<line x1="' + e.PL + '" y1="' + yy.toFixed(1) + '" x2="' + (e.W-e.PR) + '" y2="' + yy.toFixed(1) +
+      '" stroke="var(--line)" stroke-dasharray="2 4"/>' +
+      '<text x="' + (e.PL-8) + '" y="' + (yy+3.5).toFixed(1) + '" text-anchor="end" font-size="10" ' +
+      'fill="var(--ink-4)">' + fmtk(v) + '</text>';
+  }
+  return g;
+}
+// Rotulos de mes: todos quando cabem, senao espacados (o ultimo sempre entra).
+function rotulosMes(e){
+  const cs = _analise.comps, passo = Math.max(1, Math.ceil(cs.length / (e.W > 420 ? 8 : 5)));
+  let t = "";
+  cs.forEach((c,i) => {
+    if (i % passo && i !== cs.length-1) return;
+    const anc = i === 0 ? "start" : i === cs.length-1 ? "end" : "middle";
+    t += '<text x="' + e.x(i).toFixed(1) + '" y="' + (e.H-9) + '" text-anchor="' + anc + '" font-size="10" ' +
+      'fill="' + (c === _analise.foco ? "var(--ink-2)" : "var(--ink-4)") + '">' + rotulo(c) + '</text>';
+  });
+  return t;
+}
+// Areas invisiveis: tocar num mes leva a analise inteira para ele.
+function alvosMes(e){
+  const cs = _analise.comps;
+  const larg = cs.length > 1 ? (e.W-e.PL-e.PR)/(cs.length-1) : e.W-e.PL-e.PR;
+  return cs.map((c,i) =>
+    '<rect class="ir-mes" data-comp="' + c + '" x="' + (e.x(i)-larg/2).toFixed(1) + '" y="' + e.PT +
+    '" width="' + larg.toFixed(1) + '" height="' + (e.H-e.PT-e.PB) +
+    '" fill="transparent" style="cursor:pointer"><title>' + rotulo(c) + '</title></rect>').join("");
+}
+
+// Empilhado: a altura e o patrimonio, cada faixa e uma conta. Um vao de 2px na
+// cor do fundo separa as faixas -- sem ele duas contas vizinhas viram um borrao.
+function desenharPilha(){
+  const box = document.getElementById("pilha");
+  if (!box) return;
+  const ser = _analise.serie, cs = ser.competencias;
+  const mx = Math.max.apply(null, ser.totais) * 1.04;
+  const e = eixoConta(box, 240, mx, 0);
+
+  let faixas = "", acum = cs.map(() => 0);
+  for (const s of ser.series){
+    const base = acum.slice();
+    acum = acum.map((v,i) => v + s.valores[i]);
+    const topo = acum.map((v,i) => (i?"L":"M") + e.x(i).toFixed(1) + " " + e.y(v).toFixed(1)).join(" ");
+    const volta = base.map((v,i) => ({v:v,i:i})).reverse()
+      .map(o => "L" + e.x(o.i).toFixed(1) + " " + e.y(o.v).toFixed(1)).join(" ");
+    faixas += '<path d="' + topo + " " + volta + ' Z" fill="' + s.cor + '" opacity=".92"/>' +
+      '<path d="' + topo + '" fill="none" stroke="var(--bg)" stroke-width="2" ' +
+      'vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
+  }
+  const iFoco = cs.indexOf(_analise.foco);
+  const marca = iFoco >= 0
+    ? '<line x1="' + e.x(iFoco).toFixed(1) + '" y1="' + e.PT + '" x2="' + e.x(iFoco).toFixed(1) +
+      '" y2="' + (e.H-e.PB) + '" stroke="var(--ink)" stroke-dasharray="3 3" opacity=".5"/>' : "";
+
+  box.innerHTML = '<svg viewBox="0 0 ' + e.W + ' ' + e.H + '" width="' + e.W + '" height="' + e.H + '" ' +
+    'role="img" aria-label="Patrimônio empilhado por conta, mês a mês">' +
+    gradeConta(e, mx, 0) + faixas + marca + rotulosMes(e) + alvosMes(e) + '</svg>' +
+    legendaContas(ser, cs.length-1, true);
+}
+
+// Uma linha por conta, em reais. Legenda com o valor do ultimo mes: identidade
+// nunca fica so na cor.
+function desenharLinhas(){
+  const box = document.getElementById("linhas");
+  if (!box) return;
+  const ser = _analise.serie, cs = ser.competencias;
+  const todos = ser.series.flatMap(s => s.valores);
+  let mx = Math.max.apply(null, todos), mn = Math.min.apply(null, todos);
+  const folga = (mx-mn)*0.08 || mx*0.05 || 1;
+  mx += folga; mn = Math.max(0, mn - folga);
+  const e = eixoConta(box, 240, mx, mn);
+
+  const linhas = ser.series.map(s =>
+    '<path d="' + s.valores.map((v,i) => (i?"L":"M") + e.x(i).toFixed(1) + " " + e.y(v).toFixed(1)).join(" ") +
+    '" fill="none" stroke="' + s.cor + '" stroke-width="2" stroke-linejoin="round" ' +
+    'stroke-linecap="round" vector-effect="non-scaling-stroke"/>').join("");
+  const pontas = ser.series.map(s =>
+    '<circle cx="' + e.x(cs.length-1).toFixed(1) + '" cy="' + e.y(s.valores[cs.length-1]).toFixed(1) +
+    '" r="3.2" fill="' + s.cor + '" stroke="var(--bg)" stroke-width="2"/>').join("");
+
+  box.innerHTML = '<svg viewBox="0 0 ' + e.W + ' ' + e.H + '" width="' + e.W + '" height="' + e.H + '" ' +
+    'role="img" aria-label="Trajetória do saldo de cada conta">' +
+    gradeConta(e, mx, mn) + linhas + pontas + rotulosMes(e) + alvosMes(e) + '</svg>' +
+    legendaContas(ser, cs.length-1);
+}
+
+// A legenda e obrigatoria nos dois graficos (identidade nunca fica so na cor),
+// mas o VALOR aparece uma vez so: os dois mostram o mesmo ultimo mes.
+function legendaContas(ser, i, comValor){
+  return '<div class="legenda">' + ser.series.map(s =>
+    '<span><i style="background:' + s.cor + '"></i>' + esc(s.nome) +
+    (comValor ? ' <b class="d2">' + fmtk(s.valores[i]) + '</b>' : "") + '</span>').join("") + '</div>';
 }
 
 // Evolucao do patrimonio: o arco INTEIRO. Apurado (jade, cheio) onde existe,
@@ -2391,6 +2780,19 @@ function abaPatrimonio(){
   return { nome: "Patrimônio " + rotulo(mesAtual).replace("/", "-"),
     colunas: [{t:"Conta",largura:24},{t:"Instituição",largura:18},{t:"Tipo",largura:14},
               {t:"Conta desde",largura:14},{t:"Saldo",largura:16}],
+    linhas: linhas };
+}
+// Matriz meses x contas: e a serie que alimenta os graficos por conta, do
+// jeito que ela existe -- so mes completo, so conta valida no mes.
+function abaContasMes(){
+  const ser = CONTAS.serie(estado.contas, saldosNum());
+  const linhas = ser.competencias.map((c,i) => [T(rotulo(c))]
+    .concat(ser.series.map(x => M(x.valores[i])))
+    .concat([M(ser.totais[i], true)]));
+  return { nome: "Contas mes a mes",
+    colunas: [{t:"Mês",largura:12}]
+      .concat(ser.series.map(x => ({ t: x.nome, largura: 16 })))
+      .concat([{t:"Total",largura:17}]),
     linhas: linhas };
 }
 function abaPlano(){

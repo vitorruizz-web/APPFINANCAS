@@ -66,13 +66,16 @@ function montar(fx, opts){
 
 // ------------------------------------------------------------------ casos
 (async () => {
-  const html = await (await fetch("../index.html")).text();
+  // cache-buster: sem ele o navegador serve a copia anterior do index.html
+  // e o teste "passa" contra codigo velho
+  const v = "?v=" + Date.now();
+  const html = await (await fetch("../index.html" + v)).text();
   const m = html.match(/\/\*<motor>\*\/([\s\S]*?)\/\*<\/motor>\*\//);
   if (!ok(!!m, "bloco <motor> encontrado no index.html")) return fim();
   (0, eval)(m[1]);
   if (!ok(!!window.MOTOR && typeof MOTOR.projetar === "function", "MOTOR.projetar existe")) return fim();
 
-  const fx = await (await fetch("./fixtures.json")).json();
+  const fx = await (await fetch("./fixtures.json" + v)).json();
 
   // --- caso 1: reproduzir os 48 meses da planilha DERIVANDO Rendimentos e Dividendos
   const meses = MOTOR.projetar(montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] }));
@@ -161,6 +164,129 @@ function montar(fx, opts){
   // --- caso 11: parcela muda a previsao do mes e propaga
   ok(p8.find(g("2028-12-01")).previsao < base.find(g("2028-12-01")).previsao - 9000,
      "12 parcelas de 800 derrubam a projecao final");
+
+  // ================================================================
+  // CONTAS -- agregacoes por conta (bloco <contas> do index.html)
+  // ================================================================
+  const mc = html.match(/\/\*<contas>\*\/([\s\S]*?)\/\*<\/contas>\*\//);
+  if (!ok(!!mc, "bloco <contas> encontrado no index.html")) return fim();
+  (0, eval)(mc[1]);
+  if (!ok(!!window.CONTAS, "window.CONTAS existe")) return fim();
+
+  // 6 contas, todas valendo a partir de 09/2026 -- o cenario real do Vitor
+  const CT = [
+    { id:"c1", nome:"Conta corrente", ordem:1, inicio:"2026-09-01" },
+    { id:"c2", nome:"CDB",            ordem:2, inicio:"2026-09-01" },
+    { id:"c3", nome:"Tesouro",        ordem:3, inicio:"2026-09-01" },
+    { id:"c4", nome:"Acoes",          ordem:4, inicio:"2026-09-01" },
+    { id:"c5", nome:"FGTS",           ordem:5, inicio:"2026-09-01" },
+    { id:"c6", nome:"Reserva",        ordem:6, inicio:"2026-09-01" },
+  ];
+  const SET = { c1:10000, c2:300000, c3:200000, c4:100000, c5:50000, c6:60000 }; // 720.000
+  const OUT = { c1:12000, c2:310000, c3:205000, c4:90000,  c5:51000, c6:60000 }; // 728.000
+  const SALDOS = { "2026-09-01": SET, "2026-10-01": OUT };
+
+  // --- caso 12: a conta so vale a partir do mes de inicio
+  ok(CONTAS.valeEm(CT[0], "2026-09-01") === true, "conta vale no mes de inicio");
+  ok(CONTAS.valeEm(CT[0], "2026-08-01") === false, "conta nao vale antes do inicio");
+  ok(CONTAS.valeEm({ id:"x", considera_patrimonio:false }, "2027-01-01") === false,
+     "conta fora do patrimonio nunca vale");
+
+  // --- caso 13: quais contas faltam preencher no mes
+  const parcial = { "2026-09-01": { c1:10000, c2:300000, c3:200000, c4:100000 } };
+  const falt = CONTAS.faltando(CT, parcial, "2026-09-01");
+  ok(falt.length === 2 && falt[0].id === "c5" && falt[1].id === "c6",
+     "faltando aponta as 2 contas em branco (veio " + falt.map(c=>c.id).join(",") + ")");
+  ok(CONTAS.faltando(CT, SALDOS, "2026-09-01").length === 0, "mes cheio nao tem conta faltando");
+  ok(CONTAS.faltando(CT, SALDOS, "2026-08-01").length === 0,
+     "mes anterior ao inicio das contas nao cobra nada");
+
+  // --- caso 14: mes so conta como apurado quando TODAS as contas estao preenchidas
+  ok(CONTAS.mesCompleto(CT, parcial, "2026-09-01") === false, "4 de 6 contas: mes incompleto");
+  ok(CONTAS.mesCompleto(CT, SALDOS, "2026-09-01") === true,  "6 de 6 contas: mes completo");
+  ok(CONTAS.mesCompleto(CT, SALDOS, "2026-08-01") === false, "mes sem conta valida nao e completo");
+  ok(CONTAS.mesCompleto(CT, { "2026-09-01": Object.assign({}, SET, { c6:0 }) }, "2026-09-01") === true,
+     "saldo ZERO conta como preenchido (nao e o mesmo que em branco)");
+
+  // --- caso 15: so mes completo chega ao motor
+  const pm = CONTAS.paraMotor(CT, parcial);
+  ok(!pm["2026-09-01"], "mes incompleto nao vai para o motor");
+  const pm2 = CONTAS.paraMotor(CT, SALDOS);
+  ok(pm2["2026-09-01"] && Object.keys(pm2["2026-09-01"]).length === 6, "mes completo vai inteiro");
+  perto(Object.values(pm2["2026-09-01"]).reduce((a,b)=>a+b,0), 720000, "soma do mes completo");
+
+  // --- caso 16: mes pela metade continua EM ABERTO no motor (era o risco do esquema)
+  const d16 = montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] });
+  delete d16.meses["2026-09-01"].realizado_override;
+  d16.balances = CONTAS.paraMotor(CT, parcial);
+  const p16 = MOTOR.projetar(d16);
+  ok(p16.find(x => x.competencia === "2026-09-01").aberto === true,
+     "4 de 6 contas: o motor mantem 09/2026 em aberto, sem patrimonio subestimado");
+  d16.balances = CONTAS.paraMotor(CT, SALDOS);
+  const p16b = MOTOR.projetar(d16);
+  perto(p16b.find(x => x.competencia === "2026-09-01").realizado, 720000,
+        "6 de 6 contas: 09/2026 fecha com a soma das contas");
+
+  // --- caso 17: ate 31/08 vale a planilha, mesmo com conta preenchida por engano
+  const d17 = montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] });
+  d17.balances = { "2026-08-01": { c1: 1 } };
+  const realAgo17 = fx.meses.find(m => m.competencia === "2026-08-01").realizado_override;
+  perto(MOTOR.projetar(d17).find(x => x.competencia === "2026-08-01").realizado, realAgo17,
+        "08/2026 continua com o valor da planilha");
+
+  // --- caso 18: composicao do mes, maior primeiro, com participacao
+  const comp18 = CONTAS.composicao(CT, SALDOS, "2026-09-01");
+  ok(comp18.length === 6, "composicao traz as 6 contas");
+  ok(comp18[0].id === "c2" && comp18[5].id === "c1",
+     "composicao ordenada do maior para o menor (veio " + comp18.map(c=>c.id).join(",") + ")");
+  perto(comp18[0].pct, 300000/720000, "participacao do CDB");
+  perto(comp18.reduce((a,c)=>a+c.pct,0), 1, "participacoes somam 100%");
+  ok(CONTAS.composicao(CT, SALDOS, "2026-08-01").length === 0, "mes sem conta valida: composicao vazia");
+
+  // --- caso 19: a cor segue a CONTA, nunca o tamanho dela
+  const pal = CONTAS.paleta(CT);
+  ok(pal.c1 !== pal.c2, "contas diferentes, cores diferentes");
+  ok(new Set(CT.map(c => pal[c.id])).size === 6, "6 contas, 6 cores distintas");
+  const compOut = CONTAS.composicao(CT, SALDOS, "2026-10-01");
+  const corDeC4 = c => c.find(x => x.id === "c4").cor;
+  ok(corDeC4(comp18) === corDeC4(compOut),
+     "Acoes muda de posicao no ranking mas mantem a cor");
+
+  // --- caso 20: serie empilhada em ordem FIXA de conta, um valor por mes apurado
+  const s20 = CONTAS.serie(CT, SALDOS);
+  ok(s20.competencias.length === 2 && s20.competencias[0] === "2026-09-01",
+     "serie cobre os meses apurados em ordem");
+  ok(s20.series.map(s => s.id).join(",") === "c1,c2,c3,c4,c5,c6",
+     "serie empilha na ordem das contas, nao por valor (veio " + s20.series.map(s=>s.id).join(",") + ")");
+  perto(s20.series[1].valores[1], 310000, "valor da conta no 2o mes");
+  perto(s20.totais[1], 728000, "total empilhado do 2o mes");
+
+  // --- caso 21: mes incompleto nao entra na serie
+  ok(CONTAS.serie(CT, parcial).competencias.length === 0, "serie ignora mes incompleto");
+
+  // --- caso 22: variacao contra o mes apurado anterior
+  const v22 = CONTAS.variacao(CT, SALDOS, "2026-10-01");
+  ok(v22.anterior === "2026-09-01", "variacao compara com o mes apurado anterior");
+  perto(v22.total.delta, 8000, "patrimonio subiu 8.000 no mes");
+  const c4v = v22.contas.find(c => c.id === "c4");
+  perto(c4v.delta, -10000, "Acoes caiu 10.000");
+  perto(c4v.pct, -0.10, "Acoes caiu 10%");
+  const c1v = v22.contas.find(c => c.id === "c1");
+  perto(c1v.fatia, 2000/8000, "conta corrente respondeu por 1/4 do crescimento");
+  ok(v22.contas[0].id === "c2", "variacao ordenada pela maior contribuicao");
+  ok(CONTAS.variacao(CT, SALDOS, "2026-09-01").anterior === null,
+     "primeiro mes apurado nao tem com o que comparar");
+
+  // --- caso 23: passando de 6 contas, as menores viram "Outras" no grafico --
+  // a rampa validada tem 6 cores e cor repetida faria duas contas se confundirem
+  const CT7 = CT.concat([{ id:"c7", nome:"Cripto", ordem:7, inicio:"2026-09-01" }]);
+  const S7 = { "2026-09-01": Object.assign({ c7: 5000 }, SET) };
+  const s23 = CONTAS.serie(CT7, S7);
+  ok(s23.series.length === 6, "serie nunca passa de 6 faixas (veio " + s23.series.length + ")");
+  ok(s23.series[5].id === "outras", "a 6a faixa vira Outras");
+  perto(s23.totais[0], 725000, "Outras preserva o total empilhado");
+  ok(CONTAS.composicao(CT7, S7, "2026-09-01").length === 7,
+     "a composicao continua listando as 7 contas uma a uma");
 
   fim();
 })().catch(e => { log.push("EXCECAO " + e.message + "\n" + e.stack); falhas++; fim(); });
