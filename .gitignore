@@ -1,0 +1,7 @@
+# nada de dado financeiro no repositorio
+db/seed.sql
+*.xlsx
+*.xls
+test.html
+BACKUP_*
+*.bak
