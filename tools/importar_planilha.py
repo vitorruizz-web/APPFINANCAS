@@ -325,10 +325,12 @@ def gerar_seed(d, email):
     add("       (select count(*) from fin_months) as meses,")
     add("       (select count(*) from fin_rules)  as regras;")
     add("")
-    add("insert into fin_accounts (user_id, nome, tipo, ordem)")
-    add("select u.id, 'Patrimônio (consolidado)', 'investimento', 1")
-    add("from auth.users u where u.email = %s" % sql_txt(email))
-    add("on conflict (user_id, nome) do nothing;")
+    # A conta "Patrimonio (consolidado)" NAO e mais criada. De 09/2026 em diante
+    # o patrimonio E a soma das contas reais -- uma conta consolidada ao lado
+    # delas seria dupla contagem, aparecia zerada na composicao e ainda empurrava
+    # a paleta para o ramo de "mais contas que cores", onde duas contas reais
+    # dividiam o mesmo cinza. Antes de 09/2026 quem manda e o realizado da
+    # planilha (fin_months.realizado_override), que nao depende de conta nenhuma.
     return "\n".join(L) + "\n"
 
 

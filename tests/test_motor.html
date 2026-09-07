@@ -285,8 +285,17 @@ function montar(fx, opts){
   ok(s23.series.length === 6, "serie nunca passa de 6 faixas (veio " + s23.series.length + ")");
   ok(s23.series[5].id === "outras", "a 6a faixa vira Outras");
   perto(s23.totais[0], 725000, "Outras preserva o total empilhado");
-  ok(CONTAS.composicao(CT7, S7, "2026-09-01").length === 7,
-     "a composicao continua listando as 7 contas uma a uma");
+  // A composicao TAMBEM agrega. Antes ela listava as 7 uma a uma, e as duas que
+  // sobravam da rampa saiam com o MESMO cinza -- duas linhas dividindo uma cor,
+  // que e exatamente o que a cor nao pode fazer aqui (ela identifica a conta).
+  const c23 = CONTAS.composicao(CT7, S7, "2026-09-01");
+  ok(c23.length === 6, "a composicao agrega o excedente (veio " + c23.length + " linhas)");
+  ok(c23.some(l => l.id === "outras"), "o excedente da composicao vira Outras");
+  const cores23 = c23.map(l => l.cor);
+  ok(new Set(cores23).size === cores23.length,
+     "duas linhas da composicao nunca dividem a mesma cor");
+  perto(c23.reduce((a, l) => a + l.saldo, 0), 725000, "Outras preserva o total da composicao");
+  perto(c23.reduce((a, l) => a + l.pct, 0), 1, "os percentuais da composicao somam 100%");
 
   fim();
 })().catch(e => { log.push("EXCECAO " + e.message + "\n" + e.stack); falhas++; fim(); });

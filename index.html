@@ -240,8 +240,44 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
    fundo #0A0D11 (CVD dE 12,8 / visao normal 23,2 / contraste >= 3:1). */
 .pt{width:8px;height:8px;border-radius:2px;flex:none;display:inline-block}
 .lrow .nm .tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cbar{padding:9px 0 10px;border-bottom:1px solid var(--line)}
+/* A rosca e as barras sao a MESMA leitura: o anel da a proporcao de relance, a
+   barra da o valor. Por isso dividem uma selecao e nao um tooltip cada. */
+.compwrap{display:flex;flex-direction:column;align-items:center;gap:4px}
+.roscawrap{width:100%;max-width:212px;display:flex;justify-content:center;
+  padding:6px 0 2px;touch-action:manipulation}
+.cbars{width:100%}
+.roscawrap .fx{cursor:pointer;
+  transition:stroke-dasharray .5s cubic-bezier(.4,0,.2,1),
+             stroke-dashoffset .5s cubic-bezier(.4,0,.2,1),
+             stroke-width .18s ease, opacity .18s ease}
+.r-pct{font-family:var(--serif);font-size:34px;fill:var(--ink)}
+.r-sig{font-size:17px;fill:var(--ink-3)}
+.r-nm{font-size:11.5px;letter-spacing:.01em;fill:var(--ink-2)}
+@media (min-width:1000px){
+  .compwrap{flex-direction:row;align-items:center;gap:26px}
+  .roscawrap{flex:none;width:240px;max-width:240px}
+  .cbars{flex:1;min-width:0}
+}
+
+.cbar{padding:9px 0 10px;border-bottom:1px solid var(--line);
+  display:block;width:100%;text-align:left;background:none;border-left:0;
+  border-right:0;border-top:0;color:inherit;font:inherit;cursor:pointer}
+.cbar:focus-visible{outline:2px solid var(--steel);outline-offset:2px;border-radius:4px}
+.cbar.on .cb-nm{color:var(--ink)}
+.cbar.on .cb-trilha{background:var(--raised)}
+.cbar:not(.on) .cb-nm{transition:color .18s ease}
 .cbar + .hdr{margin-top:22px}
+.cb-trilha{position:relative}
+/* A marca da meta e um traco na trilha, nao um segundo numero: a comparacao
+   "onde estou x onde queria estar" se le pela distancia, sem aritmetica. */
+.cb-meta{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink-2);
+  opacity:.75;border-radius:1px;transform:translateX(-1px)}
+.conc{color:var(--ink-3);font-size:12px;line-height:1.5;margin:12px 0 0}
+.conc b{color:var(--ink-2);font-weight:500}
+.mudou{color:var(--ink-2);font-size:13px;line-height:1.55;margin:0 0 18px;
+  padding-left:11px;border-left:2px solid var(--line-2)}
+.mudou b{color:var(--ink);font-weight:500}
+@media (pointer:coarse){ .cbar{padding:11px 0 12px} }
 .cb-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}
 .cb-nm{display:flex;align-items:center;gap:7px;font-size:13.5px;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
@@ -321,6 +357,14 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
 }
 .cel:hover{border-color:var(--line-2)}
 .cel:focus{border-color:var(--steel);background:var(--raised);outline:none}
+/* No toque o campo tinha 33px de altura -- 11px abaixo do minimo de alvo, e
+   errar o campo era rotina. Aqui ele ocupa a linha inteira; a borda so aparece
+   no foco, entao visualmente nada muda. */
+@media (pointer:coarse){
+  .cel{min-height:44px;padding-top:11px;padding-bottom:11px}
+  .lrow{padding:3px 0}
+  .lrow .nm{min-height:44px}
+}
 .cel.zero{color:var(--ink-4)}
 .cel.calc{color:var(--steel)}
 
@@ -741,11 +785,25 @@ window.CONTAS = (function () {
   }
 
   // Quanto cada conta representa do patrimonio do mes, maior primeiro.
+  //
+  // As contas alem da rampa nao tem cor propria. Antes cada uma virava uma linha
+  // com o MESMO cinza -- duas linhas dividindo uma cor, que e justamente o que a
+  // cor nao pode fazer aqui (ela identifica a conta). Agora elas viram uma linha
+  // unica "Outras", igual ao que serie() ja fazia. Invariante: em qualquer lugar
+  // que desenhe composicao, duas linhas nunca compartilham cor.
   function composicao(contas, saldos, comp) {
     const sal = (saldos && saldos[comp]) || {}, cor = paleta(contas);
-    const linhas = doMes(contas, comp)
-      .filter(c => sal[c.id] !== undefined && sal[c.id] !== null)
+    const vis = doMes(contas, comp)
+      .filter(c => sal[c.id] !== undefined && sal[c.id] !== null);
+    const linhas = vis.filter(c => cor[c.id] !== COR_OUTRAS)
       .map(c => ({ id: c.id, nome: c.nome, cor: cor[c.id], saldo: +sal[c.id] }));
+    const resto = vis.filter(c => cor[c.id] === COR_OUTRAS);
+    if (resto.length) linhas.push({
+      id: "outras", cor: COR_OUTRAS,
+      nome: resto.length === 1 ? resto[0].nome : "Outras",
+      partes: resto.map(c => c.nome),
+      saldo: resto.reduce((a, c) => a + (+sal[c.id]), 0),
+    });
     const total = linhas.reduce((a, l) => a + l.saldo, 0);
     for (const l of linhas) l.pct = total ? l.saldo / total : 0;
     return linhas.sort((a, b) => b.saldo - a.saldo);
@@ -1847,21 +1905,75 @@ function renderPatrimonio(){
     estado.settings.patModo = b.dataset.m; gravarPrefs(); render();
   });
 }
+// Arrastar para o lado troca o mes -- o mesmo que as setas ‹ › ja fazem, no
+// gesto que a navegacao por mes sugere. Nao intercepta enquanto se digita um
+// saldo, nem dentro de um grafico (que rola na horizontal).
+function ligarArrasto(el){
+  let x0 = 0, y0 = 0, valido = false;
+  el.addEventListener("touchstart", ev => {
+    const t = ev.changedTouches[0];
+    x0 = t.clientX; y0 = t.clientY;
+    valido = !ev.target.closest(".grafwrap") &&
+             !(document.activeElement && document.activeElement.classList &&
+               document.activeElement.classList.contains("s-cel"));
+  }, { passive:true });
+  el.addEventListener("touchend", ev => {
+    if (!valido) return;
+    const t = ev.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > 45) return;
+    mesAtual = somaMes(mesAtual, dx < 0 ? 1 : -1);
+    render();
+  }, { passive:true });
+}
+
 function ligarNavPat(el){
+  ligarArrasto(el);
   document.getElementById("p-ant").onclick  = () => { mesAtual = somaMes(mesAtual,-1); render(); };
   document.getElementById("p-prox").onclick = () => { mesAtual = somaMes(mesAtual, 1); render(); };
   const nc = document.getElementById("nova-conta");
   if (nc) nc.onclick = () => folhaConta(null);
   el.querySelectorAll(".ed-conta").forEach(b =>
     b.onclick = () => folhaConta(estado.contas.find(c => c.id === b.dataset.id)));
-  el.querySelectorAll(".s-cel").forEach(inp => {
+  // Preencher os saldos e ENCADEAR de um campo para o outro -- e assim que o mes
+  // e fechado, seis campos seguidos. Duas travas moravam aqui:
+  //
+  // 1. render() DESTROI e recria os inputs (o foco vai parar no <body>). Chamado
+  //    no blur, ele refazia o DOM enquanto o dedo ainda estava indo para o campo
+  //    seguinte: o no que ia receber o toque deixava de existir, o teclado
+  //    fechava e o valor "nao pegava". No desktop o mousedown fixa o foco antes
+  //    e o erro passa despercebido -- por isso so acontecia no celular.
+  //    Agora o redesenho e ADIADO e so acontece se o foco saiu de todos os
+  //    campos: encadear campo a campo nao refaz nada.
+  // 2. sair de um campo SEM mudar nada gravava e redesenhava do mesmo jeito.
+  //    Agora compara com o valor que veio na tela e nao faz nada se for igual.
+  const saldoFocado = () => document.activeElement &&
+    document.activeElement.classList && document.activeElement.classList.contains("s-cel");
+  const redesenhar = () => { if (!saldoFocado()) render(); };
+
+  const cels = [...el.querySelectorAll(".s-cel")];
+  cels.forEach((inp, i) => {
     inp.addEventListener("focus", () => inp.select());
     inp.addEventListener("blur", async () => {
-      const v = parseNum(inp.value);
-      if (v === null) return;
-      await definirSaldo(mesAtual, inp.dataset.conta, v); render();
+      const v = parseNum(inp.value), antes = parseNum(inp.defaultValue);
+      if (v === null) { inp.value = inp.defaultValue; setTimeout(redesenhar, 0); return; }
+      if (antes !== null && Math.abs(v - antes) < 1e-9) return;   // nada mudou
+      inp.defaultValue = inp.value;
+      // try/finally: se a gravacao falhar (offline, sessao vencida, disfarce), o
+      // redesenho tem de acontecer do mesmo jeito -- senao a tela fica mostrando
+      // um valor que o banco nao tem. O codigo antigo chamava render() DEPOIS do
+      // await, entao um erro deixava a tela mentindo em silencio.
+      try { await definirSaldo(mesAtual, inp.dataset.conta, v); }
+      finally { setTimeout(redesenhar, 0); }
     });
-    inp.addEventListener("keydown", ev => { if (ev.key === "Enter") inp.blur(); });
+    // Enter/"Avancar" leva ao proximo campo ainda vazio -- no celular o teclado
+    // continua aberto e o mes fecha sem tirar o dedo da tela.
+    inp.addEventListener("keydown", ev => {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      const resto = cels.slice(i + 1).concat(cels.slice(0, i));
+      const alvo = resto.find(o => !o.value.trim()) || null;
+      if (alvo) alvo.focus(); else inp.blur();
+    });
   });
   const cp = document.getElementById("p-copiar");
   if (cp) cp.onclick = copiarMesAnterior;
@@ -1890,7 +2002,8 @@ function blocoApontar(ativas){
         : '<span class="d3">a partir de ' + rotulo(c.inicio) + '</span>') + '</span>' +
       (vale
         ? '<input class="cel s-cel" data-conta="' + c.id + '" value="' + esc(tem(c.id) ? fmtn(sal[c.id]) : "") +
-          '" placeholder="—" inputmode="decimal" aria-label="Saldo de ' + esc(c.nome) + '">'
+          '" placeholder="—" inputmode="decimal" enterkeyhint="next" autocomplete="off"' +
+          ' aria-label="Saldo de ' + esc(c.nome) + '">'
         : '<span class="cel zero" style="text-align:right">—</span>') +
     '</div>';
   }
@@ -1962,7 +2075,8 @@ function blocoAnalise(ativas){
   const foco = comps.includes(mesAtual) ? mesAtual : comps[comps.length-1];
   const comp = CONTAS.composicao(estado.contas, saldos, foco);
   const varia = CONTAS.variacao(estado.contas, saldos, foco);
-  _analise = { comps: comps, foco: foco, serie: CONTAS.serie(estado.contas, saldos) };
+  _analise = { comps: comps, foco: foco, comp: comp,
+               serie: CONTAS.serie(estado.contas, saldos) };
 
   const total = comp.reduce((a,c) => a + c.saldo, 0);
   let out = "";
@@ -1972,14 +2086,40 @@ function blocoAnalise(ativas){
   }
 
   // --- 1. composicao do mes
+  // O que mudou: a conta que puxou o mes, em uma frase. varia ja calcula tudo.
+  if (varia.anterior && varia.contas.length && varia.total.delta){
+    const lider = varia.contas[0].delta >= 0 ? varia.contas[0]
+                : varia.contas[varia.contas.length - 1];
+    if (lider && lider.delta)
+      out += '<p class="mudou"><b>' + esc(lider.nome) + '</b> ' +
+        (lider.delta >= 0 ? "puxou o mês" : "foi o que mais pesou") + ': ' +
+        esc(fmtsin(lider.delta)) + ' dos ' + esc(fmtsin(varia.total.delta)) +
+        ' que o patrimônio ' + (varia.total.delta >= 0 ? "subiu" : "caiu") + '.</p>';
+  }
   out += '<div class="hdr"><h2>Composição</h2><span class="aux">' + rotulo(foco) +
-    ' · ' + esc(fmt(total)) + '</span></div><div class="rule"></div>';
+    ' · <span id="comp-total" data-v="' + total + '">' + esc(fmt(total)) +
+    '</span></span></div><div class="rule"></div>';
+  out += '<div class="compwrap"><div class="roscawrap" id="rosca"></div><div class="cbars">';
   for (const c of comp){
-    out += '<div class="cbar"><div class="cb-top">' +
+    out += '<button class="cbar" data-fatia="' + esc(c.id) + '"' +
+      (c.partes ? ' title="' + esc(c.partes.join(", ")) + '"' : "") + '><div class="cb-top">' +
       '<span class="cb-nm"><i class="pt" style="background:' + c.cor + '"></i>' + esc(c.nome) + '</span>' +
       '<span class="cb-v">' + esc(fmt(c.saldo)) + ' <b>' + (c.pct*100).toFixed(0) + '%</b></span></div>' +
       '<div class="cb-trilha"><div class="cb-fill" style="width:' + (c.pct*100).toFixed(2) +
-        '%;background:' + c.cor + '"></div></div></div>';
+        '%;background:' + c.cor + '"></div>' +
+        (metaDe(c.id) != null
+          ? '<i class="cb-meta" style="left:' + (metaDe(c.id)*100).toFixed(2) + '%" title="meta ' +
+            (metaDe(c.id)*100).toFixed(0) + '%"></i>' : "") +
+      '</div></button>';
+  }
+  out += '</div></div>';
+  // Concentracao: para patrimonio, o risco nao esta no valor, esta em quanto ele
+  // depende de uma conta so. A rosca sugere isso; aqui vira numero.
+  if (comp.length > 2){
+    const top = comp.slice(0, 3).reduce((a,c) => a + c.pct, 0);
+    out += '<p class="conc">As 3 maiores somam <b>' + (top*100).toFixed(0) + '%</b>' +
+      (comp[0].pct >= .4 ? ' — só <b>' + esc(comp[0].nome) + '</b> responde por ' +
+        (comp[0].pct*100).toFixed(0) + '%.' : '.') + '</p>';
   }
 
   // --- 2. variacao contra o mes apurado anterior
@@ -2026,8 +2166,142 @@ function blocoAnalise(ativas){
   return out;
 }
 
+// ---------------------------------------------------------------- ROSCA
+// A composicao do mes como anel. Duas decisoes que valem registrar:
+//
+// 1. O centro mostra um PERCENTUAL, nunca o total. No modo discreto os valores
+//    sao escalados, mas percentual e razao -- invariante de escala. Entao a
+//    rosca continua verdadeira disfarcada, e a lista ao lado ja carrega os
+//    valores: repetir o total no centro seria redundancia que mente metade do
+//    tempo.
+// 2. Sem tooltip proprio. A selecao e COMPARTILHADA com as barras: tocar a
+//    fatia levanta a linha e tocar a linha levanta a fatia. Um estado, duas
+//    vistas.
+//
+// A troca de mes anima os arcos (stroke-dasharray com transicao) para o
+// patrimonio se rebalancear a vista -- e o unico movimento nao pedido da tela.
+// prefers-reduced-motion ja desliga tudo no reset global.
+let _fatia = null;
+// Guarda o desenho anterior do anel POR CONTA. Trocar de mes chama render(), que
+// refaz o container inteiro -- sem esta memoria os arcos nasceriam ja no lugar
+// certo e nao haveria de onde transicionar. Com ela, o anel nasce na composicao
+// do mes anterior e caminha para a do mes novo.
+let _roscaPrev = {};
+
+function desenharRosca(){
+  const box = document.getElementById("rosca");
+  if (!box || !_analise || !_analise.comp || !_analise.comp.length) return;
+  const comp = _analise.comp;
+  if (!comp.some(c => c.saldo > 0)) { box.innerHTML = ""; return; }
+
+  const larg = Math.round(box.getBoundingClientRect().width) || 260;
+  const W = Math.max(168, Math.min(matchMedia("(min-width:1000px)").matches ? 240 : 208, larg)), H = W;
+  const esp = Math.round(W * 0.13);
+  const r = (W - esp) / 2 - 2, cx = W / 2, cy = H / 2, C = 2 * Math.PI * r;
+
+  // Em foco: a fatia escolhida; sem escolha, a maior (comp ja vem ordenada).
+  const sel = comp.find(c => c.id === _fatia) || comp[0];
+
+  // O SVG so e RECONSTRUIDO quando muda o conjunto de contas ou o tamanho. Nos
+  // demais casos -- trocar de mes, escolher uma fatia -- os MESMOS <circle>
+  // recebem atributos novos, e e so por isso que a transicao CSS acontece: no
+  // recriado do zero nao tem estado anterior para transicionar. Trocar de mes
+  // faz os arcos caminharem de uma composicao para a outra.
+  const chave = comp.map(c => c.id).join("|") + "@" + W;
+  const novo = box.dataset.chave !== chave;
+  if (novo){
+    // Nasce onde o anel estava: mesma conta, mesmo tamanho de arco de antes.
+    const arcos = comp.map(c => {
+      const p = _roscaPrev[c.id];
+      return '<circle class="fx" data-fatia="' + esc(c.id) + '" cx="' + cx + '" cy="' + cy +
+        '" r="' + r.toFixed(1) + '" fill="none" stroke="' + c.cor + '" stroke-width="' + esp +
+        '" stroke-dashoffset="' + (p ? p.off : 0) + '"' +
+        ' stroke-dasharray="' + (p ? p.on : 0) + ' ' + C.toFixed(2) + '"><title></title></circle>';
+    }).join("");
+    box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '"' +
+      ' role="img" aria-label="Composicao do patrimonio por conta">' +
+      '<g transform="rotate(-90 ' + cx + ' ' + cy + ')">' + arcos + '</g>' +
+      '<text class="r-pct" x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle"></text>' +
+      // O nome fica em cinza de proposito: na cor da conta (#CD632D e afins) ele
+      // da ~4,3:1 contra o fundo, abaixo do minimo para 11,5px. Quem aponta a
+      // conta e o arco mais grosso no anel, nao a cor do texto.
+      '<text class="r-nm" x="' + cx + '" y="' + (cy + 21) + '" text-anchor="middle"></text></svg>';
+    box.dataset.chave = chave;
+    box.querySelectorAll(".fx").forEach(a => a.addEventListener("click", () => {
+      _fatia = (_fatia === a.dataset.fatia) ? null : a.dataset.fatia;
+      desenharRosca();
+    }));
+  }
+
+  // Os circulos estao na MESMA ordem de `comp` (foi assim que foram criados).
+  const arcosEl = box.querySelectorAll(".fx");
+  const pintar = () => {
+  let acum = 0;
+  comp.forEach((c, i) => {
+    const arco = arcosEl[i];
+    if (!arco) return;
+    const len = Math.max(0, c.pct) * C;
+    const vao = Math.min(3, len * 0.4);            // respiro entre fatias
+    const on = Math.max(0.6, len - vao);
+    const foco = c.id === sel.id;
+    arco.setAttribute("stroke", c.cor);
+    arco.setAttribute("stroke-width", foco ? esp + 5 : esp);
+    arco.setAttribute("stroke-dasharray", on.toFixed(2) + " " + (C - on).toFixed(2));
+    arco.setAttribute("stroke-dashoffset", (-acum).toFixed(2));
+    arco.setAttribute("opacity", _fatia && !foco ? ".46" : "1");
+    arco.firstChild.textContent = c.nome + " · " + (c.pct * 100).toFixed(1) + "%";
+    _roscaPrev[c.id] = { on: on.toFixed(2), off: (-acum).toFixed(2) };
+    acum += len;
+  });
+  };
+  // Recem-criado, forca o reflow ANTES de pintar: o navegador precisa ter
+  // calculado o estado inicial para ter de onde transicionar. Nao uso
+  // requestAnimationFrame aqui de proposito -- em aba oculta ele nao roda e os
+  // arcos ficariam parados em zero.
+  if (novo) void box.offsetWidth;
+  pintar();
+
+  const nome = sel.nome.length > 18 ? sel.nome.slice(0, 17) + "…" : sel.nome;
+  box.querySelector(".r-pct").innerHTML =
+    (sel.pct * 100).toFixed(0) + '<tspan class="r-sig">%</tspan>';
+  box.querySelector(".r-nm").textContent = nome;
+  marcarFatia();
+}
+
+// A linha correspondente na lista acompanha a fatia -- sem redesenhar a tela.
+function marcarFatia(){
+  document.querySelectorAll(".cbar").forEach(b =>
+    b.classList.toggle("on", !!_fatia && b.dataset.fatia === _fatia));
+}
+
+// O total da Composicao caminha do mes anterior para o novo, no mesmo tempo dos
+// arcos: anel e numero se movem juntos, entao a troca de mes e UM movimento so.
+let _totalPrev = null;
+function contarTotal(){
+  const el = document.getElementById("comp-total");
+  if (!el) return;
+  const alvo = +el.dataset.v, de = (_totalPrev === null) ? alvo : _totalPrev;
+  _totalPrev = alvo;
+  const parado = de === alvo || !window.requestAnimationFrame ||
+    matchMedia("(prefers-reduced-motion:reduce)").matches;
+  if (parado){ el.textContent = fmt(alvo); return; }
+  const t0 = performance.now();
+  const passo = t => {
+    const k = Math.min(1, (t - t0) / 500), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = fmt(de + (alvo - de) * e);
+    if (k < 1) requestAnimationFrame(passo);
+  };
+  requestAnimationFrame(passo);
+}
+
 function desenharAnalise(){
   if (!_analise) return;
+  desenharRosca();
+  contarTotal();
+  document.querySelectorAll(".cbar").forEach(b => b.onclick = () => {
+    _fatia = (_fatia === b.dataset.fatia) ? null : b.dataset.fatia;
+    desenharRosca();
+  });
   desenharPilha();
   desenharLinhas();
 }
@@ -2215,6 +2489,12 @@ function desenharEvolucao(){
       (iHoje >= 0 ? '<span><i class="sw-hoje"></i>hoje</span>' : "") +
     '</div>';
 }
+// Meta = quanto a conta DEVERIA representar do patrimonio, em fracao (0.25).
+// Mora em estado.settings (fin_settings.data), nao numa coluna nova: e
+// preferencia do usuario, nao dado do patrimonio, e assim nao exige migracao.
+const metas = () => (estado.settings.metas = estado.settings.metas || {});
+const metaDe = id => { const v = metas()[id]; return (v == null) ? null : +v; };
+
 function folhaConta(conta){
   const c = conta || { considera_patrimonio:true, inicio: compHoje() };
   const tipos = {corrente:"Conta corrente",investimento:"Investimento",fgts:"FGTS",cartao:"Cartão",outro:"Outro"};
@@ -2228,6 +2508,9 @@ function folhaConta(conta){
     '</select></label>' +
     '<label class="f">Instituição<input id="c-inst" value="' + esc(c.instituicao||"") + '" placeholder="opcional"></label></div>' +
     '<label class="f">Conta a partir de<input id="c-ini" type="month" value="' + (c.inicio||compHoje()).slice(0,7) + '"></label>' +
+    '<label class="f">Meta no patrimônio<input id="c-meta" inputmode="decimal" value="' +
+      (conta && metaDe(conta.id) != null ? esc(fmtn(metaDe(conta.id)*100)) : "") +
+      '" placeholder="opcional, em % — ex.: 25"></label>' +
     '<label class="check"><input type="checkbox" id="c-pat"' + (c.considera_patrimonio===false?"":" checked") + '>' +
       '<span>Somar no patrimônio</span></label>' +
     '<div class="acoes"><button class="btn pri" id="ok">' + (conta?"Salvar":"Cadastrar conta") + '</button>' +
@@ -2249,8 +2532,16 @@ function folhaConta(conta){
           inicio: (document.getElementById("c-ini").value || compHoje().slice(0,7)) + "-01",
           considera_patrimonio: document.getElementById("c-pat").checked,
           ordem: conta ? conta.ordem : estado.contas.length + 1 };
+        let alvo = conta;
         if (conta){ await patch("fin_accounts", conta.id, linha); Object.assign(conta, linha); }
-        else { const r = await salvar("fin_accounts", linha, "user_id,nome"); if (r && r[0]) estado.contas.push(r[0]); }
+        else { const r = await salvar("fin_accounts", linha, "user_id,nome");
+               if (r && r[0]){ estado.contas.push(r[0]); alvo = r[0]; } }
+        const mv = parseNum(document.getElementById("c-meta").value);
+        if (alvo && alvo.id){
+          const M = metas();
+          if (mv === null || mv <= 0) delete M[alvo.id]; else M[alvo.id] = Math.min(1, mv/100);
+          await gravarPrefs();
+        }
         fecharFolha(); reprojetar(); render(); toast(conta?"Conta salva":"Conta cadastrada");
       };
     });
