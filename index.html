@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Finanças</title>
+</head>
+<body>
+<script>
+/*<motor>*/
+// ============================================================
+// MOTOR DE PROJECAO  -- funcao pura, sem I/O.
+// Testado por tests/test_motor.html contra os 48 meses da planilha.
+//
+// IMPORTANTE: nao arredonda o encadeamento. A planilha encadeia valores
+// nao arredondados (E22 = 15450,07229; G3 = 3281,2275) e arredondar a cada
+// passo acumula erro ao longo dos 48 meses. Arredondar e trabalho da camada
+// de exibicao e da coluna numeric(14,2) do banco.
+// ============================================================
+window.MOTOR = (function () {
+
+  // "2025-01-01" -> indice absoluto de mes
+  function mesN(c) {
+    const p = c.split("-");
+    return (+p[0]) * 12 + (+p[1]) - 1;
+  }
+
+  // Qual regra vale para (categoria, mes). Vence a de MENOR vigencia -- a mais
+  // especifica; empate resolve pelo inicio mais recente. E isso que faz a regra
+  // 'fixo' de um mes so (jan/2027, jan/2028) vencer o 'crescimento' do ano.
+  function regraDoMes(regras, catId, comp) {
+    const n = mesN(comp);
+    const cand = regras.filter(r =>
+      r.category_id === catId && r.ativo !== false &&
+      mesN(r.inicio) <= n && (!r.fim || mesN(r.fim) >= n));
+    if (!cand.length) return null;
+    cand.sort((a, b) => {
+      const la = a.fim ? mesN(a.fim) - mesN(a.inicio) : 1e9;
+      const lb = b.fim ? mesN(b.fim) - mesN(b.inicio) : 1e9;
+      return la - lb || mesN(b.inicio) - mesN(a.inicio);
+    });
+    return cand[0];
+  }
+
+  function valorDaRegra(r, comp, saldoInicial) {
+    if (!r) return 0;
+    const d = mesN(comp) - mesN(r.inicio);
+    switch (r.tipo) {
+      case "pct_saldo":
+        return saldoInicial * (+r.percentual);
+      case "crescimento":
+        return (+r.valor) * Math.pow(1 + (+r.percentual), d);
+      case "anual":
+        return (+comp.split("-")[1] === +r.mes) ? (+r.valor) : 0;
+      case "fixo": {
+        if (!r.reajuste_pct || !r.reajuste_mes) return +r.valor;
+        // quantos aniversarios do reajuste ja passaram desde o inicio
+        let anos = 0;
+        const ini = mesN(r.inicio), atual = mesN(comp);
+        for (let k = ini + 1; k <= atual; k++) {
+          if ((k % 12) + 1 === +r.reajuste_mes) anos++;
+        }
+        return (+r.valor) * Math.pow(1 + (+r.reajuste_pct), anos);
+      }
+    }
+    return 0;
+  }
+
+  function projetar(d) {
+    const out = [];
+    let previsaoAnterior = null;
+
+    for (const comp of d.competencias) {
+      const info = (d.meses && d.meses[comp]) || {};
+
+      const saldoInicial = (info.saldo_inicial_override !== null && info.saldo_inicial_override !== undefined)
+        ? +info.saldo_inicial_override
+        : (previsaoAnterior !== null ? previsaoAnterior : 0);
+
+      const previsto = {};
+      let receitas = 0, saidas = 0;
+
+      for (const c of d.categorias) {
+        const posto = d.plano[comp] ? d.plano[comp][c.id] : undefined;
+        const v = (posto !== null && posto !== undefined)
+          ? +posto
+          : valorDaRegra(regraDoMes(d.regras, c.id, comp), comp, saldoInicial);
+        previsto[c.id] = v;
+        if (c.tipo === "receita") receitas += v; else saidas += v;
+      }
+
+      const previsao = saldoInicial + receitas - saidas;
+
+      // realizado: override manual, senao a soma dos saldos por conta, senao Aberto
+      const saldos = (d.balances && d.balances[comp]) || null;
+      const somaSaldos = (saldos && Object.keys(saldos).length)
+        ? Object.keys(saldos).reduce((a, k) => a + (+saldos[k]), 0)
+        : null;
+      const realizado = (info.realizado_override !== null && info.realizado_override !== undefined)
+        ? +info.realizado_override
+        : somaSaldos;
+
+      out.push({
+        competencia: comp,
+        saldoInicial: saldoInicial,
+        previsto: previsto,
+        receitas: receitas,
+        saidas: saidas,
+        previsao: previsao,
+        realizado: realizado,
+        aberto: realizado === null || realizado === undefined,
+        diferenca: (realizado === null || realizado === undefined) ? null : realizado - previsao,
+        variacao: (realizado === null || realizado === undefined || !previsao) ? null : realizado / previsao - 1,
+      });
+      previsaoAnterior = previsao;
+    }
+    return out;
+  }
+
+  return { projetar: projetar, regraDoMes: regraDoMes, valorDaRegra: valorDaRegra, mesN: mesN };
+})();
+/*</motor>*/
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste do motor de projecao</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if(!cond) falhas++; return cond; }
+function perto(a, b, msg){
+  ok(a !== null && a !== undefined && Math.abs(a - b) < 0.01,
+     `${msg} (obtido ${a}, esperado ${b})`);
+}
+function fim(){
+  document.getElementById("out").textContent =
+    log.join("\n") + `\n\n=== ${falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)"} === (${log.length} asserções)`;
+}
+
+// ---------------------------------------------------------------- helper
+// Converte a fixture no formato de entrada do motor.
+// O id sintetico de cada categoria E O PROPRIO NOME -- e isso que faz
+// previsto["Rendimentos"] e plano[comp]["Rendimentos"] funcionarem aqui.
+function montar(fx, opts){
+  opts = opts || {};
+  const sem = new Set(opts.semPlanoDe || []);
+  const categorias = fx.categorias.map(c => ({ id: c.nome, nome: c.nome, tipo: c.tipo, calculo: c.calculo }));
+
+  const regras = fx.regras.map(r => ({
+    category_id: r.categoria, tipo: r.tipo, valor: r.valor, percentual: r.percentual,
+    mes: r.mes, inicio: r.inicio, fim: r.fim, ativo: true,
+  }));
+  if (opts.regraAnual) regras.push({ category_id: opts.regraAnual.categoria, tipo: "anual",
+    valor: opts.regraAnual.valor, mes: opts.regraAnual.mes, inicio: opts.regraAnual.inicio,
+    fim: null, ativo: true });
+  if (opts.regraFixa) regras.push({ category_id: opts.regraFixa.categoria, tipo: "fixo",
+    valor: opts.regraFixa.valor, inicio: opts.regraFixa.inicio, fim: null,
+    reajuste_pct: opts.regraFixa.reajuste_pct, reajuste_mes: opts.regraFixa.reajuste_mes, ativo: true });
+
+  const plano = {};
+  for (const comp in fx.plano){
+    plano[comp] = {};
+    for (const cat in fx.plano[comp]) if (!sem.has(cat)) plano[comp][cat] = fx.plano[comp][cat];
+  }
+
+  const meses = {};
+  for (const m of fx.meses) meses[m.competencia] = {
+    saldo_inicial_override: m.saldo_inicial_override,
+    realizado_override: m.realizado_override,
+    fechado: m.fechado,
+  };
+
+  let competencias = Object.keys(fx.plano).sort();
+  if (opts.ate){
+    let ult = competencias[competencias.length - 1];
+    while (ult < opts.ate){
+      let [a, m] = ult.split("-").map(Number);
+      m++; if (m > 12){ m = 1; a++; }
+      ult = `${a}-${String(m).padStart(2,"0")}-01`;
+      competencias.push(ult);
+      if (!plano[ult]) plano[ult] = {};
+    }
+  }
+  return { categorias, regras, plano, meses, competencias, balances: {}, entries: {} };
+}
+
+// ------------------------------------------------------------------ casos
+(async () => {
+  const html = await (await fetch("../index.html")).text();
+  const m = html.match(/\/\*<motor>\*\/([\s\S]*?)\/\*<\/motor>\*\//);
+  if (!ok(!!m, "bloco <motor> encontrado no index.html")) return fim();
+  (0, eval)(m[1]);
+  if (!ok(!!window.MOTOR && typeof MOTOR.projetar === "function", "MOTOR.projetar existe")) return fim();
+
+  const fx = await (await fetch("./fixtures.json")).json();
+
+  // --- caso 1: reproduzir os 48 meses da planilha DERIVANDO Rendimentos e Dividendos
+  const meses = MOTOR.projetar(montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] }));
+  ok(meses.length === 48, `48 meses projetados (veio ${meses.length})`);
+  for (const mes of meses) perto(mes.previsao, fx.esperado[mes.competencia], "previsao " + mes.competencia);
+
+  // --- caso 2: mes sem saldo e sem override e "Aberto", nao zero
+  const set26 = meses.find(x => x.competencia === "2026-09-01");
+  ok(set26.aberto === true && set26.realizado === null, "09/2026 aberto (nao zero)");
+  const ago26 = meses.find(x => x.competencia === "2026-08-01");
+  perto(ago26.realizado, 718905.10, "realizado de 08/2026 vem do override");
+  perto(ago26.diferenca, 718905.10 - 713061.83, "diferenca de 08/2026");
+
+  // --- caso 3: reancorar muda so dali pra frente
+  const d3 = montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] });
+  d3.meses["2026-09-01"] = { saldo_inicial_override: 700000 };
+  const p3 = MOTOR.projetar(d3);
+  perto(p3.find(x => x.competencia === "2026-08-01").previsao, fx.esperado["2026-08-01"],
+        "mes anterior a ancora intacto");
+  perto(p3.find(x => x.competencia === "2026-09-01").saldoInicial, 700000, "ancora aplicada em 09/2026");
+  ok(Math.abs(p3.find(x => x.competencia === "2028-12-01").previsao - fx.esperado["2028-12-01"]) > 1,
+     "ancora propaga ate 12/2028");
+
+  // --- caso 4: fin_plan congela categoria automatica
+  const d4 = montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] });
+  d4.plano["2027-05-01"]["Rendimentos"] = 1;
+  const p4 = MOTOR.projetar(d4);
+  perto(p4.find(x => x.competencia === "2027-05-01").previsto["Rendimentos"], 1,
+        "plano congela categoria pct_saldo");
+
+  // --- caso 5: regra anual so lanca no mes configurado
+  const p5 = MOTOR.projetar(montar(fx, {
+    semPlanoDe: ["Rendimentos", "Dividendos"], ate: "2029-12-01",
+    regraAnual: { categoria: "IPVA", valor: 3000, mes: 1, inicio: "2029-01-01" } }));
+  perto(p5.find(x => x.competencia === "2029-01-01").previsto["IPVA"], 3000, "IPVA lanca em janeiro");
+  perto(p5.find(x => x.competencia === "2029-02-01").previsto["IPVA"], 0, "IPVA zero em fevereiro");
+
+  // --- caso 6: reajuste anual aplica uma vez por ano
+  const p6 = MOTOR.projetar(montar(fx, {
+    semPlanoDe: ["Rendimentos", "Dividendos"], ate: "2031-12-01",
+    regraFixa: { categoria: "Contabilidade", valor: 100, inicio: "2029-01-01",
+                 reajuste_pct: 0.05, reajuste_mes: 1 } }));
+  perto(p6.find(x => x.competencia === "2029-06-01").previsto["Contabilidade"], 100, "reajuste ano 0");
+  perto(p6.find(x => x.competencia === "2030-06-01").previsto["Contabilidade"], 105, "reajuste ano 1");
+  perto(p6.find(x => x.competencia === "2031-06-01").previsto["Contabilidade"], 110.25, "reajuste ano 2");
+
+  // --- caso 7: realizado vem da soma dos saldos por conta quando existe
+  const d7 = montar(fx, { semPlanoDe: ["Rendimentos", "Dividendos"] });
+  delete d7.meses["2026-09-01"].realizado_override;
+  d7.balances["2026-09-01"] = { "cc": 5000.10, "cdb": 700000.90 };
+  const p7 = MOTOR.projetar(d7);
+  perto(p7.find(x => x.competencia === "2026-09-01").realizado, 705001.00,
+        "realizado = soma dos saldos das contas");
+
+  fim();
+})().catch(e => { log.push("EXCECAO " + e.message + "\n" + e.stack); falhas++; fim(); });
+</script>
