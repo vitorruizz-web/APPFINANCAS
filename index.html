@@ -25,9 +25,10 @@
   --line:#1E252E; --line-2:#2A333F;
   --ink:#E9ECF0; --ink-2:#98A3B0; --ink-3:#5E6874; --ink-4:#3D454F;
 
-  --jade:#4FC08D;   --jade-d:#1E5C42;  --jade-g:rgba(79,192,141,.10);
+  --tif:#3ECFC8;   --tif-d:#17706B;  --tif-g:rgba(62,207,200,.10);
   --steel:#6E93C4;  --steel-d:#2B4463; --steel-g:rgba(110,147,196,.10);
   --sand:#C9A227;   --sand-g:rgba(201,162,39,.10);
+  --ouro:#F0C24A;   --ouro-2:#F7DA8B;  --ouro-3:#C89A2E;
   --clay:#D2605C;   --clay-g:rgba(210,96,92,.10);
 
   --pad:18px; --r:10px;
@@ -45,10 +46,10 @@ button,input,select,textarea{font:inherit;color:inherit;font-variant-numeric:tab
 button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
 :focus-visible{outline:2px solid var(--steel);outline-offset:2px;border-radius:5px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-::selection{background:var(--jade-d);color:#fff}
+::selection{background:var(--tif-d);color:#fff}
 
 .serif{font-family:var(--serif);font-weight:400}
-.pos{color:var(--jade)} .neg{color:var(--clay)} .abr{color:var(--sand)}
+.pos{color:var(--tif)} .neg{color:var(--clay)} .abr{color:var(--sand)}
 .d2{color:var(--ink-2)} .d3{color:var(--ink-3)}
 .t11{font-size:11px} .t12{font-size:12px} .t13{font-size:13px}
 
@@ -117,14 +118,14 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   border:1px solid var(--line-2);background:var(--surface);
 }
 .hero .delta b{font-weight:600;font-size:15px}
-.hero .delta.up{border-color:var(--jade-d);background:var(--jade-g)}
+.hero .delta.up{border-color:var(--tif-d);background:var(--tif-g)}
 .hero .delta.down{border-color:var(--clay);background:var(--clay-g)}
 
 .nota{
   margin:22px 0 0;padding:15px 16px;border-radius:var(--r);
   background:var(--surface);border:1px solid var(--line);
   font-size:13.5px;line-height:1.6;color:var(--ink-2);
-  border-left:2px solid var(--jade);
+  border-left:2px solid var(--tif);
 }
 .nota b{color:var(--ink);font-weight:600}
 .nota.fria{border-left-color:var(--steel)}
@@ -142,9 +143,11 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   font-size:11px;color:var(--ink-3)}
 .legenda span{display:inline-flex;align-items:center;gap:6px}
 .legenda i{width:12px;height:10px;border-radius:2px;display:inline-block}
-.legenda .sw-bar{background:var(--jade);opacity:.62}
-.legenda .sw-lin{height:2px;background:var(--steel);border-radius:1px}
-.legenda .sw-tra{height:0;width:14px;border-top:2px dashed var(--steel)}
+.legenda .sw-bar{background:var(--tif);opacity:.62}
+.legenda .sw-lin{height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--ouro-3),var(--ouro),var(--ouro-2));
+  box-shadow:0 0 7px rgba(240,194,74,.65)}
+.legenda .sw-tra{height:0;width:14px;border-top:2px dashed var(--tif);opacity:.8}
 .legenda .sw-hoje{height:0;width:12px;border-top:2px dashed var(--sand)}
 .legenda b{font-weight:500}
 
@@ -174,7 +177,7 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   background:var(--line);position:relative;overflow:visible;
 }
 .trilha i{position:absolute;left:0;top:0;height:100%;border-radius:2px;display:block}
-.trilha .fill{background:var(--jade)}
+.trilha .fill{background:var(--tif)}
 .trilha .fill.plano{background:var(--steel);opacity:.5}
 .trilha .tick{
   position:absolute;top:-3px;width:2px;height:9px;border-radius:1px;
@@ -199,7 +202,7 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
 .lrow .nm:hover{color:var(--steel)}
 .lrow .nm .fx{color:var(--steel);font-size:11px}
 .lrow .rl{font-size:11.5px;color:var(--ink-3);text-align:right;white-space:nowrap}
-.lrow .rl b{color:var(--jade);font-weight:500}
+.lrow .rl b{color:var(--tif);font-weight:500}
 .parc{
   grid-column:1/-1;display:flex;gap:8px;align-items:baseline;flex-wrap:nowrap;
   font-size:11.5px;color:var(--ink-3);padding:0 0 5px 4px;
@@ -238,8 +241,8 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   padding:9px 15px;font-size:13.5px;transition:background .15s,border-color .15s;
 }
 .btn:hover{background:var(--raised);border-color:var(--ink-4)}
-.btn.pri{background:var(--jade-d);border-color:var(--jade-d);color:#EDFBF4;font-weight:500}
-.btn.pri:hover{background:#267653}
+.btn.pri{background:var(--tif-d);border-color:var(--tif-d);color:#ECFCFA;font-weight:500}
+.btn.pri:hover{background:#1E8C85}
 .btn.mini{padding:6px 11px;font-size:12.5px}
 .btn.plain{border-color:transparent;background:transparent;color:var(--ink-2)}
 .btn.plain:hover{background:var(--surface);color:var(--ink)}
@@ -270,7 +273,7 @@ table.plano th:first-child,table.plano td:first-child{
 table.plano thead th{color:var(--ink-3);font-weight:500;font-size:11px;
   background:var(--surface);position:sticky;top:0;z-index:2}
 table.plano thead th:first-child{z-index:3;background:var(--surface)}
-table.plano thead th.rec{color:var(--jade)}
+table.plano thead th.rec{color:var(--tif)}
 table.plano thead th.des{color:var(--ink-3)}
 table.plano tr.sep td{background:var(--raised);color:var(--ink-3);font-size:11px;
   padding:5px 11px;letter-spacing:.04em}
@@ -278,6 +281,16 @@ table.plano tr.agora td{background:var(--sand-g)}
 table.plano td.z{color:var(--ink-4)}
 table.plano td.forte{color:var(--ink)}
 table.plano .colsep{border-left:1px solid var(--line-2)}
+table.plano td.ed{cursor:cell}
+table.plano td.ed:hover{background:var(--raised);box-shadow:inset 0 0 0 1px var(--line-2)}
+table.plano td.editando{padding:2px 4px}
+table.plano td input{width:100%;min-width:82px;background:var(--raised);
+  border:1px solid var(--steel);border-radius:4px;padding:5px 7px;text-align:right;
+  font-size:12.5px;outline:none}
+.salvo{animation:pisca .8s ease-out}
+.cel.salvo{animation:piscaCel .8s ease-out}
+@keyframes pisca{0%{box-shadow:inset 0 0 0 2px var(--tif)}100%{box-shadow:inset 0 0 0 2px transparent}}
+@keyframes piscaCel{0%{border-color:var(--tif);background:var(--tif-g)}100%{border-color:transparent;background:transparent}}
 
 /* ---------------- folha modal ---------------- */
 .sheet-bg{position:fixed;inset:0;background:rgba(4,6,9,.74);z-index:60;display:none;
@@ -312,7 +325,7 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{
 .lg-regua{display:grid;gap:10px}
 .lg-regua i{height:5px;border-radius:2px;display:block;background:var(--line);position:relative}
 .lg-regua i::after{content:"";position:absolute;left:0;top:0;height:100%;border-radius:2px;
-  background:var(--jade);width:var(--w)}
+  background:var(--tif);width:var(--w)}
 .lg-regua i:nth-child(n+5)::after{background:var(--steel);opacity:.45}
 .lg-form label.f:first-of-type{margin-top:0}
 #login .btn{width:100%;margin-top:22px;padding:14px}
@@ -585,6 +598,22 @@ function toast(msg){
   el.textContent = msg; el.classList.add("on");
   clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), 2800);
 }
+// Degradê ao longo do traço + brilho gaussiano. O <defs> vai dentro de cada
+// SVG (ids únicos por gráfico) para não depender de ordem de renderização.
+function defsOuro(id){
+  return '<defs>' +
+    '<linearGradient id="g' + id + '" x1="0" y1="0" x2="1" y2="0">' +
+      '<stop offset="0%" stop-color="var(--ouro-3)"/>' +
+      '<stop offset="45%" stop-color="var(--ouro)"/>' +
+      '<stop offset="100%" stop-color="var(--ouro-2)"/>' +
+    '</linearGradient>' +
+    '<filter id="b' + id + '" x="-35%" y="-35%" width="170%" height="170%">' +
+      '<feGaussianBlur stdDeviation="3.2" result="d"/>' +
+      '<feMerge><feMergeNode in="d"/><feMergeNode in="d"/>' +
+      '<feMergeNode in="SourceGraphic"/></feMerge>' +
+    '</filter></defs>';
+}
+
 const ICO = {
   ant:'<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   prox:'<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
@@ -879,14 +908,14 @@ function desenharCombo(ano){
   ms.forEach((m,i) => {
     const yb = y(m.previsao), x0 = cx(i)-bar/2;
     barras += '<rect x="' + x0.toFixed(1) + '" y="' + yb.toFixed(1) + '" width="' + bar.toFixed(1) +
-      '" height="' + Math.max(1,(H-PB-yb)).toFixed(1) + '" rx="3" fill="var(--jade)" opacity="' +
+      '" height="' + Math.max(1,(H-PB-yb)).toFixed(1) + '" rx="3" fill="var(--tif)" opacity="' +
       (m.aberto ? ".30" : ".62") + '"/>';
     eixo += '<text x="' + cx(i).toFixed(1) + '" y="' + (H-9) + '" text-anchor="middle" font-size="11" ' +
       'fill="' + (m.competencia===hoje ? "var(--sand)" : "var(--ink-3)") + '">' + MESES[i] + '</text>';
     if (!m.aberto){
       pts.push([cx(i), y(m.realizado)]);
       bolas += '<circle cx="' + cx(i).toFixed(1) + '" cy="' + y(m.realizado).toFixed(1) +
-        '" r="3.2" fill="var(--bg)" stroke="var(--steel)" stroke-width="2"/>';
+        '" r="3.4" fill="var(--bg)" stroke="var(--ouro)" stroke-width="2"/>';
     }
     alvos += '<rect data-comp="' + m.competencia + '" x="' + (PL+bw*i).toFixed(1) + '" y="0" width="' +
       bw.toFixed(1) + '" height="' + H + '" fill="transparent" style="cursor:pointer"><title>' +
@@ -895,13 +924,14 @@ function desenharCombo(ano){
   });
   const linha = pts.length > 1
     ? '<path d="' + pts.map((p,i) => (i?"L":"M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ") +
-      '" fill="none" stroke="var(--steel)" stroke-width="2.2" stroke-linejoin="round" ' +
+      '" fill="none" stroke="url(#gC)" stroke-width="2.6" stroke-linejoin="round" ' +
       'stroke-linecap="round" vector-effect="non-scaling-stroke"/>' : "";
 
   box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" ' +
     'role="img" aria-label="Previsto em barras e apurado em linha, ' + ano + '">' +
+    defsOuro("C") +
     '<line x1="0" y1="' + (H-PB) + '" x2="' + W + '" y2="' + (H-PB) + '" stroke="var(--line)"/>' +
-    barras + linha + bolas + eixo + alvos + '</svg>' +
+    barras + '<g filter="url(#bC)">' + linha + bolas + '</g>' + eixo + alvos + '</svg>' +
     '<div class="legenda"><span><i class="sw-bar"></i>previsto</span>' +
     '<span><i class="sw-lin"></i>apurado</span>' +
     '<span class="d3">toque num mês para o detalhe</span></div>';
@@ -1098,6 +1128,9 @@ async function aplicarCelula(inp){
     await definirPlano(mesAtual, catId, v);
     if (cat && cat.calculo !== "manual") toast(cat.nome + " congelado em " + rotulo(mesAtual));
     render();
+    // confirma na propria celula: gravou. Sem toast, que viraria spam ao editar varias.
+    const nova = document.querySelector('#s-mes .p-cel[data-cat="' + catId + '"]');
+    if (nova){ nova.classList.add("salvo"); setTimeout(() => nova.classList.remove("salvo"), 800); }
   } catch(e){ inp.value = fmtn(antes); }
 }
 
@@ -1452,7 +1485,7 @@ function desenharEvolucao(){
   if (reais.length > 1){
     const volta = reais.slice().reverse()
       .map(o => "L" + x(o.i).toFixed(1) + " " + y(o.p.previsao).toFixed(1)).join(" ");
-    faixa = '<path d="' + dReal + " " + volta + ' Z" fill="var(--jade)" opacity=".13"/>';
+    faixa = '<path d="' + dReal + " " + volta + ' Z" fill="var(--ouro)" opacity=".10"/>';
   }
 
   const iHoje = ps.findIndex(p => p.competencia === compHoje());
@@ -1461,21 +1494,22 @@ function desenharEvolucao(){
       '" stroke="var(--sand)" stroke-dasharray="3 3" opacity=".8"/>' : "";
   const ult = reais[reais.length-1];
   const alvo = ult ? '<circle cx="' + x(ult.i).toFixed(1) + '" cy="' + y(ult.p.realizado).toFixed(1) +
-      '" r="4" fill="var(--jade)" stroke="var(--bg)" stroke-width="2"/>' : "";
+      '" r="4.2" fill="var(--ouro)" stroke="var(--bg)" stroke-width="2"/>' : "";
   const fim = ps[ps.length-1];
   const rotFim = '<circle cx="' + x(ps.length-1).toFixed(1) + '" cy="' + y(fim.previsao).toFixed(1) +
-      '" r="3" fill="var(--steel)"/>';
+      '" r="3" fill="var(--tif)"/>';
 
   box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" ' +
     'role="img" aria-label="Patrimônio apurado e projetado ao longo do plano">' +
-    grade + eixo + faixa + marcaHoje +
-    '<path d="' + dPrev + '" fill="none" stroke="var(--steel)" stroke-width="1.6" ' +
-      'stroke-dasharray="5 4" vector-effect="non-scaling-stroke" opacity=".85"/>' +
-    (dReal ? '<path d="' + dReal + '" fill="none" stroke="var(--jade)" stroke-width="2.4" ' +
-      'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' : "") +
-    rotFim + alvo + '</svg>' +
+    defsOuro("E") + grade + eixo + faixa + marcaHoje +
+    '<path d="' + dPrev + '" fill="none" stroke="var(--tif)" stroke-width="1.7" ' +
+      'stroke-dasharray="5 4" vector-effect="non-scaling-stroke" opacity=".75"/>' +
+    (dReal ? '<g filter="url(#bE)"><path d="' + dReal + '" fill="none" stroke="url(#gE)" ' +
+      'stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round" ' +
+      'vector-effect="non-scaling-stroke"/>' + alvo + '</g>' : "") +
+    rotFim + '</svg>' +
     '<div class="legenda">' +
-      '<span><i class="sw-lin" style="background:var(--jade)"></i>apurado' +
+      '<span><i class="sw-lin"></i>apurado' +
         (ult ? ' <b class="d2">' + fmtk(ult.p.realizado) + '</b>' : "") + '</span>' +
       '<span><i class="sw-tra"></i>plano <b class="d2">' + fmtk(fim.previsao) + ' em ' +
         rotulo(fim.competencia) + '</b></span>' +
@@ -1560,7 +1594,12 @@ function renderPlano(){
     h += '<tr' + (m.competencia===hoje?' class="agora"':'') + '><td>' + rotulo(m.competencia) + '</td>' +
       cols.map(c => {
         const v = c.ids.reduce((s,id) => s + (m.previsto[id]||0), 0);
-        return '<td class="' + (v?"":"z") + '">' + (v?fmtn(v):"·") + '</td>';
+        // so o modo Categorias e editavel: um grupo e soma de varias categorias,
+        // nao daria para saber em qual delas gravar.
+        const edit = modo === "categorias";
+        return '<td class="' + (v?"":"z") + (edit?" ed":"") + '"' +
+          (edit ? ' data-comp="' + m.competencia + '" data-cat="' + c.ids[0] + '"' : "") +
+          '>' + (v?fmtn(v):"·") + '</td>';
       }).join("") +
       '<td class="colsep pos">' + fmtn(m.receitas) + '</td>' +
       '<td class="neg">' + fmtn(m.saidas) + '</td>' +
@@ -1587,6 +1626,7 @@ function renderPlano(){
     '<div class="acoes"><button class="btn" id="nova-regra">Nova regra</button>' +
     '<button class="btn plain" id="mais12">Estender 12 meses</button></div>';
 
+  ligarEdicaoTabela(el);
   el.querySelectorAll("#seg-modo button").forEach(b => b.onclick = async () => {
     estado.settings.planoModo = b.dataset.m;
     render(); gravarPrefs();
@@ -1601,6 +1641,61 @@ function renderPlano(){
     estado.settings.mesesExtra = (estado.settings.mesesExtra||0) + 12;
     horizonte(); reprojetar(); render(); gravarPrefs(); toast("Horizonte estendido");
   };
+}
+
+// Edicao direta na tabela do plano: clicar na celula, digitar, Enter.
+// Grava na hora (mesmo caminho da aba Mes) e Enter pula para o mes seguinte,
+// que e o gesto natural de quem vai editar varios de uma vez.
+function ligarEdicaoTabela(el){
+  el.querySelectorAll("td.ed").forEach(td => td.onclick = () => editarNaTabela(td));
+}
+function editarNaTabela(td){
+  if (td.querySelector("input")) return;
+  const comp = td.dataset.comp, cat = td.dataset.cat;
+  const m = mesProj(comp);
+  if (!m) return;
+  const atual = m.previsto[cat] || 0;
+  const textoAntes = td.textContent, classeAntes = td.className;
+  td.classList.add("editando");
+  td.innerHTML = '<input inputmode="decimal" value="' + (atual ? fmtn(atual) : "") + '">';
+  const inp = td.querySelector("input");
+  inp.focus(); inp.select();
+
+  let feito = false;
+  const encerra = async (gravar, seguir) => {
+    if (feito) return; feito = true;
+    const v = gravar ? parseNum(inp.value) : null;
+    if (v === null || Math.abs(v - atual) < 0.005){
+      td.className = classeAntes; td.textContent = textoAntes;
+      if (seguir) abrirProxima(comp, cat);
+      return;
+    }
+    td.className = classeAntes; td.textContent = fmtn(v);
+    try {
+      await definirPlano(comp, cat, v);
+      const rolagem = el2().scrollLeft, alto = window.scrollY;
+      render();
+      const box = el2(); if (box) box.scrollLeft = rolagem;
+      window.scrollTo(0, alto);
+      const alvo = document.querySelector('td.ed[data-comp="' + comp + '"][data-cat="' + cat + '"]');
+      if (alvo){ alvo.classList.add("salvo"); setTimeout(() => alvo.classList.remove("salvo"), 800); }
+      if (seguir) abrirProxima(comp, cat);
+    } catch(e){ td.textContent = textoAntes; }
+  };
+  const el2 = () => document.querySelector("#s-plano .tabwrap");
+  inp.addEventListener("blur", () => encerra(true, false));
+  inp.addEventListener("keydown", ev => {
+    if (ev.key === "Enter"){ ev.preventDefault(); encerra(true, true); }
+    else if (ev.key === "Escape"){ ev.preventDefault(); encerra(false, false); }
+    else if (ev.key === "Tab"){ ev.preventDefault(); encerra(true, true); }
+  });
+}
+function abrirProxima(comp, cat){
+  const prox = somaMes(comp, 1);
+  const td = document.querySelector('td.ed[data-comp="' + prox + '"][data-cat="' + cat + '"]');
+  if (!td) return;
+  td.scrollIntoView({ block:"nearest", inline:"nearest" });
+  editarNaTabela(td);
 }
 
 const TIPO_REGRA = { fixo:"valor fixo", pct_saldo:"% do saldo inicial",

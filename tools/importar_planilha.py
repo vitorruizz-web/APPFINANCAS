@@ -239,6 +239,14 @@ def gerar_seed(d, email):
     add("-- O dono e resolvido por e-mail; nao ha UUID literal neste arquivo.")
     add("")
 
+    add("-- ===== LIMPEZA =====")
+    add("-- O seed e autoritativo sobre o que veio da planilha: sem isso, celula")
+    add("-- apagada no Excel ficaria orfa no banco. Linhas 'manual' sao preservadas.")
+    add("delete from fin_plan p using auth.users u")
+    add("where p.user_id = u.id and u.email = %s and p.origem = 'planilha';" % sql_txt(email))
+    add("delete from fin_rules r using auth.users u")
+    add("where r.user_id = u.id and u.email = %s and r.obs = 'seed';" % sql_txt(email))
+    add("")
     add("-- ===== CATEGORIAS =====")
     add("insert into fin_categories (user_id, nome, tipo, grupo, calculo, ordem)")
     add("select u.id, v.nome, v.tipo, v.grupo, v.calculo, v.ordem")
@@ -269,6 +277,10 @@ def gerar_seed(d, email):
     add("")
 
     add("-- ===== PLANO (previsto por mes x categoria) =====")
+    add("-- Usa o valor que a planilha REALMENTE somou (dentro do intervalo do")
+    add("-- SUM de Total Saidas). Ate 01/2026 a formula era =SUM(N:V)/=SUM(N:X) e")
+    add("-- deixava Contabilidade (L) e Assistencia Medica (M) de fora; a pedido do")
+    add("-- Vitor o app reproduz o Excel, que e a base dele.")
     add("insert into fin_plan (user_id, competencia, category_id, valor, origem, obs)")
     add("select u.id, v.comp::date, c.id, v.valor::numeric, 'planilha', v.obs")
     add("from auth.users u cross join (values")
@@ -279,8 +291,10 @@ def gerar_seed(d, email):
             if cat in d["automaticas"] and not congelar_auto:
                 continue
             it = d["plano"][c][cat]
+            if not it["contado"]:
+                continue
             linhas.append("  (%s,%s,%s,%s)" % (sql_txt(c), sql_txt(cat),
-                                               sql_num(it["valor"]), sql_txt(it["obs"])))
+                                               sql_num(it["contado"]), sql_txt(it["obs"])))
     add(",\n".join(linhas))
     add(") as v(comp,cat,valor,obs)")
     add("join fin_categories c on c.user_id = u.id and c.nome = v.cat")
@@ -290,8 +304,8 @@ def gerar_seed(d, email):
     add("")
 
     add("-- ===== REGRAS (valem de 08-09/2026 em diante) =====")
-    add("insert into fin_rules (user_id, category_id, tipo, valor, percentual, mes, inicio, fim)")
-    add("select u.id, c.id, v.tipo, v.valor::numeric, v.pct::numeric, v.mes::int, v.inicio::date, v.fim::date")
+    add("insert into fin_rules (user_id, category_id, tipo, valor, percentual, mes, inicio, fim, obs)")
+    add("select u.id, c.id, v.tipo, v.valor::numeric, v.pct::numeric, v.mes::int, v.inicio::date, v.fim::date, 'seed'")
     add("from auth.users u cross join (values")
     linhas = ["  (%s,%s,%s,%s,%s,%s,%s)" % (sql_txt(r["categoria"]), sql_txt(r["tipo"]),
                                             sql_num(r["valor"]), sql_num(r["percentual"]),
@@ -305,11 +319,51 @@ def gerar_seed(d, email):
     add("")
 
     add("-- ===== CONTA INICIAL =====")
+    add("-- ===== CONFERENCIA =====")
+    add("-- roda junto: mostra se o numero de celulas bate com o esperado")
+    add("select (select count(*) from fin_plan)   as celulas,")
+    add("       (select count(*) from fin_months) as meses,")
+    add("       (select count(*) from fin_rules)  as regras;")
+    add("")
     add("insert into fin_accounts (user_id, nome, tipo, ordem)")
     add("select u.id, 'Patrimônio (consolidado)', 'investimento', 1")
     add("from auth.users u where u.email = %s" % sql_txt(email))
     add("on conflict (user_id, nome) do nothing;")
     return "\n".join(L) + "\n"
+
+
+def gerar_igualar_excel(d, email):
+    """DELETEs das celulas que a planilha exibia mas NAO somava.
+
+    Derivado do intervalo real do SUM linha a linha -- nada e listado a mao.
+    Depois disso a Previsao do app bate com a coluna AB do Excel nos 48 meses.
+    """
+    NL = chr(10)
+    alvos = []
+    for comp in sorted(d["plano"]):
+        for cat, it in sorted(d["plano"][comp].items()):
+            if it["valor"] and not it["contado"]:
+                alvos.append((comp, cat, it["valor"]))
+    L = ["-- App Financas - migracao 004: igualar ao Excel",
+         "--",
+         "-- A planilha exibia estas celulas mas as deixava FORA do Total Saidas",
+         "-- (o SUM comecava na coluna N ate 01/2026). A pedido do Vitor o app",
+         "-- passa a reproduzir o Excel, que e a base dele.",
+         "-- Total nao somado: R$ %.2f em %d celulas." % (sum(a[2] for a in alvos), len(alvos)),
+         ""]
+    if not alvos:
+        L.append("-- nada a fazer")
+        return NL.join(L) + NL
+    L.append("delete from fin_plan p")
+    L.append("using auth.users u, fin_categories c")
+    L.append("where p.user_id = u.id and c.id = p.category_id and c.user_id = u.id")
+    L.append("  and u.email = %s and p.origem = 'planilha'" % sql_txt(email))
+    L.append("  and (p.competencia, c.nome) in (")
+    L.append(("," + NL).join("    (%s::date, %s)" % (sql_txt(a[0]), sql_txt(a[1])) for a in alvos))
+    L.append("  );")
+    L.append("")
+    L.append("select count(*) as celulas_restantes from fin_plan;")
+    return NL.join(L) + NL
 
 
 def gerar_fixtures(d):
@@ -400,6 +454,10 @@ def main():
         with open(p2, "w", encoding="utf-8") as f:
             json.dump(gerar_fixtures(d), f, ensure_ascii=False, indent=1)
         print("gerado: %s (%d bytes)" % (p1, os.path.getsize(p1)))
+        p4 = os.path.join(RAIZ, "db", "004_igualar_excel.sql")
+        with open(p4, "w", encoding="utf-8") as f:
+            f.write(gerar_igualar_excel(d, email))
+        print("gerado: %s (%d bytes)" % (p4, os.path.getsize(p4)))
         p3 = os.path.join(RAIZ, "tests", "mock.json")
         with open(p3, "w", encoding="utf-8") as f:
             json.dump(gerar_mock(d), f, ensure_ascii=False)
@@ -428,9 +486,13 @@ def gerar_mock(d):
         for cat, it in sorted(d["plano"][comp].items()):
             if cat in d["automaticas"] and not congelar_auto:
                 continue
+            if not it["contado"]:
+                continue
             i += 1
             plan.append({"id": "p%d" % i, "user_id": "u1", "competencia": comp,
-                         "category_id": cat, "valor": round(it["valor"], 2),
+                         # precisao cheia: a coluna do banco e numeric(18,6) desde a
+                         # migracao 005; arredondar aqui faria o preview mentir
+                         "category_id": cat, "valor": it["contado"],
                          "origem": "planilha", "obs": it["obs"]})
     regras = [{"id": "r%d" % n, "user_id": "u1", "category_id": r["categoria"],
                "tipo": r["tipo"], "valor": r["valor"], "percentual": r["percentual"],
