@@ -13,3 +13,4 @@ tests/mock.json
 tests/fixtures.json
 # os documentos de design citam patrimonio real; ficam so na maquina
 docs/
+tests/preview_login.html
