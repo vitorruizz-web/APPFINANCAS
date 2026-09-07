@@ -29,7 +29,9 @@ MOCK = r"""
   }));
 
   async function garantir(){
-    if (!carregado) carregado = (await (await realFetch("./mock.json")).json());
+    // guarda a PROMESSA, nao o resultado: as 9 tabelas carregam em paralelo e
+    // cada uma disparava o proprio fetch do mock.json
+    if (!carregado) carregado = realFetch("./mock.json").then(r => r.json());
     return carregado;
   }
   const realFetch = window.fetch.bind(window);

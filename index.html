@@ -73,6 +73,11 @@ button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
   background:var(--surface);
 }
 .pill b{color:var(--ink);font-weight:500}
+/* discreto para quem olha de fora, inequívoco para quem sabe:
+   aceso = os números da tela não são os seus. */
+.ponto{width:5px;height:5px;border-radius:50%;background:var(--ink-4);
+  flex:none;margin-left:-4px;opacity:0;transition:opacity .2s}
+body.discreto .ponto{opacity:1}
 main{padding:0 var(--pad) 128px;max-width:760px;margin:0 auto}
 /* no desktop o conteudo vira duas colunas: acaba o vazio da direita */
 @media (min-width:1000px){
@@ -422,6 +427,7 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
   <header class="top"><div class="top-in">
     <span class="marca">Finanças</span>
     <button class="pill" id="chip-mes"></button>
+    <span class="ponto" id="ponto-dis" aria-hidden="true"></span>
   </div></header>
 
   <main>
@@ -608,15 +614,45 @@ const MESES_L = ["janeiro","fevereiro","março","abril","maio","junho",
 // ============================================================
 // UTILIDADES
 // ============================================================
+// ============================================================
+// MODO DISCRETO
+// Abre SEMPRE disfarcado: quem olhar a tela por cima do ombro ve valores
+// pequenos. Nao e escondido em localStorage de proposito -- cada abertura
+// comeca disfarcada, inclusive depois de recarregar.
+//
+// Os valores falsos sao os reais multiplicados por um FATOR unico, de modo
+// que o patrimonio caia para ~R$ 4.200. Numero aleatorio deixaria o app
+// incoerente (grafico torto, soma que nao fecha); a escala mantem tudo
+// coerente, porque percentual e formato de grafico sao invariantes de escala.
+// ============================================================
+let disfarce = true;
+let fatorDisfarce = null;
+const TETO_DISFARCE = 4500;
+// FOLGA: a tela mostra valores DERIVADOS que passam do maior mes -- a projecao
+// ajustada pelo vies, por exemplo. Sem margem, um vies grande estouraria o teto
+// sem ninguem perceber. 1,4x cobre isso com sobra.
+const FOLGA_DISFARCE = 1.4;
+function fator(){
+  if (!disfarce) return 1;
+  if (fatorDisfarce === null){
+    const vals = proj.flatMap(m => [m.previsao, m.realizado].filter(v => !vazio(v)));
+    const mx = (vals.length ? Math.max.apply(null, vals) : 0) * FOLGA_DISFARCE;
+    fatorDisfarce = (mx > TETO_DISFARCE) ? (TETO_DISFARCE / mx) : 1;
+  }
+  return fatorDisfarce;
+}
+const dis = v => vazio(v) ? v : v * fator();
+
 const BRL = new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"});
 const NUM = new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const vazio = v => v === null || v === undefined || (typeof v === "number" && isNaN(v));
-const fmt  = v => vazio(v) ? "—" : BRL.format(v);
-const fmtn = v => vazio(v) ? "—" : NUM.format(v);
-const fmtsin = v => vazio(v) ? "—" : (v >= 0 ? "+" : "−") + NUM.format(Math.abs(v));
+const fmt  = v => vazio(v) ? "—" : BRL.format(dis(v));
+const fmtn = v => vazio(v) ? "—" : NUM.format(dis(v));
+const fmtsin = v => vazio(v) ? "—" : (v >= 0 ? "+" : "−") + NUM.format(Math.abs(dis(v)));
 const fmtpct = v => vazio(v) ? "—" : (v >= 0 ? "+" : "−") + (Math.abs(v)*100).toFixed(1).replace(".",",") + "%";
 function fmtk(v){
   if (vazio(v)) return "—";
+  v = dis(v);
   const a = Math.abs(v);
   if (a >= 1e6) return (v/1e6).toLocaleString("pt-BR",{minimumFractionDigits:1,maximumFractionDigits:1})+" mi";
   if (a >= 1000) return Math.round(v/1000).toLocaleString("pt-BR")+"k";
@@ -824,7 +860,16 @@ async function carregarTudo(){
     throw err;                   // sem cache e sem rede: NAO abrir vazio por cima do real
   }
 }
+// Ponto unico por onde TODA escrita passa. Gravar no modo discreto gravaria
+// o valor falso por cima do real -- por isso a trava fica aqui, e nao em cada
+// campo: campo esquecido vira dado corrompido.
+function bloqueadoPeloDisfarce(){
+  if (!disfarce) return false;
+  toast("Modo discreto: os valores na tela não são os reais, então nada é gravado");
+  return true;
+}
 async function salvar(tabela, linhas, conflito){
+  if (bloqueadoPeloDisfarce()) return null;
   if (dadosTravados){ toast("Sem conexão — nada foi gravado"); return null; }
   const arr = Array.isArray(linhas) ? linhas : [linhas];
   for (const l of arr) l.user_id = estado.uid;
@@ -837,10 +882,12 @@ async function salvar(tabela, linhas, conflito){
   }
 }
 async function patch(tabela, id, linha){
+  if (bloqueadoPeloDisfarce()) return null;
   if (dadosTravados){ toast("Sem conexão — nada foi gravado"); return null; }
   return sbFetch(tabela + "?id=eq." + id, { method:"PATCH", body: JSON.stringify(linha) });
 }
 async function apagar(tabela, id){
+  if (bloqueadoPeloDisfarce()) return;
   if (dadosTravados){ toast("Sem conexão — nada foi apagado"); return; }
   await sbFetch(tabela + "?id=eq." + id, { method:"DELETE" });
 }
@@ -884,11 +931,18 @@ function irPara(nome){
   window.scrollTo(0,0);
   render();
 }
+function marcarDisfarce(){
+  document.body.classList.toggle("discreto", disfarce);
+  // campos de valor viram somente-leitura: sem isso daria para digitar um
+  // numero falso achando que e real
+  document.querySelectorAll(".cel").forEach(i => { if (i.tagName === "INPUT") i.readOnly = disfarce; });
+}
 function render(){
   const ch = document.getElementById("chip-mes");
   ch.innerHTML = '<b>' + rotulo(mesAtual) + '</b>';
   ({ resumo:renderResumo, mes:renderMes, patrimonio:renderPatrimonio,
      plano:renderPlano, ajustes:renderAjustes })[aba]();
+  marcarDisfarce();
 }
 const avisoTravado = () => dadosTravados
   ? '<div class="aviso">Sem conexão. Você está vendo a última cópia salva neste aparelho — nada será gravado até reconectar.</div>' : "";
@@ -1773,6 +1827,7 @@ function ligarEdicaoTabela(el){
 }
 function editarNaTabela(td){
   if (td.querySelector("input")) return;
+  if (bloqueadoPeloDisfarce()) return;
   const comp = td.dataset.comp, cat = td.dataset.cat;
   const m = mesProj(comp);
   if (!m) return;
@@ -1916,7 +1971,12 @@ function renderAjustes(){
     '<div class="hdr"><h2>Conta de acesso</h2></div><div class="rule"></div>' +
     '<div class="row"><span class="nm">' + esc(estado.email||"") + '</span></div>' +
     '<div class="acoes"><button class="btn plain" id="exportar">Exportar dados</button>' +
-    '<button class="btn plain" id="sair">Sair</button></div>';
+    '<button class="btn plain" id="sair">Sair</button></div>' +
+    // nome deliberadamente burocratico: quem pegar o celular nao vai clicar aqui
+    '<div class="hdr"><h2>Manutenção</h2></div><div class="rule"></div>' +
+    '<div class="row"><span class="nm">Recalibrar índice local' +
+      '<br><span class="t11 d3">Reprocessa o cache de exibição desta sessão.</span></span>' +
+      '<button class="btn mini plain" id="recalibrar">Recalibrar</button></div>';
   el.innerHTML = h;
 
   document.getElementById("add-conta").onclick = () => folhaConta(null);
@@ -1924,6 +1984,12 @@ function renderAjustes(){
   el.querySelectorAll(".ed-conta").forEach(b => b.onclick = () => folhaConta(estado.contas.find(c => c.id === b.dataset.id)));
   el.querySelectorAll(".ed-cat").forEach(b => b.onclick = () => folhaCategoria(estado.categorias.find(c => c.id === b.dataset.id)));
   document.getElementById("exportar").onclick = exportar;
+  document.getElementById("recalibrar").onclick = () => {
+    disfarce = !disfarce; fatorDisfarce = null;
+    marcarDisfarce();
+    render();
+    tremer(disfarce ? 8 : [8,40,8]);
+  };
   document.getElementById("sair").onclick = () => { limparSessao(); location.reload(); };
 }
 function folhaCategoria(cat){
@@ -1959,6 +2025,7 @@ function folhaCategoria(cat){
     });
 }
 function exportar(){
+  if (disfarce){ toast("Saia do modo discreto para exportar — o arquivo sairia com os valores da tela"); return; }
   const dados = { exportado:new Date().toISOString(), categorias:estado.categorias,
     contas:estado.contas, regras:estado.regras, parcelas:estado.parcelas, plano:estado.plano,
     meses:estado.meses, balances:estado.balances, entries:estado.entries };
@@ -2082,6 +2149,8 @@ if (instalado) document.body.classList.add("instalado");
 // vibrar de leve ao gravar: no celular instalado isso e o que separa
 // "site" de "app". Silencioso onde nao existe.
 function tremer(ms){ try { if (navigator.vibrate) navigator.vibrate(ms || 8); } catch(e){} }
+// estado inicial: sempre discreto
+marcarDisfarce();
 
 // atalhos do manifest (?ir=mes) e deep link
 function abaDaURL(){
