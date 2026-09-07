@@ -388,9 +388,79 @@ def main():
         with open(p2, "w", encoding="utf-8") as f:
             json.dump(gerar_fixtures(d), f, ensure_ascii=False, indent=1)
         print("gerado: %s (%d bytes)" % (p1, os.path.getsize(p1)))
+        p3 = os.path.join(RAIZ, "tests", "mock.json")
+        with open(p3, "w", encoding="utf-8") as f:
+            json.dump(gerar_mock(d), f, ensure_ascii=False)
         print("gerado: %s (%d bytes)" % (p2, os.path.getsize(p2)))
+        print("gerado: %s (%d bytes)" % (p3, os.path.getsize(p3)))
         return
     print(__doc__)
+
+
+
+
+# ----------------------------------------------------------- mock/preview
+def gerar_mock(d):
+    """Linhas no formato que o PostgREST devolveria, para o preview local.
+
+    Segue a MESMA politica do seed (passado congelado, automaticas por regra
+    de 09/2026 em diante) e usa o valor CHEIO -- inclusive Contabilidade e
+    Assistencia Medica dos meses que a planilha nao somava.
+    """
+    cats = [{"id": c["nome"], "user_id": "u1", "nome": c["nome"], "tipo": c["tipo"],
+             "grupo": c["grupo"], "calculo": c["calculo"], "ordem": c["ordem"],
+             "ativo": True, "cor": None} for c in d["categorias"]]
+    plan, i = [], 0
+    for comp in sorted(d["plano"]):
+        congelar_auto = comp < d["primeiro_aberto"]
+        for cat, it in sorted(d["plano"][comp].items()):
+            if cat in d["automaticas"] and not congelar_auto:
+                continue
+            i += 1
+            plan.append({"id": "p%d" % i, "user_id": "u1", "competencia": comp,
+                         "category_id": cat, "valor": round(it["valor"], 2),
+                         "origem": "planilha", "obs": it["obs"]})
+    regras = [{"id": "r%d" % n, "user_id": "u1", "category_id": r["categoria"],
+               "tipo": r["tipo"], "valor": r["valor"], "percentual": r["percentual"],
+               "mes": r["mes"], "inicio": r["inicio"], "fim": r["fim"],
+               "reajuste_pct": None, "reajuste_mes": None, "ativo": True}
+              for n, r in enumerate(d["regras_seed"], 1)]
+    meses = [{"id": "m%d" % n, "user_id": "u1", "competencia": m["competencia"],
+              "saldo_inicial_override": m["saldo_inicial_override"],
+              "realizado_override": m["realizado_override"],
+              "fechado": m["fechado"], "obs": None}
+             for n, m in enumerate(d["meses"], 1)]
+    contas = [
+        {"id": "a1", "user_id": "u1", "nome": "Conta corrente", "tipo": "corrente",
+         "instituicao": "Itaú", "ordem": 1, "ativo": True, "considera_patrimonio": True, "cor": None},
+        {"id": "a2", "user_id": "u1", "nome": "CDB", "tipo": "investimento",
+         "instituicao": "Itaú", "ordem": 2, "ativo": True, "considera_patrimonio": True, "cor": None},
+        {"id": "a3", "user_id": "u1", "nome": "Tesouro Selic", "tipo": "investimento",
+         "instituicao": "XP", "ordem": 3, "ativo": True, "considera_patrimonio": True, "cor": None},
+        {"id": "a4", "user_id": "u1", "nome": "FGTS", "tipo": "fgts",
+         "instituicao": None, "ordem": 4, "ativo": True, "considera_patrimonio": True, "cor": None},
+    ]
+    # saldos por conta nos 3 ultimos meses fechados, somando o realizado do mes
+    fech = [m for m in d["meses"] if m["realizado_override"]][-3:]
+    pesos = [("a1", 0.008), ("a2", 0.175), ("a3", 0.795), ("a4", 0.022)]
+    bals, n = [], 0
+    for m in fech:
+        tot = m["realizado_override"]
+        for acc, w in pesos:
+            n += 1
+            bals.append({"id": "b%d" % n, "user_id": "u1", "competencia": m["competencia"],
+                         "account_id": acc, "saldo": round(tot * w, 2)})
+    ents = [
+        {"id": "e1", "user_id": "u1", "data": "2026-08-04", "competencia": "2026-08-01",
+         "category_id": "Combustível", "account_id": "a1", "valor": 210.0, "descricao": "Posto Shell"},
+        {"id": "e2", "user_id": "u1", "data": "2026-08-11", "competencia": "2026-08-01",
+         "category_id": "Saídas", "account_id": "a1", "valor": 96.5, "descricao": "Jantar"},
+        {"id": "e3", "user_id": "u1", "data": "2026-08-19", "competencia": "2026-08-01",
+         "category_id": "Saídas", "account_id": "a1", "valor": 53.5, "descricao": "Cinema"},
+    ]
+    return {"fin_categories": cats, "fin_accounts": contas, "fin_rules": regras,
+            "fin_plan": plan, "fin_entries": ents, "fin_balances": bals,
+            "fin_months": meses, "fin_settings": [], "fin_installments": []}
 
 
 if __name__ == "__main__":

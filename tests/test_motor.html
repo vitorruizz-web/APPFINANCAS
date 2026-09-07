@@ -60,7 +60,8 @@ function montar(fx, opts){
       if (!plano[ult]) plano[ult] = {};
     }
   }
-  return { categorias, regras, plano, meses, competencias, balances: {}, entries: {} };
+  return { categorias, regras, plano, meses, competencias,
+           balances: {}, entries: {}, parcelas: opts.parcelas || [] };
 }
 
 // ------------------------------------------------------------------ casos
@@ -125,6 +126,38 @@ function montar(fx, opts){
   const p7 = MOTOR.projetar(d7);
   perto(p7.find(x => x.competencia === "2026-09-01").realizado, 705001.00,
         "realizado = soma dos saldos das contas");
+
+  // --- caso 8: compromisso parcelado SOMA por cima do plano, so na vigencia
+  const par = [{ id:"x1", category_id:"Viagens", valor:800, inicio:"2027-03-01",
+                 parcelas:12, obs:"Pacote Bariloche 12x", ativo:true }];
+  const p8 = MOTOR.projetar(montar(fx, { semPlanoDe:["Rendimentos","Dividendos"], parcelas: par }));
+  const base = MOTOR.projetar(montar(fx, { semPlanoDe:["Rendimentos","Dividendos"] }));
+  const g = c => x => x.competencia === c;
+  perto(p8.find(g("2027-02-01")).previsto["Viagens"],
+        base.find(g("2027-02-01")).previsto["Viagens"], "mes antes da 1a parcela intacto");
+  perto(p8.find(g("2027-03-01")).previsto["Viagens"],
+        base.find(g("2027-03-01")).previsto["Viagens"] + 800, "1a parcela soma ao plano");
+  perto(p8.find(g("2028-02-01")).previsto["Viagens"],
+        base.find(g("2028-02-01")).previsto["Viagens"] + 800, "12a parcela ainda soma");
+  perto(p8.find(g("2028-03-01")).previsto["Viagens"],
+        base.find(g("2028-03-01")).previsto["Viagens"], "13o mes ja nao soma");
+
+  // --- caso 9: o motor devolve QUAL parcela e de quantas (para o app mostrar)
+  const det = p8.find(g("2027-05-01")).parcelas["Viagens"];
+  ok(!!det && det.length === 1, "detalhe da parcela devolvido");
+  ok(det && det[0].n === 3 && det[0].total === 12, "parcela 3/12 em 05/2027 (veio " +
+     (det ? det[0].n + "/" + det[0].total : "nada") + ")");
+  ok(det && det[0].obs === "Pacote Bariloche 12x", "observacao preservada");
+
+  // --- caso 10: parcela desativada nao entra
+  const p10 = MOTOR.projetar(montar(fx, { semPlanoDe:["Rendimentos","Dividendos"],
+    parcelas: [Object.assign({}, par[0], { ativo:false })] }));
+  perto(p10.find(g("2027-05-01")).previsto["Viagens"],
+        base.find(g("2027-05-01")).previsto["Viagens"], "parcela desativada nao soma");
+
+  // --- caso 11: parcela muda a previsao do mes e propaga
+  ok(p8.find(g("2028-12-01")).previsao < base.find(g("2028-12-01")).previsao - 9000,
+     "12 parcelas de 800 derrubam a projecao final");
 
   fim();
 })().catch(e => { log.push("EXCECAO " + e.message + "\n" + e.stack); falhas++; fim(); });

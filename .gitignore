@@ -5,3 +5,6 @@ db/seed.sql
 test.html
 BACKUP_*
 *.bak
+
+tests/preview.html
+tests/mock.json
