@@ -169,6 +169,16 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
   border-top:1px solid var(--line);
 }
+.agora{
+  margin-top:18px;padding:15px 0 16px;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+}
+.agora .k{font-size:11.5px;color:var(--ink-3);margin-bottom:6px}
+.agora .v{font-size:22px;letter-spacing:-.015em;display:flex;align-items:baseline;
+  gap:9px;flex-wrap:wrap}
+.agora .v .pos,.agora .v .neg{font-size:15px;font-weight:600}
+.agora .v .d3{font-size:13px}
+.agora .sep{color:var(--ink-4)}
 .fatos.anos{border-top:0;grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
 .fatos.anos .fato{padding-top:2px}
 .fatos.anos .fato .v{font-size:14.5px}
@@ -1059,6 +1069,7 @@ function renderResumo(){
         : 'ponto de partida — nenhum mês apurado ainda') + '</div>' +
     '</div></div>' +
     '<div class="arco" id="arco"></div>' +
+    mesCorrente(ult) +
     fatos(fechados, fim);
 
   el.innerHTML = avisoTravado() +
@@ -1079,6 +1090,28 @@ function renderResumo(){
   el.querySelectorAll("[data-comp]").forEach(b => b.onclick = () => folhaMes(b.dataset.comp));
 }
 
+// Onde o mes de hoje deve terminar -- e quanto isso significa de crescimento
+// sobre o ultimo mes ja apurado. E a pergunta mais imediata de quem abre o app.
+function mesCorrente(ult){
+  const hoje = compHoje();
+  const m = mesProj(hoje);
+  if (!m) return "";
+  const base = ult && ult.competencia < hoje ? ult : null;
+  const passo = base ? m.previsao - base.realizado : null;
+  let detalhe = "";
+  if (!m.aberto){
+    const d = m.diferenca;
+    detalhe = '<span class="sep">·</span><span class="' + (d>=0?"pos":"neg") + '">' +
+      esc(fmtsin(d)) + '</span> <span class="d3">' + (d>=0?"acima":"abaixo") + ' do plano</span>';
+  } else if (passo !== null){
+    detalhe = '<span class="sep">·</span><span class="' + (passo>=0?"pos":"neg") + '">' +
+      esc(fmtsin(passo)) + '</span> <span class="d3">sobre ' + MESES_L[+base.competencia.split("-")[1]-1] + '</span>';
+  }
+  return '<div class="agora">' +
+    '<div class="k">' + (m.aberto ? "O plano prevê fechar " : "Fechou ") + rotuloL(hoje) + ' em</div>' +
+    '<div class="v">' + esc(fmt(m.aberto ? m.previsao : m.realizado)) + detalhe + '</div></div>';
+}
+
 function fatos(fechados, fim){
   // um fim de ano por ano restante -- ver so 2028 escondia o caminho ate la
   const anoHoje = compHoje().slice(0,4);
@@ -1089,7 +1122,7 @@ function fatos(fechados, fim){
     fins.push(doAno[doAno.length-1]);
   }
   const proj_ = fins.length
-    ? '<div class="hdr"><h2>Onde o plano termina cada ano</h2></div><div class="rule"></div>' +
+    ? '<div class="hdr" style="margin-top:22px"><h2>Onde o plano termina cada ano</h2></div><div class="rule"></div>' +
       '<div class="fatos anos">' + fins.map(m =>
         '<div class="fato"><div class="k">' + rotulo(m.competencia) + '</div>' +
         '<div class="v">' + esc(fmt(m.previsao)) + '</div></div>').join("") + '</div>'

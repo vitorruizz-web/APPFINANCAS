@@ -117,6 +117,14 @@ def main():
     io.open(dst, "w", encoding="utf-8").write(html)
     print("gerado: %s (%d bytes)" % (dst, os.path.getsize(dst)))
 
+    # sem o mock o preview cai no cache do localStorage e mostra "Sem conexao"
+    # -- parece bug do app e nao e. Ja confundiu duas vezes.
+    mock = os.path.join(RAIZ, "tests", "mock.json")
+    if not os.path.exists(mock):
+        print("")
+        print("  !! FALTA tests/mock.json -- o preview vai abrir em modo offline.")
+        print("     rode: python tools/importar_planilha.py --gerar --email <voce@exemplo.com>")
+        print("")
 
 if __name__ == "__main__":
     main()
