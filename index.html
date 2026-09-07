@@ -723,12 +723,21 @@ window.MOTOR = (function () {
 // ============================================================
 window.CONTAS = (function () {
 
-  // A rampa saiu da paleta do app e foi VALIDADA (os seis checks do metodo de
-  // dataviz) contra o fundo #0A0D11: pior par adjacente CVD dE 12,8 (alvo 8),
-  // visao normal dE 23,2 (piso 15), contraste >= 3:1 nas seis, todas dentro da
-  // banda de luminancia do modo escuro. A ORDEM e o mecanismo de seguranca para
-  // daltonismo, nao enfeite -- reordenar exige revalidar.
-  const RAMPA = ["#009D8D", "#CD632D", "#905FC0", "#B28E00", "#4181D2", "#CC527F"];
+  // Rampa da FAMILIA do app: turquesa (vizinho do tiffany) e ambar (vizinho do
+  // ouro) sao os dois primeiros porque quase sempre carregam as maiores fatias --
+  // e sao justamente os dois tons que dao identidade ao site. A anterior era um
+  // leque de seis matizes saturados igualmente espacados: passava nos checks mas
+  // parecia de outro app (o laranja queimado brigava com o teal).
+  //
+  // VALIDADA contra o fundo #0A0D11: pior par sob daltonismo dE 20,2 (alvo 8; a
+  // anterior dava 9,2), visao normal dE 30,9 (piso 15), contraste de 3,8 a 10,8
+  // (piso 3:1).
+  //
+  // ⚠ A CLARIDADE escalonada (L* 78/70/62/54/71/46) NAO e acaso: sob deuteranopia
+  // o matiz colapsa no eixo azul-amarelo e o que sobra para separar as cores e a
+  // diferenca de claridade. Testei rampas de luminancia igual -- bonitas, todas
+  // REPROVARAM. Mexer em L* exige revalidar: python tools/validar_paleta.py
+  const RAMPA = ["#3BD8B6", "#D0A553", "#3A9BEB", "#C25F99", "#00C0D8", "#7D5EAD"];
   const COR_OUTRAS = "#5E6874";  // --ink-3: "Outras" nao e identidade, e resto
 
   const ordenar = contas => (contas || []).filter(c => c && c.ativo !== false)
@@ -2199,8 +2208,10 @@ function desenharRosca(){
   const esp = Math.round(W * 0.13);
   const r = (W - esp) / 2 - 2, cx = W / 2, cy = H / 2, C = 2 * Math.PI * r;
 
-  // Em foco: a fatia escolhida; sem escolha, a maior (comp ja vem ordenada).
-  const sel = comp.find(c => c.id === _fatia) || comp[0];
+  // Sem nada escolhido o centro mostra 100% / Total, e nenhum arco fica em
+  // destaque. Mostrar a maior conta ali dava a impressao de que ela estava
+  // selecionada -- o estado "nada escolhido" tem de parecer o que e.
+  const sel = comp.find(c => c.id === _fatia) || null;
 
   // O SVG so e RECONSTRUIDO quando muda o conjunto de contas ou o tamanho. Nos
   // demais casos -- trocar de mes, escolher uma fatia -- os MESMOS <circle>
@@ -2243,7 +2254,7 @@ function desenharRosca(){
     const len = Math.max(0, c.pct) * C;
     const vao = Math.min(3, len * 0.4);            // respiro entre fatias
     const on = Math.max(0.6, len - vao);
-    const foco = c.id === sel.id;
+    const foco = !!sel && c.id === sel.id;
     arco.setAttribute("stroke", c.cor);
     arco.setAttribute("stroke-width", foco ? esp + 5 : esp);
     arco.setAttribute("stroke-dasharray", on.toFixed(2) + " " + (C - on).toFixed(2));
@@ -2261,10 +2272,11 @@ function desenharRosca(){
   if (novo) void box.offsetWidth;
   pintar();
 
-  const nome = sel.nome.length > 18 ? sel.nome.slice(0, 17) + "…" : sel.nome;
   box.querySelector(".r-pct").innerHTML =
-    (sel.pct * 100).toFixed(0) + '<tspan class="r-sig">%</tspan>';
-  box.querySelector(".r-nm").textContent = nome;
+    (sel ? (sel.pct * 100).toFixed(0) : "100") + '<tspan class="r-sig">%</tspan>';
+  box.querySelector(".r-nm").textContent = sel
+    ? (sel.nome.length > 18 ? sel.nome.slice(0, 17) + "…" : sel.nome)
+    : "Total";
   marcarFatia();
 }
 
