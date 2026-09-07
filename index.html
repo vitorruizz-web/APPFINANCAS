@@ -78,6 +78,11 @@ button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
 .ponto{width:5px;height:5px;border-radius:50%;background:var(--ink-4);
   flex:none;margin-left:-4px;opacity:0;transition:opacity .2s}
 body.discreto .ponto{opacity:1}
+/* no modo discreto sobram Resumo e Ajustes: quem pega o aparelho nao chega
+   nem no detalhe por categoria nem no saldo das contas */
+body.discreto nav button[data-tab="mes"],
+body.discreto nav button[data-tab="patrimonio"],
+body.discreto nav button[data-tab="plano"]{display:none}
 main{padding:0 var(--pad) 128px;max-width:760px;margin:0 auto}
 /* no desktop o conteudo vira duas colunas: acaba o vazio da direita */
 @media (min-width:1000px){
@@ -89,12 +94,31 @@ main{padding:0 var(--pad) 128px;max-width:760px;margin:0 auto}
   #s-resumo > .col-b .hdr:first-child{margin-top:20px}
 }
 section{display:none} section.on{display:block}
+/* A troca de aba responde ao toque e diz a DIRECAO: vindo da direita ou da
+   esquerda, conforme a ordem da barra. Movimento que mostra o que mudou --
+   nao entrada animada em cada bloco, que e o tique de pagina gerada. */
+@keyframes entraDir{from{opacity:0;transform:translate3d(14px,0,0)}to{opacity:1;transform:none}}
+@keyframes entraEsq{from{opacity:0;transform:translate3d(-14px,0,0)}to{opacity:1;transform:none}}
+section.on.vem-dir{animation:entraDir .26s cubic-bezier(.22,.7,.3,1) both}
+section.on.vem-esq{animation:entraEsq .26s cubic-bezier(.22,.7,.3,1) both}
+nav button{transition:color .18s, background .18s, transform .12s}
+nav button:active{transform:scale(.94)}
+.sheet{animation:sobe .3s cubic-bezier(.22,.8,.28,1) both}
+@keyframes sobe{from{transform:translateY(14px);opacity:.4}to{transform:none;opacity:1}}
+.sheet-bg{animation:apaga .22s ease both}
+@keyframes apaga{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){
+  section.on.vem-dir,section.on.vem-esq,.sheet,.sheet-bg{animation:none}
+  nav button:active{transform:none}
+}
 
 .hdr{
-  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
-  margin:30px 0 12px;
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  margin:30px 0 12px;flex-wrap:wrap;
 }
-.hdr h2{font-size:13px;font-weight:600;margin:0;color:var(--ink-2);letter-spacing:.01em}
+.hdr h2{font-size:13px;font-weight:600;margin:0;color:var(--ink-2);letter-spacing:.01em;
+  white-space:nowrap;flex:none}
+.hdr .seg{margin-left:auto}
 .hdr .aux{font-size:11.5px;color:var(--ink-3)}
 .rule{height:1px;background:var(--line);margin:0 0 6px}
 
@@ -145,14 +169,28 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
   border-top:1px solid var(--line);
 }
+.fatos.anos{border-top:0;grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
+.fatos.anos .fato{padding-top:2px}
+.fatos.anos .fato .v{font-size:14.5px}
+@media (max-width:520px){
+  .fatos.anos{grid-template-columns:repeat(3,1fr);gap:0}
+  /* :first-child precisa repetir o padding-top, senao herda os 14px da regra
+     geral de .fatos e o primeiro ano desalinha dos outros dois */
+  .fatos.anos .fato,
+  .fatos.anos .fato:first-child{border-top:0;padding:2px 0 0 12px}
+  .fatos.anos .fato{border-left:1px solid var(--line)}
+  .fatos.anos .fato:first-child{border-left:0;padding-left:0}
+  .fatos.anos .fato .v{font-size:13px}
+  .fatos.anos .fato .k{font-size:10.5px}
+}
 .fato{padding:14px 0 0;border-left:1px solid var(--line);padding-left:16px}
 .fato:first-child{border-left:0;padding-left:0}
 .fato .k{font-size:11px;color:var(--ink-3);margin-bottom:4px}
 .fato .v{font-size:15.5px;letter-spacing:-.01em}
 .fato .v small{font-size:12px;color:var(--ink-3);font-weight:400}
 @media (max-width:520px){
-  .fato{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:12px}
-  .fato:first-child{border-top:0;padding-top:14px}
+  .fatos > .fato{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:12px}
+  .fatos > .fato:first-child{border-top:0;padding-top:14px}
   .fatos{grid-template-columns:1fr;gap:12px}
 }
 
@@ -616,16 +654,25 @@ const MESES_L = ["janeiro","fevereiro","março","abril","maio","junho",
 // ============================================================
 // ============================================================
 // MODO DISCRETO
-// Abre SEMPRE disfarcado: quem olhar a tela por cima do ombro ve valores
-// pequenos. Nao e escondido em localStorage de proposito -- cada abertura
-// comeca disfarcada, inclusive depois de recarregar.
+// So o APP INSTALADO abre disfarcado: e ele que anda no bolso e e visto por
+// cima do ombro. No navegador, onde o trabalho de verdade acontece, os
+// valores saem reais -- destravar a cada aba seria atrito sem ganho.
+// O botao continua disponivel nos dois, para disfarcar de proposito (numa
+// tela compartilhada em reuniao, por exemplo).
+//
+// O estado nao vai para o localStorage de proposito: cada abertura do app
+// recomeca disfarcada, inclusive depois de recarregar.
 //
 // Os valores falsos sao os reais multiplicados por um FATOR unico, de modo
 // que o patrimonio caia para ~R$ 4.200. Numero aleatorio deixaria o app
 // incoerente (grafico torto, soma que nao fecha); a escala mantem tudo
 // coerente, porque percentual e formato de grafico sao invariantes de escala.
 // ============================================================
-let disfarce = true;
+const ehApp = matchMedia("(display-mode: standalone)").matches
+           || matchMedia("(display-mode: fullscreen)").matches
+           || matchMedia("(display-mode: minimal-ui)").matches
+           || navigator.standalone === true;
+let disfarce = ehApp;
 let fatorDisfarce = null;
 const TETO_DISFARCE = 4500;
 // FOLGA: a tela mostra valores DERIVADOS que passam do maior mes -- a projecao
@@ -924,12 +971,33 @@ async function gravarPrefs(){
 // NAVEGACAO
 // ============================================================
 let aba = "resumo";
+const ORDEM_ABAS = ["resumo","mes","patrimonio","plano","ajustes"];
+const ABAS_OCULTAS = ["mes","patrimonio","plano"];
 function irPara(nome){
+  // guarda no ponto UNICO de navegacao: tocar num mes no Resumo, um atalho do
+  // manifest ou um botao interno tambem chegam aqui, e nenhum deles pode furar
+  // o disfarce
+  if (disfarce && ABAS_OCULTAS.includes(nome)){
+    toast("Modo discreto: recalibre o índice local em Ajustes para abrir esta aba");
+    return;
+  }
+  const de = ORDEM_ABAS.indexOf(aba), para = ORDEM_ABAS.indexOf(nome);
+  const dir = para > de ? "vem-dir" : "vem-esq";
   aba = nome;
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === nome));
-  document.querySelectorAll("main section").forEach(s => s.classList.toggle("on", s.id === "s-"+nome));
+  document.querySelectorAll("main section").forEach(x => {
+    x.classList.remove("vem-dir","vem-esq");
+    x.classList.toggle("on", x.id === "s-"+nome);
+  });
   window.scrollTo(0,0);
   render();
+  if (de !== para && de >= 0){
+    const alvo = document.getElementById("s-"+nome);
+    // reinicia a animacao: sem o reflow, trocar de aba duas vezes seguidas
+    // para a mesma direcao nao re-dispara
+    void alvo.offsetWidth;
+    alvo.classList.add(dir);
+  }
 }
 function marcarDisfarce(){
   document.body.classList.toggle("discreto", disfarce);
@@ -943,6 +1011,24 @@ function render(){
   ({ resumo:renderResumo, mes:renderMes, patrimonio:renderPatrimonio,
      plano:renderPlano, ajustes:renderAjustes })[aba]();
   marcarDisfarce();
+  ligarExcel();
+}
+const EXPORTS = {
+  resumo:     [["Resumo " + "", () => abaResumo()],           "Financas resumo"],
+  mes:        [null, "Financas mes"],
+  patrimonio: [null, "Financas patrimonio"],
+  plano:      [null, "Financas plano"],
+  tudo:       [null, "Financas completo"],
+};
+function ligarExcel(){
+  document.querySelectorAll(".xls").forEach(b => b.onclick = () => {
+    const q = b.dataset.x;
+    if (q === "resumo")     exportarXLSX([abaResumo], "Financas resumo " + anoSel);
+    else if (q === "mes")   exportarXLSX([abaMes], "Financas " + rotulo(mesAtual).replace("/","-"));
+    else if (q === "patrimonio") exportarXLSX([abaPatrimonio], "Financas patrimonio");
+    else if (q === "plano") exportarXLSX([abaPlano], "Financas plano");
+    else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaCompromissos], "Financas completo");
+  });
 }
 const avisoTravado = () => dadosTravados
   ? '<div class="aviso">Sem conexão. Você está vendo a última cópia salva neste aparelho — nada será gravado até reconectar.</div>' : "";
@@ -964,7 +1050,6 @@ function renderResumo(){
 
   const d = ult ? ult.diferenca : null;
   const heroi =
-    '<div class="arco" id="arco"></div>' +
     '<div class="hero"><div>' +
       '<div class="val"><span class="cur">R$</span>' +
         esc(fmtn(ult ? ult.realizado : (proj[0] ? proj[0].saldoInicial : 0))) + '</div>' +
@@ -973,12 +1058,14 @@ function renderResumo(){
           esc(fmtsin(d)) + '</b> ' + (d>=0 ? "acima" : "abaixo") + ' do plano, ' + fmtpct(ult.variacao)
         : 'ponto de partida — nenhum mês apurado ainda') + '</div>' +
     '</div></div>' +
+    '<div class="arco" id="arco"></div>' +
     fatos(fechados, fim);
 
   el.innerHTML = avisoTravado() +
     '<div class="col-a">' + heroi + leitura() + '</div>' +
     '<div class="col-b">' +
       '<div class="hdr"><h2>Mês a mês</h2>' +
+        '<button class="btn mini plain xls" data-x="resumo">Excel</button>' +
         '<span class="seg" id="seg-ano">' + anos.map(a =>
           '<button data-a="' + a + '"' + (a===anoSel?' class="on"':'') + '>' + a + '</button>').join("") +
         '</span></div>' +
@@ -993,15 +1080,27 @@ function renderResumo(){
 }
 
 function fatos(fechados, fim){
+  // um fim de ano por ano restante -- ver so 2028 escondia o caminho ate la
+  const anoHoje = compHoje().slice(0,4);
+  const fins = [];
+  for (const a of [...new Set(proj.map(m => m.competencia.slice(0,4)))]){
+    if (a < anoHoje) continue;
+    const doAno = proj.filter(m => m.competencia.slice(0,4) === a);
+    fins.push(doAno[doAno.length-1]);
+  }
+  const proj_ = fins.length
+    ? '<div class="hdr"><h2>Onde o plano termina cada ano</h2></div><div class="rule"></div>' +
+      '<div class="fatos anos">' + fins.map(m =>
+        '<div class="fato"><div class="k">' + rotulo(m.competencia) + '</div>' +
+        '<div class="v">' + esc(fmt(m.previsao)) + '</div></div>').join("") + '</div>'
+    : "";
+
   const c = compromissos();
-  const linhas = [
-    ["Projeção " + rotulo(fim.competencia), fmt(fim.previsao), ""],
-    ["Meses apurados", fechados.length, "<small> de " + proj.length + "</small>"],
-  ];
+  const linhas = [["Meses apurados", fechados.length, "<small> de " + proj.length + "</small>"]];
   if (c) linhas.push(["A pagar até " + rotulo(c.ultimo),
                       '<span class="abr">' + fmt(c.restante) + "</span>",
                       "<small> em " + c.n + " compromisso" + (c.n>1?"s":"") + "</small>"]);
-  return '<div class="fatos">' + linhas.map(l =>
+  return proj_ + '<div class="fatos">' + linhas.map(l =>
     '<div class="fato"><div class="k">' + l[0] + '</div>' +
     '<div class="v">' + l[1] + l[2] + '</div></div>').join("") + '</div>';
 }
@@ -1277,6 +1376,7 @@ function renderMes(){
     '<button class="btn mini" id="m-ancora">' + (vazio(info.saldo_inicial_override)?"Reancorar":"Remover âncora") + '</button>' +
     '<button class="btn mini plain" id="m-nota">' + (info.obs?"Editar nota":"Anotar o mês") + '</button>' +
     '<button class="btn mini plain" id="m-lanc">Lançamentos</button>' +
+    '<button class="btn mini plain xls" data-x="mes">Excel</button>' +
   '</div>';
 
   el.innerHTML = out;
@@ -1596,7 +1696,8 @@ function renderPatrimonio(){
       rotulo(proj[0].competencia) + ' → ' + rotulo(proj[proj.length-1].competencia) +
       '</span></div><div class="rule"></div><div class="grafwrap" id="evol"></div>';
   }
-  out += '<div class="acoes"><button class="btn" id="nova-conta">Nova conta</button></div>';
+  out += '<div class="acoes"><button class="btn" id="nova-conta">Nova conta</button>' +
+         '<button class="btn plain xls" data-x="patrimonio">Excel</button></div>';
 
   el.innerHTML = out;
   desenharEvolucao();
@@ -1788,6 +1889,7 @@ function renderPlano(){
 
   el.innerHTML = avisoTravado() +
     '<div class="hdr"><h2>Plano completo</h2>' +
+      '<button class="btn mini plain xls" data-x="plano">Excel</button>' +
       '<span class="seg" id="seg-modo">' +
         ['totais','grupos','categorias'].map(k =>
           '<button data-m="' + k + '"' + (k===modo?' class="on"':'') + '>' +
@@ -1970,12 +2072,15 @@ function renderAjustes(){
   h += '<div class="acoes"><button class="btn" id="add-cat">Nova categoria</button></div>' +
     '<div class="hdr"><h2>Conta de acesso</h2></div><div class="rule"></div>' +
     '<div class="row"><span class="nm">' + esc(estado.email||"") + '</span></div>' +
-    '<div class="acoes"><button class="btn plain" id="exportar">Exportar dados</button>' +
+    '<div class="acoes"><button class="btn xls" data-x="tudo">Exportar tudo em Excel</button>' +
+    '<button class="btn plain" id="exportar">Exportar JSON</button>' +
     '<button class="btn plain" id="sair">Sair</button></div>' +
     // nome deliberadamente burocratico: quem pegar o celular nao vai clicar aqui
     '<div class="hdr"><h2>Manutenção</h2></div><div class="rule"></div>' +
     '<div class="row"><span class="nm">Recalibrar índice local' +
-      '<br><span class="t11 d3">Reprocessa o cache de exibição desta sessão.</span></span>' +
+      '<br><span class="t11 d3">' + (disfarce
+        ? "Reprocessa o cache de exibição desta sessão."
+        : "Restaura o cache de exibição reduzido.") + '</span></span>' +
       '<button class="btn mini plain" id="recalibrar">Recalibrar</button></div>';
   el.innerHTML = h;
 
@@ -1987,7 +2092,7 @@ function renderAjustes(){
   document.getElementById("recalibrar").onclick = () => {
     disfarce = !disfarce; fatorDisfarce = null;
     marcarDisfarce();
-    render();
+    if (disfarce && ABAS_OCULTAS.includes(aba)) irPara("resumo"); else render();
     tremer(disfarce ? 8 : [8,40,8]);
   };
   document.getElementById("sair").onclick = () => { limparSessao(); location.reload(); };
@@ -2033,6 +2138,266 @@ function exportar(){
   const a = document.createElement("a");
   a.href = URL.createObjectURL(b); a.download = "financas-" + hojeISO() + ".json"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+// ============================================================
+// EXPORTAR PARA EXCEL (.xlsx)
+//
+// Gerador proprio, sem biblioteca de CDN: o app e um PWA que precisa abrir
+// offline, e uma dependencia externa quebraria justamente quando falta sinal.
+// .xlsx e um ZIP com XML dentro; o ZIP sai sem compressao (metodo STORE), que
+// o Excel abre normalmente e dispensa implementar DEFLATE.
+//
+// Os valores vao como NUMERO com formato de moeda, nao como texto: assim da
+// para somar e filtrar no Excel, e a tela e a planilha mostram o mesmo.
+// ============================================================
+const TAB_CRC = (function(){
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++){
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(b){
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < b.length; i++) c = TAB_CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function zipar(arquivos){
+  const cod = new TextEncoder();
+  const partes = [], central = [];
+  let desloc = 0;
+  const u16 = n => [n & 255, (n >>> 8) & 255];
+  const u32 = n => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+
+  for (const a of arquivos){
+    const nome = cod.encode(a.nome), dados = cod.encode(a.txt), c = crc32(dados);
+    const cab = [].concat([80,75,3,4], u16(20), u16(0), u16(0), u16(0), u16(0),
+                          u32(c), u32(dados.length), u32(dados.length),
+                          u16(nome.length), u16(0));
+    partes.push(new Uint8Array(cab), nome, dados);
+    const cen = [].concat([80,75,1,2], u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+                          u32(c), u32(dados.length), u32(dados.length),
+                          u16(nome.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(desloc));
+    central.push({ bytes: cen, nome: nome });
+    desloc += cab.length + nome.length + dados.length;
+  }
+  const inicio = desloc;
+  let tam = 0;
+  for (const c of central){
+    partes.push(new Uint8Array(c.bytes), c.nome);
+    tam += c.bytes.length + c.nome.length;
+  }
+  partes.push(new Uint8Array([].concat([80,75,5,6], u16(0), u16(0),
+    u16(central.length), u16(central.length), u32(tam), u32(inicio), u16(0))));
+  return new Blob(partes, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+const xmlEsc = t => String(t === null || t === undefined ? "" : t)
+  .replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&apos;" }[c]));
+function colLetra(n){
+  let s = ""; n++;
+  while (n > 0){ const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = ((n - r) / 26) | 0; }
+  return s;
+}
+
+// aba = { nome, colunas:[{t,largura}], linhas:[[celula,...]] }
+// celula = T(texto) | M(moeda) | P(percentual) | N(numero)
+function planilhaXLSX(abas){
+  const ESTILOS = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<numFmts count="2">',
+    '<numFmt numFmtId="164" formatCode="&quot;R$&quot; #,##0.00"/>',
+    '<numFmt numFmtId="165" formatCode="0.0%"/></numFmts>',
+    '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>',
+    '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>',
+    '<fills count="2"><fill><patternFill patternType="none"/></fill>',
+    '<fill><patternFill patternType="gray125"/></fill></fills>',
+    '<borders count="1"><border/></borders>',
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
+    '<cellXfs count="5">',
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>',
+    '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>',
+    '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>',
+    '<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>',
+    '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
+    '</styleSheet>'
+  ].join("");
+
+  const arquivos = [
+    { nome: "[Content_Types].xml", txt:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      abas.map((_, i) => '<Override PartName="/xl/worksheets/sheet' + (i+1) +
+        '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("") +
+      '</Types>' },
+    { nome: "_rels/.rels", txt:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>' },
+    { nome: "xl/workbook.xml", txt:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+      abas.map((a, i) => '<sheet name="' + xmlEsc(a.nome.slice(0,31)) + '" sheetId="' + (i+1) +
+        '" r:id="rId' + (i+1) + '"/>').join("") + '</sheets></workbook>' },
+    { nome: "xl/_rels/workbook.xml.rels", txt:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      abas.map((_, i) => '<Relationship Id="rId' + (i+1) +
+        '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' +
+        (i+1) + '.xml"/>').join("") +
+      '<Relationship Id="rId' + (abas.length+1) +
+      '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '</Relationships>' },
+    { nome: "xl/styles.xml", txt: ESTILOS }
+  ];
+
+  abas.forEach((a, idx) => {
+    const cols = '<cols>' + a.colunas.map((c, i) =>
+      '<col min="' + (i+1) + '" max="' + (i+1) + '" width="' + (c.largura || 16) +
+      '" customWidth="1"/>').join("") + '</cols>';
+    const cab = '<row r="1">' + a.colunas.map((c, i) =>
+      '<c r="' + colLetra(i) + '1" t="inlineStr" s="1"><is><t>' + xmlEsc(c.t) +
+      '</t></is></c>').join("") + '</row>';
+    const corpo = a.linhas.map((linha, li) => {
+      const r = li + 2;
+      const cels = linha.map((cel, ci) => {
+        if (!cel || cel.v === null || cel.v === undefined || cel.v === "") return "";
+        const ref = colLetra(ci) + r;
+        if (cel.tipo === "num" || cel.tipo === "moeda" || cel.tipo === "pct"){
+          if (isNaN(cel.v)) return "";
+          const est = cel.tipo === "moeda" ? (cel.forte ? 4 : 2) : cel.tipo === "pct" ? 3 : 0;
+          return '<c r="' + ref + '" s="' + est + '"><v>' + Number(cel.v) + '</v></c>';
+        }
+        return '<c r="' + ref + '" t="inlineStr" s="' + (cel.forte ? 1 : 0) + '"><is><t>' +
+               xmlEsc(cel.v) + '</t></is></c>';
+      }).join("");
+      return '<row r="' + r + '">' + cels + '</row>';
+    }).join("");
+    arquivos.push({ nome: "xl/worksheets/sheet" + (idx+1) + ".xml", txt:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<sheetViews><sheetView workbookViewId="0">' +
+      '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
+      '</sheetView></sheetViews>' +
+      cols + '<sheetData>' + cab + corpo + '</sheetData></worksheet>' });
+  });
+  return zipar(arquivos);
+}
+
+function baixar(blob, nome){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const T = (v, forte) => ({ v: v, tipo: "txt", forte: forte });
+const M = (v, forte) => ({ v: v, tipo: "moeda", forte: forte });
+const P = v => ({ v: v, tipo: "pct" });
+const N = v => ({ v: v, tipo: "num" });
+
+// ---------------- o que cada aba exporta ----------------
+// Regra: sai EXATAMENTE o que a tela mostra -- mesmas colunas, mesma ordem,
+// mesmo recorte (o ano escolhido no Resumo, o mes aberto, o modo do Plano).
+function abaResumo(){
+  const ms = proj.filter(m => m.competencia.slice(0,4) === anoSel);
+  return { nome: "Resumo " + anoSel,
+    colunas: [{t:"Mês",largura:12},{t:"Previsto",largura:16},{t:"Apurado",largura:16},
+              {t:"Diferença",largura:16},{t:"Δ%",largura:10}],
+    linhas: ms.map(m => [ T(rotulo(m.competencia)), M(m.previsao),
+      m.aberto ? T("em aberto") : M(m.realizado),
+      m.aberto ? null : M(m.diferenca), m.aberto ? null : P(m.variacao) ]) };
+}
+function abaMes(){
+  const m = mesProj(mesAtual);
+  const real = realizadoCat(mesAtual);
+  const linhas = [];
+  for (const tipo of ["receita","despesa"]){
+    for (const c of estado.categorias.filter(x => x.tipo === tipo && x.ativo !== false)){
+      linhas.push([ T(tipo === "receita" ? "Receita" : "Saída"), T(c.grupo), T(c.nome),
+                    M(m.previsto[c.id]), real[c.id] === undefined ? null : M(real[c.id]) ]);
+    }
+  }
+  linhas.push([]);
+  linhas.push([ T("Saldo inicial", true), null, null, M(m.saldoInicial, true), null ]);
+  linhas.push([ T("Receitas", true), null, null, M(m.receitas, true), null ]);
+  linhas.push([ T("Saídas", true), null, null, M(m.saidas, true), null ]);
+  linhas.push([ T("Previsão", true), null, null, M(m.previsao, true), null ]);
+  linhas.push([ T("Apurado", true), null, null,
+                m.aberto ? T("em aberto") : M(m.realizado, true), null ]);
+  if (!m.aberto) linhas.push([ T("Diferença", true), null, null, M(m.diferenca, true), P(m.variacao) ]);
+  return { nome: rotulo(mesAtual).replace("/", "-"),
+    colunas: [{t:"Tipo",largura:10},{t:"Grupo",largura:16},{t:"Categoria",largura:22},
+              {t:"Previsto",largura:16},{t:"Realizado",largura:16}],
+    linhas: linhas };
+}
+function abaPatrimonio(){
+  const sal = estado.balances[mesAtual] || {};
+  const ativas = estado.contas.filter(c => c.ativo !== false);
+  const linhas = ativas.map(c => {
+    const vale = contaValeEm(c, mesAtual), b = sal[c.id];
+    return [ T(c.nome), T(c.instituicao || ""), T(c.tipo),
+             T(c.inicio ? rotulo(c.inicio) : "desde sempre"),
+             (!vale || !b) ? null : M(+b.saldo) ];
+  });
+  const total = ativas.reduce((a,c) =>
+    a + (contaValeEm(c, mesAtual) && sal[c.id] ? +sal[c.id].saldo : 0), 0);
+  linhas.push([]);
+  linhas.push([ T("Soma das contas", true), null, null, null, M(total, true) ]);
+  return { nome: "Patrimônio " + rotulo(mesAtual).replace("/", "-"),
+    colunas: [{t:"Conta",largura:24},{t:"Instituição",largura:18},{t:"Tipo",largura:14},
+              {t:"Conta desde",largura:14},{t:"Saldo",largura:16}],
+    linhas: linhas };
+}
+function abaPlano(){
+  const modo = estado.settings.planoModo || "grupos";
+  const cols = colunasPlano(modo);
+  const colunas = [{t:"Mês",largura:12}]
+    .concat(cols.map(c => ({ t: c.nome, largura: 16 })))
+    .concat([{t:"Receitas",largura:16},{t:"Saídas",largura:16},{t:"Previsão",largura:17},
+             {t:"Apurado",largura:17},{t:"Δ",largura:15},{t:"Δ%",largura:10}]);
+  const linhas = proj.map(m => [T(rotulo(m.competencia))]
+    .concat(cols.map(c => M(c.ids.reduce((s,id) => s + (m.previsto[id]||0), 0))))
+    .concat([ M(m.receitas), M(m.saidas), M(m.previsao, true),
+              m.aberto ? T("em aberto") : M(m.realizado, true),
+              m.aberto ? null : M(m.diferenca),
+              m.aberto ? null : P(m.variacao) ]));
+  return { nome: "Plano", colunas: colunas, linhas: linhas };
+}
+function abaCompromissos(){
+  if (!estado.parcelas.length) return null;
+  return { nome: "Compromissos",
+    colunas: [{t:"O que é",largura:28},{t:"Categoria",largura:20},{t:"Parcela",largura:14},
+              {t:"Parcelas",largura:10},{t:"Primeira",largura:12},{t:"Última",largura:12},
+              {t:"Total",largura:16},{t:"Observação",largura:34}],
+    linhas: estado.parcelas.slice().sort((a,b) => a.inicio.localeCompare(b.inicio)).map(p => {
+      const c = estado.categorias.find(x => x.id === p.category_id);
+      return [ T(p.descricao), T(c ? c.nome : ""), M(+p.valor), N(+p.parcelas),
+               T(rotulo(p.inicio)), T(rotulo(somaMes(p.inicio, (+p.parcelas)-1))),
+               M((+p.valor) * (+p.parcelas)), T(p.obs || "") ];
+    }) };
+}
+
+function exportarXLSX(quais, nomeArquivo){
+  if (disfarce){
+    toast("Saia do modo discreto para exportar — a planilha sairia com os valores da tela");
+    return;
+  }
+  const abas = quais.map(f => f()).filter(Boolean);
+  if (!abas.length){ toast("Nada para exportar"); return; }
+  baixar(planilhaXLSX(abas), nomeArquivo + " " + hojeISO() + ".xlsx");
+  toast("Planilha baixada");
 }
 
 // ============================================================
@@ -2108,7 +2473,8 @@ async function iniciar(){
            : (estado.competencias[estado.competencias.length-1] || hoje);
   reprojetar();
   const alvo = abaDaURL();
-  if (alvo && alvo !== "resumo") irPara(alvo); else render();
+  if (alvo && alvo !== "resumo" && !(disfarce && ABAS_OCULTAS.includes(alvo))) irPara(alvo);
+  else render();
 }
 
 // esconder a barra ao rolar — limitador por relógio, NAO rAF
@@ -2143,7 +2509,7 @@ window.addEventListener("resize", () => {
 // ============================================================
 // PWA
 // ============================================================
-const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const instalado = ehApp;
 if (instalado) document.body.classList.add("instalado");
 
 // vibrar de leve ao gravar: no celular instalado isso e o que separa

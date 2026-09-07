@@ -1,7 +1,7 @@
 // Service worker do app Financas.
 // Navegacao e NETWORK-FIRST de proposito: assim uma mudanca no index.html
 // chega sem precisar de bump de cache. O cache so entra quando a rede falha.
-const CACHE = "fin-v3";
+const CACHE = "fin-v4";
 const ESTATICOS = ["./", "./index.html", "./manifest.json",
                    "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 
