@@ -8,3 +8,8 @@ BACKUP_*
 
 tests/preview.html
 tests/mock.json
+
+# dado financeiro real NAO vai para repo publico
+tests/fixtures.json
+# os documentos de design citam patrimonio real; ficam so na maquina
+docs/
