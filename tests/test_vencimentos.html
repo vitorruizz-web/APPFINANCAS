@@ -95,6 +95,140 @@ function fim(){
   igual(V.emissor("CDB GAMA - JURO MENSAL - DEZ/2027"), "GAMA", "emissor tira 'JURO MENSAL'");
   igual(V.emissor("CDB BANCO DELTA - GRUPO EPSILON - SET/2027"), "BANCO DELTA - GRUPO EPSILON", "hifen do meio do nome fica");
 
+  // ------------------------------------------ curva do CDI (Task 2)
+  // historico SINTETICO no formato do BC: CDI por dia util (13,90 ate 16/09,
+  // 13,65 em 17/09 -- ultimo publicado) e Selic meta dia a dia, preenchida ate
+  // o dia da proxima reuniao (04/11), como a serie 432 vem de verdade.
+  const HIST = [], META = [];
+  for (let x = d("2026-09-01"); x <= d("2026-09-17"); x++)
+    if (V.ehUtil(x)) HIST.push({ dia: V.iso(x), cdi: x < d("2026-09-17") ? 13.90 : 13.65 });
+  for (let x = d("2026-09-01"); x <= d("2026-11-04"); x++)
+    META.push({ dia: V.iso(x), selic: x < d("2026-09-17") ? 14.00 : 13.75 });
+  const FOCUS = { reunioes: [{r:"R6/2026", v:13.75}, {r:"R7/2026", v:13.5}, {r:"R8/2026", v:13.25}, {r:"R1/2027", v:13}],
+                  anuais: [{ano:2026, v:13.25}, {ano:2027, v:12}, {ano:2028, v:11}] };
+  const TXH = { historico: HIST, meta: META, selic: 13.75, cdi: 13.65, focus: FOCUS };
+  const HOJE = d("2026-09-19");
+  const ver = c => c.map(x => [x.desde === -Infinity ? null : V.iso(x.desde), +(x.cdi * 100).toFixed(6)]);
+  const cH = V.curvaCDI(TXH, "hoje", HOJE);
+  igual(ver(cH), [[null, 13.9], ["2026-09-17", 13.65]],
+        "VALIDACAO pos: 'Selic de hoje' = CDI que valeu ate 16/09 e 13,65 (Selic 13,75 − 0,10) dali em diante");
+  const cF = V.curvaCDI(TXH, "focus", HOJE);
+  igual(ver(cF), [[null, 13.9], ["2026-09-17", 13.65], ["2026-11-05", 13.4], ["2026-12-10", 13.15],
+                  ["2027-01-29", 12.9], ["2027-12-10", 11.9], ["2028-12-11", 10.9]],
+        "Focus: R6 ja passou; R7 vale no dia util seguinte ao fim da serie da meta (05/11); anuais depois da ultima reuniao");
+  igual(ver(V.curvaCDI(TXH, "manual", HOJE, 12)), [[null, 13.9], ["2026-09-17", 13.65], ["2026-09-18", 11.9]],
+        "manual: o passado continua o que valeu; a Selic digitada so a partir do dia seguinte ao ultimo CDI");
+  igual(ver(V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", HOJE)), [[null, 13.65]], "sem historico: CDI atual constante");
+  igual(ver(V.curvaCDI({ selic: 12 }, "hoje", HOJE)), [[null, 11.9]], "so a Selic: CDI = Selic − 0,10");
+  igual(ver(V.curvaCDI({ selic: 13.75, cdi: 13.65, focus: FOCUS }, "focus", HOJE)),
+        [[null, 13.65], ["2026-11-05", 13.4], ["2026-12-10", 13.15], ["2027-01-29", 12.9], ["2027-12-10", 11.9], ["2028-12-11", 10.9]],
+        "Focus sem a serie da meta: datas pela tabela, reuniao passada ignorada");
+  igual(V.curvaCDI(null, "focus", HOJE), null, "sem taxa nenhuma: curva nula");
+  perto(V.cdiEm(cF, d("2026-11-04")), 0.1365, "cdiEm na vespera da R7", 1e-12);
+  perto(V.cdiEm(cF, d("2026-11-05")), 0.134, "cdiEm no dia em que a R7 vigora", 1e-12);
+  perto(V.cdiEm(cF, d("2026-09-16")), 0.139, "cdiEm num dia passado = o CDI que valeu", 1e-12);
+
+  // ------------------------------------------ projecao pre e pos (Task 2)
+  const ctx = (extra) => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),
+                                         degraus: V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", HOJE), irPresumido: 0.15 }, extra || {});
+  const cdbPre = { indexador:"pre", taxa:0.15, vencimento:"2027-09-21", saldo_liquido:1000 };
+  const pre = V.projetar(cdbPre, ctx());
+  const F = Math.pow(1.15, 250/252);
+  igual([pre.du, V.iso(pre.credito), pre.qual, pre.eventos.length], [250, "2027-09-21", "estimado", 1], "pre: 250 du, cai no proprio dia, estimado, 1 evento");
+  perto(pre.bruto, 1000 * F, "pre: bruto = saldo × 1,15^(250/252)");
+  perto(pre.liquido, 1000 + 0.85 * 1000 * (F - 1), "pre sem data de aplicacao: IR presumido 15% so no rendimento futuro");
+
+  // exato: saldo montado pela propria regra (aplicou 1.000 em 10/03/2025)
+  const G0 = 1000 * Math.pow(1.15, 386/252), N0 = G0 - 0.175 * (G0 - 1000);
+  const GT = 1000 * Math.pow(1.15, 636/252), NT = GT - 0.15 * (GT - 1000);
+  const exa = V.projetar(Object.assign({}, cdbPre, { saldo_liquido:N0, data_aplicacao:"2025-03-10", valor_aplicado:1000 }), ctx());
+  igual(exa.qual, "exato", "data e valor aplicados = exato");
+  perto(exa.liquido, NT, "exato: 15% sobre TODO o ganho desde a aplicacao (925 dias corridos)");
+  perto(exa.aliquota, 0.15, "exato: aliquota no vencimento", 1e-12);
+  const par = V.projetar(Object.assign({}, cdbPre, { saldo_liquido:N0, data_aplicacao:"2025-03-10" }), ctx());
+  igual(par.qual, "parcial", "so a data = parcial");
+  perto(par.liquido, NT, "parcial (pre): o principal sai exato da propria taxa");
+
+  perto(V.projetar({ indexador:"cdi", taxa:1.2, vencimento:"2027-09-21", saldo_liquido:1000 }, ctx()).bruto,
+        1000 * Math.pow(1 + 1.2 * (Math.pow(1.1365, 1/252) - 1), 250), "120% do CDI com CDI de 13,65%");
+  perto(V.projetar({ indexador:"cdi+", taxa:0.015, vencimento:"2027-09-21", saldo_liquido:1000 }, ctx()).bruto,
+        1000 * Math.pow(1.1365 * 1.015, 250/252), "CDI + 1,5%");
+  const sem = V.projetar({ indexador:"cdi", taxa:1.2, vencimento:"2027-09-21", saldo_liquido:1000 }, ctx({ degraus: null }));
+  ok(sem.semTaxa && Math.abs(sem.liquido - 1000) < 1e-9, "CDI sem taxa: fica no saldo e marca semTaxa");
+
+  // ---------- VALIDACAO (a): o valor anda com os dias pela taxa da planilha
+  const p0 = V.projetar(cdbPre, ctx());
+  const p1 = V.projetar(cdbPre, ctx({ hoje: d("2026-10-21") }));
+  const p2 = V.projetar(cdbPre, ctx({ hoje: d("2026-11-20") }));
+  perto(p0.valorHoje, 1000, "VALIDACAO a: no dia da planilha, hoje = saldo da planilha");
+  perto(p1.valorHoje, 1000 + 0.85 * 1000 * (Math.pow(1.15, 21/252) - 1), "VALIDACAO a: 30 dias depois = saldo + 21 du a 15% a.a. (liquido)");
+  perto(p2.valorHoje, 1000 + 0.85 * 1000 * (Math.pow(1.15, 42/252) - 1), "VALIDACAO a: 60 dias depois = 42 du");
+  ok(p0.valorHoje < p1.valorHoje && p1.valorHoje < p2.valorHoje, "VALIDACAO a: o valor de hoje so cresce");
+  perto(p2.liquido, p0.liquido, "VALIDACAO a: o valor no vencimento nao depende do dia em que se olha", 1e-9);
+  perto(p2.rendimento, p2.liquido - p2.valorHoje, "rendimento = vencimento − valor de hoje");
+  const pv = V.projetar(cdbPre, ctx({ hoje: d("2027-09-22") }));
+  ok(pv.pago && pv.valorHoje === 0 && pv.aReceber === 0 && pv.rendimento === 0, "depois do credito: nada a receber, valor de hoje 0");
+
+  // ---------- VALIDACAO (b): pos-fixado com a Selic de hoje e a mudanca aplicada a partir da data dela
+  const cdbCdi = { indexador:"cdi", taxa:1, vencimento:"2026-11-10", saldo_liquido:1000 };
+  const ctxH = extra => Object.assign({ posicao: d("2026-09-10"), hoje: HOJE, irPresumido: 0.15 }, extra);
+  const ph = V.projetar(cdbCdi, ctxH({ degraus: cH }));
+  perto(ph.fator, Math.pow(1.139, 5/252) * Math.pow(1.1365, 36/252),
+        "VALIDACAO b: 5 du a 13,90 (valeu) + 36 du a 13,65 (Selic de hoje)", 1e-12);
+  perto(ph.valorHoje, 1000 + 0.85 * 1000 * (Math.pow(1.139, 5/252) * Math.pow(1.1365, 2/252) - 1),
+        "VALIDACAO b: valor de hoje com o CDI que valeu em cada dia");
+  const pf = V.projetar(cdbCdi, ctxH({ degraus: cF }));
+  perto(pf.fator, Math.pow(1.139, 5/252) * Math.pow(1.1365, 33/252) * Math.pow(1.134, 3/252),
+        "Focus: o corte esperado da R7 entra em 05/11 (3 du a 13,40)", 1e-12);
+  // em 06/11 o BC publica o corte que vigorou em 05/11: historico ganha 13,40 e a meta vai ate a R8
+  const HIST2 = HIST.slice(), META2 = META.filter(m => m.dia < "2026-11-05");
+  for (let x = d("2026-09-18"); x < d("2026-11-06"); x++)
+    if (V.ehUtil(x)) HIST2.push({ dia: V.iso(x), cdi: x < d("2026-11-05") ? 13.65 : 13.40 });
+  for (let x = d("2026-11-05"); x <= d("2026-12-09"); x++) META2.push({ dia: V.iso(x), selic: 13.50 });
+  const c2 = V.curvaCDI({ historico: HIST2, meta: META2, focus: FOCUS }, "hoje", d("2026-11-06"));
+  igual(ver(c2), [[null, 13.9], ["2026-09-17", 13.65], ["2026-11-05", 13.4]],
+        "VALIDACAO b: Selic nova so a partir do dia em que vigorou; o passado nao muda");
+  const pl = V.projetar({ indexador:"cdi", taxa:1, vencimento:"2026-12-31", saldo_liquido:1000 },
+                        { posicao: d("2026-09-10"), hoje: d("2026-11-06"), degraus: c2, irPresumido: 0.15 });
+  perto(pl.fator, Math.pow(1.139, 5/252) * Math.pow(1.1365, 33/252) * Math.pow(1.134, 38/252),
+        "VALIDACAO b: 5 du a 13,90 + 33 a 13,65 + 38 a 13,40 (do corte ao vencimento)", 1e-12);
+
+  // ------------------------------------------ juros mensais (Task 2)
+  const jm = { indexador:"pre", taxa:0.12, vencimento:"2027-01-15", saldo_liquido:1000, valor_aplicado:1000, juros_mensais:true };
+  const pj = V.projetar(jm, ctx());
+  igual(pj.eventos.map(e => V.iso(e.dia) + ":" + e.tipo),
+        ["2026-10-15:juros", "2026-11-16:juros", "2026-12-15:juros", "2027-01-15:vencimento"],
+        "juros mensais: 3 cupons + vencimento; 15/11 (domingo) paga 16/11");
+  const cup = n => 1000 * (Math.pow(1.12, n/252) - 1) * 0.85;
+  perto(pj.eventos[0].liquido, cup(21), "1o cupom: 15/09 a 15/10 = 21 du");
+  perto(pj.eventos[2].liquido, cup(20), "3o cupom: 20 du");
+  perto(pj.eventos[3].liquido, 1000 + cup(21), "vencimento: principal + ultimo cupom");
+  perto(pj.liquido, 3 * cup(21) + cup(20) + 1000, "total = soma dos eventos");
+  const Nj = 1000 * (1 + 0.85 * (Math.pow(1.12, 4/252) - 1));
+  const pj2 = V.projetar(Object.assign({}, jm, { valor_aplicado:null, saldo_liquido:Nj }), ctx());
+  perto(pj2.principal, 1000, "sem valor aplicado: principal = saldo − juro liquido acumulado desde 15/09", 1e-9);
+  perto(pj2.liquido, pj.liquido, "mesmo fluxo com o principal estimado", 1e-7);
+  perto(pj2.valorHoje, Nj, "juros mensais: no dia da planilha, hoje = saldo", 1e-9);
+  const pj3 = V.projetar(jm, ctx({ hoje: d("2026-10-20") }));
+  perto(pj3.valorHoje, 1000 + 1000 * (Math.pow(1.12, 3/252) - 1) * 0.85, "depois do 1o cupom: principal + juro desde 15/10 (3 du)");
+  perto(pj3.aReceber, pj.liquido - pj.eventos[0].liquido, "o cupom ja pago sai do 'a receber'");
+
+  // ------------------------------------------ agenda (Task 2)
+  // saldo COERENTE com o principal (P + juro liquido acumulado desde 15/09)
+  const jmC = Object.assign({}, jm, { saldo_liquido: Nj });
+  const ag = V.agenda([cdbPre, { indexador:"cdi", taxa:1.2, vencimento:"2027-09-21", saldo_liquido:1000 }, jmC], ctx());
+  const cdiL = V.projetar({ indexador:"cdi", taxa:1.2, vencimento:"2027-09-21", saldo_liquido:1000 }, ctx()).liquido;
+  igual(Object.keys(ag.porDia).length, 5, "agenda: 5 dias com credito");
+  perto(ag.porDia[d("2027-09-21")].total, pre.liquido + cdiL, "dois CDBs no mesmo dia somam");
+  igual(Object.keys(ag.porMes).sort(), ["2026-10", "2026-11", "2026-12", "2027-01", "2027-09"], "meses com credito");
+  igual([ag.porMes["2027-01"].vencimentos, ag.porMes["2026-10"].juros, ag.porMes["2027-09"].vencimentos], [1, 1, 2], "conta vencimentos e juros por mes");
+  perto(ag.total, pre.liquido + cdiL + pj.liquido, "total = tudo o que cai");
+  perto(ag.posicao, 2000 + Nj, "posicao = soma dos saldos da planilha");
+  perto(ag.hoje, 2000 + Nj, "no dia da planilha, carteira de hoje = posicao");
+  const ag2 = V.agenda([cdbPre, jm], ctx({ hoje: d("2026-10-20") }));
+  perto(ag2.aReceber, p0.liquido + pj3.aReceber, "a receber (a partir de hoje) ignora o cupom ja pago");
+  ok(ag2.hoje > 2000, "carteira de hoje cresceu depois de um mes");
+
   // ==MAIS_TESTES==
 
   fim();
