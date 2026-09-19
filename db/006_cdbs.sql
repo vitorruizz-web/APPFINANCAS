@@ -30,6 +30,17 @@ create table if not exists fin_cdbs (
   isento_ir boolean not null default false, -- LCI e LCA
   created_at timestamptz not null default now()
 );
+-- quem rodou a primeira versao desta migracao (sem as colunas do Open Finance):
+-- completa a tabela sem perder nada; em tabela nova, nao faz nada
+alter table fin_cdbs add column if not exists origem text not null default 'planilha'
+  check (origem in ('planilha','pluggy'));
+alter table fin_cdbs add column if not exists instituicao text;
+alter table fin_cdbs add column if not exists externo_id text;
+alter table fin_cdbs add column if not exists tipo text;
+alter table fin_cdbs add column if not exists spread numeric(12,8);
+alter table fin_cdbs add column if not exists valor_bruto numeric(18,6);
+alter table fin_cdbs add column if not exists isento_ir boolean not null default false;
+
 create index if not exists fin_cdbs_venc on fin_cdbs (user_id, vencimento);
 
 alter table fin_cdbs enable row level security;
