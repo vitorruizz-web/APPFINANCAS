@@ -1,7 +1,7 @@
 // Service worker do app Financas.
 // Navegacao e NETWORK-FIRST de proposito: assim uma mudanca no index.html
 // chega sem precisar de bump de cache. O cache so entra quando a rede falha.
-const CACHE = "fin-v5";
+const CACHE = "fin-v6";
 const ESTATICOS = ["./", "./index.html", "./manifest.json",
                    "./icon-192.png", "./icon-512.png", "./icon-180.png"];
 
@@ -22,6 +22,9 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   // nunca cachear a API: dado financeiro velho servido como novo e pior que erro
   if (req.url.indexOf("supabase.co") !== -1) return;
+  // taxa do Banco Central: quem guarda copia e o app (localStorage). Aqui um
+  // erro de rede viraria o index.html servido no lugar do JSON.
+  if (req.url.indexOf("bcb.gov.br") !== -1) return;
 
   e.respondWith(
     fetch(req)

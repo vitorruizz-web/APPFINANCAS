@@ -56,6 +56,18 @@
           "sizes": "192x192"
         }
       ]
+    },
+    {
+      "name": "Vencimentos",
+      "short_name": "Vencimentos",
+      "url": "./?ir=vencimentos",
+      "description": "Quanto cai na conta com os CDBs que vencem",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
