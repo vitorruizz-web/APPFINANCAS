@@ -46,6 +46,17 @@ MOCK = r"""
     url = String(url); opts = opts || {};
     if (url.indexOf("supabase.co") === -1) return realFetch(url, opts);
 
+    // ---- Edge Function da aba Vencimentos (Open Finance): responde com
+    //      tests/_real/<arquivo> (gerado da planilha real, FORA do git). Sem o
+    //      arquivo, responde como funcao ainda nao publicada (404).
+    //      window.__pluggyMock troca o arquivo (ex.: "pluggy_mock_falha.json").
+    if (url.indexOf("/functions/v1/pluggy-cdbs") !== -1){
+      const arq = window.__pluggyMock || "pluggy_mock.json";
+      const r = await realFetch("./_real/" + arq + "?v=" + Date.now()).catch(() => null);
+      if (!r || !r.ok) return json({ message: "Requested function was not found" }, 404);
+      return json(await r.json());
+    }
+
     // ---- auth ----
     if (url.indexOf("/auth/v1/user") !== -1)
       return json({ id: "u1", email: "preview@local" });

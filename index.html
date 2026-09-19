@@ -3314,11 +3314,18 @@ const ordenarCdbs = l => l.slice().sort((a, b) =>
 
 // A planilha e a carteira INTEIRA: grava o lote novo e so entao apaga os
 // anteriores. Se o DELETE falhar, indexar() fica so com o lote mais recente.
+const tipoDoNome = nome => (/^\s*(CDB|RDB|LCI|LCA|LC)\b/i.exec(nome || "") || [0, "CDB"])[1].toUpperCase();
 async function gravarPosicao(cdbs, pos){
   const lote = new Date().toISOString();
-  const linhas = cdbs.map(c => ({ lote: lote, data_posicao: pos, nome: c.nome, emissor: c.emissor,
-    indexador: c.indexador, taxa: c.taxa, vencimento: c.vencimento, saldo_liquido: c.saldo_liquido,
-    data_aplicacao: c.data_aplicacao, valor_aplicado: c.valor_aplicado, juros_mensais: !!c.juros_mensais }));
+  const nulo = v => v === undefined ? null : v;
+  // mesmas chaves em todas as linhas (exigencia do insert em lote do PostgREST);
+  // linha da planilha nao traz corretora, id externo, bruto nem spread
+  const linhas = cdbs.map(c => ({ lote: lote, origem: c.origem || "planilha", data_posicao: c.data_posicao || pos,
+    instituicao: nulo(c.instituicao), externo_id: nulo(c.externo_id), tipo: c.tipo || tipoDoNome(c.nome),
+    nome: c.nome, emissor: c.emissor, indexador: c.indexador, taxa: c.taxa, spread: nulo(c.spread),
+    vencimento: c.vencimento, saldo_liquido: c.saldo_liquido, valor_bruto: nulo(c.valor_bruto),
+    data_aplicacao: nulo(c.data_aplicacao), valor_aplicado: nulo(c.valor_aplicado), juros_mensais: !!c.juros_mensais,
+    isento_ir: c.isento_ir !== undefined && c.isento_ir !== null ? !!c.isento_ir : /^\s*(LCI|LCA)\b/i.test(c.nome || "") }));
   let r;
   try { r = await salvar("fin_cdbs", linhas); } catch (e){ return false; }
   if (!r || !r.length) return false;
@@ -3347,7 +3354,7 @@ const isoDeBR = s => s.slice(6, 10) + "-" + s.slice(3, 5) + "-" + s.slice(0, 2);
 // so os pontos em que o valor muda, mais o ultimo dia (que diz ate onde a serie vai)
 const mudancas = (l, campo) => l.filter((x, i) => i === 0 || i === l.length - 1 || x[campo] !== l[i - 1][campo]);
 function buscarTaxas(forcar){
-  const inicio = VENC.dn(posicaoAtual()) - 10, hoje = VENC.dn(hojeISO());
+  const inicio = VENC.dn(inicioPosicao()) - 10, hoje = VENC.dn(hojeISO());
   const idade = taxas && taxas.buscado ? Date.now() - Date.parse(taxas.buscado) : Infinity;
   const cobre = !!(taxas && taxas.desde && VENC.dn(taxas.desde) <= inicio);
   if (!forcar && idade < TAXAS_VALIDADE && cobre) return Promise.resolve(taxas);
@@ -3398,7 +3405,22 @@ function buscarTaxas(forcar){
 
 // ---------------------------------------------------------------- contexto
 const prefVenc = () => Object.assign({ curva:"focus", ir:0.15, selicManual:null }, estado.settings.venc || {});
-function posicaoAtual(){ return estado.cdbs.length ? estado.cdbs[0].data_posicao : hojeISO(); }
+// Cada linha guarda a data do proprio saldo (no Open Finance, XP e BTG podem estar
+// em dias diferentes): a posicao "atual" e a mais recente; o historico do CDI
+// precisa comecar na mais antiga.
+function posicaoAtual(){
+  return estado.cdbs.length ? estado.cdbs.reduce((m, c) => c.data_posicao > m ? c.data_posicao : m, "") : hojeISO();
+}
+function inicioPosicao(){
+  return estado.cdbs.length ? estado.cdbs.reduce((m, c) => !m || c.data_posicao < m ? c.data_posicao : m, "") : hojeISO();
+}
+// A marcacao manual de "paga juros todo mes" (o Open Finance pode nao trazer isso no
+// nome do titulo) vale por cima da linha do banco, pelo id do investimento.
+function cdbsComAjustes(){
+  const jm = prefVenc().jurosMensais || {};
+  return estado.cdbs.map(c => c.externo_id && jm[c.externo_id] !== undefined
+    ? Object.assign({}, c, { juros_mensais: !!jm[c.externo_id] }) : c);
+}
 function ctxVenc(){
   const p = prefVenc(), hoje = VENC.dn(hojeISO());
   return { posicao: VENC.dn(posicaoAtual()), hoje: hoje, irPresumido: +p.ir || 0.15,
@@ -3410,8 +3432,8 @@ function ctxVenc(){
 function agendaAtual(){
   const ctx = ctxVenc();
   const chave = JSON.stringify([estado.cdbs.length, estado.cdbs.length ? estado.cdbs[0].lote : "",
-                                ctx.posicao, ctx.hoje, ctx.irPresumido, ctx.degraus]);
-  if (!agendaCache || agendaCache.chave !== chave) agendaCache = { chave: chave, ag: VENC.agenda(estado.cdbs, ctx) };
+                                ctx.posicao, ctx.hoje, ctx.irPresumido, ctx.degraus, prefVenc().jurosMensais || {}]);
+  if (!agendaCache || agendaCache.chave !== chave) agendaCache = { chave: chave, ag: VENC.agenda(cdbsComAjustes(), ctx) };
   return agendaCache.ag;
 }
 async function gravarPrefVenc(campos){
@@ -3429,7 +3451,8 @@ const SEMANA_CURTA = ["seg","ter","qua","qui","sex","sáb","dom"];
 function descTaxa(c){
   const t = Math.round(+c.taxa * 1e6) / 1e4;         // em %, sem ruido de ponto flutuante
   if (c.indexador === "pre") return pctTxt(t) + " a.a.";
-  if (c.indexador === "cdi") return pctTxt(t, t % 1 ? 2 : 0) + " do CDI";
+  const s = Math.round((+c.spread || 0) * 1e6) / 1e4;
+  if (c.indexador === "cdi") return pctTxt(t, t % 1 ? 2 : 0) + " do CDI" + (s ? " + " + pctTxt(s) : "");
   return "CDI + " + pctTxt(t);
 }
 // valor compacto para caber na celula do calendario: 486 · 6,3k · 13k
@@ -3447,6 +3470,97 @@ function horaCurta(isoStr){
   return p(d.getDate()) + "/" + p(d.getMonth() + 1) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
 }
 
+// ---------------------------------------------------------------- Open Finance (XP e BTG)
+// A posicao vem da Edge Function pluggy-cdbs -- a chave da Pluggy fica so no
+// servidor. O mapeamento e o VENC.lerPluggy (testado); a gravacao e a mesma da
+// planilha (lote novo, depois apaga os antigos, RLS de sempre).
+const FN_PLUGGY = SB_URL + "/functions/v1/pluggy-cdbs";
+const SINC_VALIDADE = 6 * 3600 * 1000;       // o Meu Pluggy renova a cada 24 h; ler nao gasta cota
+let sincronizando = null;
+let sincInfo = null;                          // { em, itens, avisos, n, mantidos, erro, erroEm }
+try { sincInfo = JSON.parse(localStorage.getItem("fin_pluggy_sinc") || "null"); } catch (e){}
+const guardarSincInfo = () => { try { localStorage.setItem("fin_pluggy_sinc", JSON.stringify(sincInfo)); } catch (e){} };
+const fontePluggy = () => estado.cdbs.some(c => c.origem === "pluggy") || prefVenc().fonte === "pluggy";
+async function chamarFuncaoPluggy(jaTentou){
+  let r;
+  try {
+    r = await fetch(FN_PLUGGY, { method:"POST", body:"{}", headers:{ "apikey": SB_KEY,
+      "Authorization": "Bearer " + (tokenAtual() || SB_KEY), "Content-Type": "application/json" } });
+  } catch (e){ const x = new Error("rede"); x.tipo = "rede"; throw x; }
+  if (r.status === 401 && !jaTentou && await renovar()) return chamarFuncaoPluggy(true);
+  const corpo = await r.json().catch(() => null);
+  if (!r.ok){ const x = new Error((corpo && corpo.erro) || ("HTTP " + r.status)); x.status = r.status; x.corpo = corpo; throw x; }
+  return corpo;
+}
+function explicarErroPluggy(e){
+  const c = e.corpo || {};
+  if (e.tipo === "rede") return "sem conexão com o Supabase";
+  if (e.status === 404) return "a função pluggy-cdbs ainda não foi publicada no Supabase";
+  if (c.erro === "configuracao") return "faltam os segredos no Supabase: " + (c.falta || []).join(", ");
+  if (c.erro === "pluggy_auth") return "a Pluggy recusou o Client ID/Secret — confira os segredos";
+  if (c.erro === "pluggy_rede") return "a Pluggy não respondeu";
+  if (c.erro === "proibido") return "este usuário não pode sincronizar";
+  if (e.status === 401) return "sessão expirada — entre de novo";
+  return e.message;
+}
+// Uma corretora que falhou (consentimento vencido, instabilidade) NAO pode apagar a
+// posicao dela: os titulos que ela tinha no lote anterior seguem, com a data antiga,
+// ate a proxima sincronizacao boa -- e a tela avisa.
+function manterQuemFalhou(lido){
+  const comDados = new Set(lido.cdbs.map(c => c.instituicao));
+  return estado.cdbs.filter(c => c.origem === "pluggy" && c.instituicao && !comDados.has(c.instituicao))
+    .map(c => { const o = Object.assign({}, c); delete o.id; delete o.user_id; delete o.lote; delete o.created_at; return o; });
+}
+function sincronizarPluggy(manual){
+  if (sincronizando) return sincronizando;
+  if (disfarce){ if (manual) bloqueadoPeloDisfarce(); return Promise.resolve(false); }
+  if (dadosTravados){ if (manual) toast("Sem conexão — nada foi sincronizado"); return Promise.resolve(false); }
+  sincronizando = (async () => {
+    try {
+      const resp = await chamarFuncaoPluggy();
+      const lido = VENC.lerPluggy(resp, { hoje: VENC.dn(hojeISO()) });
+      const mantidos = manterQuemFalhou(lido);
+      sincInfo = { em: new Date().toISOString(), itens: lido.itens, avisos: lido.avisos, n: lido.cdbs.length,
+                   mantidos: [...new Set(mantidos.map(c => c.instituicao))], erro: null };
+      const todos = lido.cdbs.concat(mantidos);
+      if (!todos.length){
+        sincInfo.erro = "o Open Finance não devolveu nenhum título de renda fixa bancária";
+        if (manual) toast(sincInfo.erro);
+        return false;
+      }
+      if (!(await gravarPosicao(todos, lido.posicao || hojeISO()))){ sincInfo.erro = "não gravou a posição"; return false; }
+      if (prefVenc().fonte !== "pluggy"){
+        estado.settings.venc = Object.assign(prefVenc(), { fonte: "pluggy" });
+        gravarPrefs().catch(() => {});
+      }
+      if (manual){
+        toast("Sincronizado: " + lido.cdbs.length + " títulos" +
+              (sincInfo.mantidos.length ? " · " + sincInfo.mantidos.join(", ") + " mantido da última vez" : ""));
+        tremer([8, 40, 8]);
+      }
+      return true;
+    } catch (e){
+      sincInfo = Object.assign({}, sincInfo || {}, { erro: explicarErroPluggy(e), erroEm: new Date().toISOString() });
+      if (manual) toast("Não sincronizou: " + sincInfo.erro);
+      return false;
+    } finally {
+      guardarSincInfo(); sincronizando = null; agendaCache = null;
+      if (aba === "vencimentos") render();
+    }
+  })();
+  if (aba === "vencimentos") render();       // mostra o "sincronizando..." enquanto espera
+  return sincronizando;
+}
+// Ao abrir a aba: sincroniza sozinho se a posicao do Open Finance tiver mais de 6 h.
+// Depois de um erro, espera 10 min antes de tentar de novo (senao cada redesenho tentaria).
+function talvezSincronizar(){
+  if (!fontePluggy() || sincronizando || disfarce || dadosTravados) return;
+  const agora = Date.now(), s = sincInfo || {};
+  if (s.erroEm && agora - Date.parse(s.erroEm) < 10 * 60 * 1000) return;
+  if (s.em && agora - Date.parse(s.em) < SINC_VALIDADE) return;
+  sincronizarPluggy(false);
+}
+
 // ---------------------------------------------------------------- tela
 let vencMes = null, vencDia = null;        // mes aberto ("AAAA-MM") e dia escolhido (numero de dia)
 function renderVencimentos(){
@@ -3455,8 +3569,11 @@ function renderVencimentos(){
   if (!estado.cdbs.length){
     el.innerHTML = avisoTravado() + (cdbsIndisponivel
       ? '<div class="aviso">A tabela <b>fin_cdbs</b> ainda não existe no banco — rode <b>db/006_cdbs.sql</b> no Supabase.</div>' : "") +
+      (sincInfo && sincInfo.erro && !sincronizando
+        ? '<div class="aviso">Open Finance: ' + esc(sincInfo.erro) + '.</div>' : "") +
       vazioVenc();
     ligarAcoesVenc(el);
+    talvezSincronizar();
     return;
   }
   const ag = agendaAtual(), hoje = VENC.dn(hojeISO());
@@ -3470,9 +3587,10 @@ function renderVencimentos(){
     '<div class="grafwrap" id="graf-venc"></div>' +
     navMesVenc() + calendarioVenc(ag, hoje) + resumoMesVenc(ag) +
     '<div class="vlista">' + listaVenc(ag, hoje) + '</div>' +
-    premissasVenc();
+    premissasVenc() + conexoesVenc();
   desenharBarrasVenc();
   ligarAcoesVenc(el);
+  talvezSincronizar();
   // taxa velha: busca em segundo plano e redesenha UMA vez quando chegar
   const antes = taxas;
   buscarTaxas(false).then(t => {
@@ -3481,9 +3599,21 @@ function renderVencimentos(){
 }
 function linhaPosicao(){
   const pos = posicaoAtual(), velha = VENC.dn(hojeISO()) - VENC.dn(pos) > 31;
+  if (estado.cdbs.some(c => c.origem === "pluggy")){
+    const corretoras = [...new Set(estado.cdbs.map(c => c.instituicao).filter(Boolean))].join(" e ") || "Open Finance";
+    const quando = sincInfo && sincInfo.em ? horaCurta(sincInfo.em) : VENC.dataBR(pos);
+    const problema = !sincronizando && sincInfo && (sincInfo.erro ||
+      (sincInfo.mantidos && sincInfo.mantidos.length ? sincInfo.mantidos.join(", ") + " não respondeu — mantida a posição anterior" : ""));
+    return '<div class="vpos"><span class="' + (problema ? "abr" : "d3") + '">' + esc(corretoras) + ' · Open Finance · ' +
+      (sincronizando ? "sincronizando…" : "atualizado " + quando) + (problema ? " — " + esc(problema) : "") + '</span>' +
+      '<button class="btn mini plain" id="v-sinc"' + (sincronizando ? " disabled" : "") + '>' +
+      (sincronizando ? "Sincronizando…" : "Sincronizar") + '</button></div>';
+  }
   return '<div class="vpos"><span class="' + (velha ? "abr" : "d3") + '">planilha de ' + VENC.dataBR(pos) +
     ' · ' + estado.cdbs.length + ' CDBs' + (velha ? ' — suba a posição nova' : '') + '</span>' +
-    '<button class="btn mini plain" id="v-importar">Atualizar posição</button></div>';
+    '<span><button class="btn mini plain" id="v-conectar"' + (sincronizando ? " disabled" : "") + '>' +
+      (sincronizando ? "Conectando…" : "Conectar XP e BTG") + '</button>' +
+    '<button class="btn mini plain" id="v-importar">Atualizar posição</button></span></div>';
 }
 function heroiVenc(ag, hoje){
   const futuros = ag.eventos.filter(e => e.dia >= hoje);
@@ -3607,9 +3737,10 @@ function listaVenc(ag, hoje){
 function linhaEventoVenc(ag, e){
   const it = ag.itens[e.i], c = it.cdb, p = it.p;
   const juros = e.tipo === "juros";
-  const sub = juros ? '<em>juros do mês</em> · ' + esc(descTaxa(c))
+  const corr = c.instituicao ? esc(String(c.instituicao).split(/\s+/)[0]) + ' · ' : '';
+  const sub = corr + (juros ? '<em>juros do mês</em> · ' + esc(descTaxa(c))
     : esc(descTaxa(c)) + (c.juros_mensais ? ' · <em>principal + último juro</em>' : '') +
-      (p.semTaxa ? ' · <em>sem taxa do CDI</em>' : '');
+      (c.isento_ir ? ' · isento de IR' : '') + (p.semTaxa ? ' · <em>sem taxa do CDI</em>' : ''));
   const dir = juros ? 'IR ' + esc(fmt(e.ir))
     : p.pago ? 'já caiu'
     : 'hoje ' + esc(fmt(p.valorHoje)) + ' <b class="pos">' + esc(fmtsin(e.liquido - p.valorHoje)) + '</b>';
@@ -3621,22 +3752,25 @@ function folhaCDB(i){
   const ag = agendaAtual(), it = ag.itens[i];
   if (!it) return;
   const c = it.cdb, p = it.p, T = VENC.dn(c.vencimento);
-  const expl = {
-    exato: "IR exato: a planilha trouxe a data e o valor aplicados.",
-    parcial: "IR pela " + (c.data_aplicacao ? "data de aplicação; o valor aplicado saiu da própria taxa." : "alíquota presumida; o valor aplicado veio da planilha."),
-    estimado: "A planilha não traz a data de aplicação: o rendimento daqui até o vencimento paga " +
+  const fonte = c.origem === "pluggy" ? "o Open Finance" : "a planilha";
+  const expl = c.isento_ir ? "Isento de IR (" + esc(c.tipo || "LCI/LCA") + "): cai na conta o valor bruto." : {
+    exato: "IR exato: " + fonte + " trouxe a data e o valor aplicados.",
+    parcial: "IR pela " + (c.data_aplicacao ? "data de aplicação; o valor aplicado saiu da própria taxa."
+                                            : "alíquota presumida; o valor aplicado veio d" + (c.origem === "pluggy" ? "o Open Finance." : "a planilha.")),
+    estimado: "Sem a data de aplicação: o rendimento daqui até o vencimento paga " +
       pctTxt(ctxVenc().irPresumido * 100, 1) + " de IR (ajuste em Premissas).",
   }[p.qual];
   const cup = c.juros_mensais ? p.eventos : [];
+  const quando = VENC.dataBR(c.data_posicao || posicaoAtual()).slice(0, 5);
   abrirFolha(
     '<h3>' + esc(c.nome) + '</h3>' +
-    '<div class="sub">' + esc(descTaxa(c)) + ' · vence ' + VENC.dataBR(c.vencimento) +
-      (p.credito !== T ? ' (cai em ' + diaBR(p.credito) + ')' : '') + ' · ' + p.du + ' dias úteis desde a planilha</div>' +
+    '<div class="sub">' + (c.instituicao ? esc(c.instituicao) + ' · ' : '') + esc(descTaxa(c)) + ' · vence ' + VENC.dataBR(c.vencimento) +
+      (p.credito !== T ? ' (cai em ' + diaBR(p.credito) + ')' : '') + ' · ' + p.du + ' dias úteis desde ' + quando + '</div>' +
     '<div class="tot" style="margin-top:0">' +
-      '<div><span>Saldo líquido na planilha (' + VENC.dataBR(c.data_posicao || posicaoAtual()).slice(0, 5) + ')</span><span>' + esc(fmt(+c.saldo_liquido)) + '</span></div>' +
+      '<div><span>Saldo líquido em ' + quando + (c.origem === "pluggy" ? ' (Open Finance)' : ' (planilha)') + '</span><span>' + esc(fmt(+c.saldo_liquido)) + '</span></div>' +
       '<div><span>Hoje (estimado pela taxa)</span><span>' + (p.pago ? 'já caiu' : esc(fmt(p.valorHoje))) + '</span></div>' +
       '<div><span>Bruto ' + (c.juros_mensais ? 'a receber (juros + principal)' : 'no vencimento') + '</span><span>' + esc(fmt(p.bruto)) + '</span></div>' +
-      '<div><span>IR' + (p.qual === "estimado" ? ' sobre o rendimento futuro' : '') + ' (' + pctTxt(p.aliquota * 100, 1) + ')</span>' +
+      '<div><span>IR' + (c.isento_ir ? ' (isento)' : (p.qual === "estimado" ? ' sobre o rendimento futuro' : '') + ' (' + pctTxt(p.aliquota * 100, 1) + ')') + '</span>' +
         '<span class="neg">' + esc(fmt(-p.ir)) + '</span></div>' +
       '<div class="destaque"><span>Cai na conta</span><span>' + esc(fmt(p.liquido)) + '</span></div>' +
       '<div><span>Rendimento líquido daqui até lá</span><span class="pos">' + esc(fmtsin(p.rendimento)) + '</span></div>' +
@@ -3645,8 +3779,20 @@ function folhaCDB(i){
       '<div class="row"><span class="nm">' + diaBR(e.dia) + (e.tipo === "vencimento" ? ' · principal + juro' : '') + '</span>' +
       '<span class="vl">' + esc(fmt(e.liquido)) + '</span></div>').join("") : '') +
     '<div class="nota fria">' + expl + (p.semTaxa ? '<br><b>Sem taxa do CDI</b>: este CDB aparece pelo saldo até a taxa chegar.' : '') + '</div>' +
+    // o Open Finance pode nao dizer que o titulo paga juros mensais: a marcacao e manual
+    (c.externo_id ? '<label class="check"><input type="checkbox" id="v-jm"' + (c.juros_mensais ? ' checked' : '') + '>' +
+      '<span>Paga juros todo mês<br><span class="t11 d3">marque se o título paga cupom mensal — o calendário passa a mostrar os juros de cada mês</span></span></label>' : '') +
     '<div class="acoes"><button class="btn plain" id="fechar">Fechar</button></div>',
-    () => { document.getElementById("fechar").onclick = fecharFolha; });
+    () => {
+      document.getElementById("fechar").onclick = fecharFolha;
+      const jm = document.getElementById("v-jm");
+      if (jm) jm.onchange = () => {
+        const mapa = Object.assign({}, prefVenc().jurosMensais || {});
+        mapa[c.externo_id] = jm.checked;
+        gravarPrefVenc({ jurosMensais: mapa });
+        folhaCDB(i);
+      };
+    });
 }
 function premissasVenc(){
   const p = prefVenc(), tx = taxas;
@@ -3680,6 +3826,38 @@ function premissasVenc(){
     '<div class="row"><span class="nm">Taxas<br><span class="t11 d3">' + esc(fonte) + '</span></span>' +
       '<button class="btn mini plain" id="v-taxas">Atualizar</button></div>';
 }
+// Conexoes do Open Finance: o que cada corretora respondeu na ultima sincronizacao e
+// ate quando vale o consentimento (renova-se no Meu Pluggy; aviso 30 dias antes).
+const STATUS_ITEM = { UPDATED: "atualizada", UPDATING: "atualizando", OUTDATED: "desatualizada",
+  LOGIN_ERROR: "precisa reconectar", WAITING_USER_INPUT: "esperando você", CREATING: "conectando" };
+function conexoesVenc(){
+  const pluggy = estado.cdbs.some(c => c.origem === "pluggy");
+  const itens = (sincInfo && sincInfo.itens) || [];
+  let h = '<div class="hdr"><h2>Conexões</h2></div><div class="rule"></div>';
+  const hoje = VENC.dn(hojeISO());
+  for (const it of itens){
+    const ate = it.consentimentoAte ? VENC.dn(VENC.diaBrasilia(it.consentimentoAte)) : null;
+    const resta = ate !== null ? ate - hoje : null;
+    const cons = resta === null ? "" : resta < 0 ? '<span class="neg"> · consentimento vencido — renove no Meu Pluggy</span>'
+      : resta <= 30 ? '<span class="abr"> · consentimento vence em ' + resta + ' dia' + (resta === 1 ? '' : 's') + ' — renove no Meu Pluggy</span>'
+      : ' · consentimento até ' + VENC.dataBR(VENC.iso(ate));
+    h += '<div class="row"><span class="nm">' + esc(it.conector || it.id) + '<br><span class="t11 d3">' +
+      esc(STATUS_ITEM[it.status] || it.status || "sem resposta") + (it.atualizadoEm ? ' · dados de ' + horaCurta(it.atualizadoEm) : '') +
+      (it.erro ? ' · <span class="neg">' + esc(it.erro) + '</span>' : '') + cons + '</span></span></div>';
+  }
+  if (!itens.length) h += '<div class="row"><span class="nm">XP e BTG pelo Open Finance<br><span class="t11 d3">' +
+    (sincInfo && sincInfo.erro ? esc(sincInfo.erro) : "ainda não conectadas") + '</span></span>' +
+    '<button class="btn mini plain" id="v-conectar2">Conectar</button></div>';
+  if (sincInfo && sincInfo.avisos && sincInfo.avisos.length){
+    const porMotivo = {};
+    for (const a of sincInfo.avisos) porMotivo[a.msg] = (porMotivo[a.msg] || 0) + 1;
+    h += '<div class="conc">Fora do calendário: ' + Object.keys(porMotivo).map(k =>
+      esc(k) + ' (' + porMotivo[k] + ')').join(' · ') + '.</div>';
+  }
+  if (pluggy) h += '<div class="row"><span class="nm">Planilha da corretora<br><span class="t11 d3">plano B, se o Open Finance ' +
+    'ficar fora do ar — substitui a posição inteira</span></span><button class="btn mini plain" id="v-importar">Atualizar por planilha</button></div>';
+  return h;
+}
 
 // ---------------------------------------------------------------- acoes
 let arrastoVencLigado = false;
@@ -3706,6 +3884,7 @@ function ligarAcoesVenc(el){
   const q = id => document.getElementById(id);
   if (q("v-importar")) q("v-importar").onclick = folhaImportar;
   if (q("v-modelo")) q("v-modelo").onclick = baixarModelo;
+  ["v-sinc", "v-conectar", "v-conectar2"].forEach(id => { if (q(id)) q(id).onclick = () => sincronizarPluggy(true); });
   if (q("v-ant")) q("v-ant").onclick = () => mudarMesVenc(-1);
   if (q("v-prox")) q("v-prox").onclick = () => mudarMesVenc(1);
   if (q("v-todos")) q("v-todos").onclick = () => { vencDia = null; render(); };
@@ -3748,9 +3927,11 @@ function regrasColunas(){
 function vazioVenc(){
   return '<div class="hero"><div><div class="k-hero">vencimentos</div>' +
       '<div class="val serif v-vazio">Quanto cai na conta, dia a dia</div>' +
-      '<div class="cap">Suba a planilha de posição da corretora: o app projeta o valor líquido de cada CDB no vencimento — ' +
-      'prefixado pela taxa, pós-fixado pelo CDI do Banco Central.</div></div></div>' +
-    '<div class="acoes"><button class="btn pri" id="v-importar">Subir planilha</button>' +
+      '<div class="cap">A posição vem da XP e do BTG pelo Open Finance (ou da planilha da corretora): o app projeta o valor ' +
+      'líquido de cada título no vencimento — prefixado pela taxa, pós-fixado pelo CDI do Banco Central.</div></div></div>' +
+    '<div class="acoes"><button class="btn pri" id="v-conectar"' + (sincronizando ? ' disabled' : '') + '>' +
+      (sincronizando ? "Conectando…" : "Conectar XP e BTG") + '</button>' +
+    '<button class="btn plain" id="v-importar">Subir planilha</button>' +
     '<button class="btn plain" id="v-modelo">Baixar modelo</button></div>' + regrasColunas();
 }
 let importacao = null;       // { arquivo, abas }
@@ -3852,16 +4033,17 @@ function baixarModelo(){
 function abaVencCDBs(){
   if (!estado.cdbs.length) return null;
   const ag = agendaAtual();
-  return { nome: "CDBs",
-    colunas: [{t:"Vencimento",largura:12},{t:"Cai na conta",largura:12},{t:"CDB",largura:46},{t:"Emissor",largura:30},
-              {t:"Taxa",largura:16},{t:"Juros mensais",largura:10},{t:"Saldo na planilha",largura:16},
-              {t:"Hoje (estimado)",largura:16},{t:"Bruto",largura:16},{t:"IR",largura:13},{t:"Alíquota IR",largura:11},
-              {t:"Cai na conta (líquido)",largura:18},{t:"Rendimento daqui até lá",largura:18},{t:"Dias úteis",largura:10},
-              {t:"IR calculado",largura:12}],
+  return { nome: "Títulos",
+    colunas: [{t:"Vencimento",largura:12},{t:"Cai na conta",largura:12},{t:"Corretora",largura:16},{t:"Tipo",largura:7},
+              {t:"Título",largura:46},{t:"Emissor",largura:30},{t:"Taxa",largura:18},{t:"Juros mensais",largura:10},
+              {t:"Saldo na posição",largura:16},{t:"Data da posição",largura:12},{t:"Hoje (estimado)",largura:16},
+              {t:"Bruto",largura:16},{t:"IR",largura:13},{t:"Alíquota IR",largura:11},{t:"Cai na conta (líquido)",largura:18},
+              {t:"Rendimento daqui até lá",largura:18},{t:"Dias úteis",largura:10},{t:"IR calculado",largura:12}],
     linhas: ag.itens.map(it => { const c = it.cdb, p = it.p;
-      return [T(VENC.dataBR(c.vencimento)), T(diaBR(p.credito)), T(c.nome), T(c.emissor || ""), T(descTaxa(c)),
-              T(c.juros_mensais ? "sim" : ""), M(+c.saldo_liquido), M(p.valorHoje), M(p.bruto), M(p.ir), P(p.aliquota),
-              M(p.liquido, true), M(p.rendimento), N(p.du), T(p.qual)]; }) };
+      return [T(VENC.dataBR(c.vencimento)), T(diaBR(p.credito)), T(c.instituicao || (c.origem === "pluggy" ? "" : "planilha")),
+              T(c.tipo || tipoDoNome(c.nome)), T(c.nome), T(c.emissor || ""), T(descTaxa(c)), T(c.juros_mensais ? "sim" : ""),
+              M(+c.saldo_liquido), T(VENC.dataBR(c.data_posicao || "")), M(p.valorHoje), M(p.bruto), M(p.ir), P(p.aliquota),
+              M(p.liquido, true), M(p.rendimento), N(p.du), T(c.isento_ir ? "isento" : p.qual)]; }) };
 }
 function abaVencCalendario(){
   if (!estado.cdbs.length) return null;

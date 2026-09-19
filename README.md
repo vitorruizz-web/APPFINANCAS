@@ -57,6 +57,30 @@ dia útil a dia útil; a Selic meta **já decidida** até a próxima reunião; e
 mudança de Selic entra no dia em que vigorou — o passado não muda. As taxas ficam em
 cache no aparelho (`localStorage`), não no banco.
 
+**Posição direto da XP e do BTG (Open Finance).** A fonte principal é o Open Finance, via
+[Meu Pluggy](https://www.pluggy.ai/meu-pluggy) (grátis para uso pessoal, até 5 conexões,
+renova a cada 24 h). A chave da Pluggy não pode ir ao navegador, então quem fala com ela é a
+Edge Function [`supabase/functions/pluggy-cdbs`](supabase/functions/pluggy-cdbs/index.ts): o app
+chama com o JWT do usuário, recebe só os campos que usa, mapeia com `VENC.lerPluggy` e grava
+em `fin_cdbs` com a mesma regra da planilha (lote novo, depois apaga os antigos). A aba
+sincroniza sozinha se a posição tiver mais de 6 h; uma corretora que falhar mantém a posição
+anterior (e a tela avisa). Entra a renda fixa bancária (CDB, RDB, LC, LCI, LCA — LCI/LCA sem
+IR); Tesouro, debêntures e CRI/CRA ficam fora, com aviso. A planilha continua como plano B.
+
+Configuração (uma vez):
+
+1. `dashboard.pluggy.ai`: criar conta e time (teste de 15 dias); em *Customize*, pôr o conector
+   **MeuPluggy** na lista; criar uma *Application* → **Client ID** e **Client Secret**.
+2. `meu.pluggy.ai`: criar conta e conectar a **XP** e o **BTG** (consentimento no app de cada um).
+3. Na Application: **Ir para Demo** → conectar pelo MeuPluggy, **uma vez por banco** → menu ⋮ →
+   **Copiar Item ID**. ⚠ Os passos 2 e 3 só funcionam durante o teste de 15 dias.
+4. Supabase → Edge Functions: publicar `pluggy-cdbs` (JWT obrigatório) e, em *Secrets*,
+   `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_ITEM_IDS` (ids separados por vírgula) e,
+   opcional, `DONO_UID` (uid do usuário do app).
+
+O consentimento do Open Finance vence (até 12 meses): a aba avisa 30 dias antes; renova-se no
+Meu Pluggy.
+
 O cálculo mora no bloco `/*<vencimentos>*/` do `index.html` (função pura: dias úteis
 ANBIMA, IR regressivo, curva do CDI, projeção, leitura da planilha) e o leitor de
 arquivo no bloco `/*<xlsx>*/` (ZIP + `DecompressionStream` + `DOMParser`, sem
@@ -68,6 +92,7 @@ biblioteca).
 python -m http.server 8765
 # abrir http://localhost:8765/tests/test_motor.html        -> "TUDO PASSOU"
 # abrir http://localhost:8765/tests/test_vencimentos.html  -> "TUDO PASSOU"
+# abrir http://localhost:8765/tests/test_pluggy_funcao.html -> "TUDO PASSOU" (a Edge Function com Deno e Pluggy falsos)
 ```
 
 `tests/test_vencimentos.html` usa só CDBs inventados. A conferência com a planilha
