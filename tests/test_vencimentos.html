@@ -429,6 +429,24 @@ function fim(){
   igual([outra.taxas.vencimento, outra.cdbs.find(c => c.externo_id === "sem").taxa], [0, 0.12],
         "corretora cuja emissao nao confere com as compras: fica a taxa da emissao");
 
+  // ------------------------------------------ aviso "chame o Claude"
+  const AG = Date.parse("2026-10-06T15:00:00Z"), hAtras = h => new Date(AG - h * 3600000).toISOString();
+  const ok1 = { em: hAtras(2), itens: [{ conector: "XP", status: "UPDATED", atualizadoEm: hAtras(20), consentimentoAte: "2027-06-01T00:00:00Z", erro: null }] };
+  igual(V.problemasConexao(ok1, "2026-10-05", AG), [], "tudo em dia: nenhum aviso");
+  igual(V.problemasConexao(null, "2026-10-05", AG), [], "nunca sincronizou (sem info): nenhum aviso");
+  igual(V.problemasConexao(Object.assign({}, ok1, { erro: "a Pluggy recusou o Client ID/Secret", erroEm: hAtras(1) }), "2026-10-05", AG),
+        ["a última sincronização falhou: a Pluggy recusou o Client ID/Secret"], "a ultima tentativa falhou: aviso com o motivo");
+  igual(V.problemasConexao(Object.assign({}, ok1, { erro: "sem conexão", erroEm: hAtras(5) }), "2026-10-05", AG), [],
+        "erro antigo, com sincronizacao boa depois: nao avisa");
+  igual(V.problemasConexao({ em: hAtras(2), itens: [{ conector: "BTG", status: "LOGIN_ERROR", erro: null }] }, "2026-10-05", AG),
+        ["BTG: precisa reconectar"], "corretora que precisa reconectar");
+  igual(V.problemasConexao({ em: hAtras(2), itens: [{ conector: "XP", status: "UPDATED", atualizadoEm: hAtras(4 * 24) }] }, "2026-10-05", AG),
+        ["XP: o Meu Pluggy não atualiza desde 02/10/2026"], "corretora parada ha mais de 3 dias");
+  igual(V.problemasConexao({ em: hAtras(2), itens: [{ conector: "XP", status: "UPDATED", atualizadoEm: hAtras(3),
+          consentimentoAte: "2026-10-16T00:00:00Z" }] }, "2026-10-05", AG),
+        ["XP: a autorização do Open Finance vence em 9 dias"], "autorizacao do Open Finance vencendo (15 dias antes)");
+  igual(V.problemasConexao(ok1, "2026-09-29", AG), ["a posição é de 29/09/2026"], "posicao com mais de 5 dias");
+
   // ------------------------------------------ rendimento do passado: datas e vencidos
   // compra antes da janela: a data sai de tras para a frente, conferida na faixa de IR
   const gan = Bv - Pv, diasCart = d(POS) - d(D0);                               // 192 dias corridos

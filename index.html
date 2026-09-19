@@ -501,6 +501,8 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
 /* ---------------- avisos ---------------- */
 .aviso{border:1px solid var(--sand);background:var(--sand-g);color:var(--sand);
   border-radius:var(--r);padding:11px 14px;font-size:13px;margin:16px 0}
+.aviso.chame{line-height:1.55}
+.aviso .acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .vazio{color:var(--ink-3);font-size:13.5px;padding:34px 0;text-align:center;line-height:1.7}
 .vazio b{color:var(--ink-2);font-weight:500}
 #toast{
@@ -1598,6 +1600,32 @@ window.VENC = (function () {
       isento_ir: sub === "LCI" || sub === "LCA", instituicao: conector || null, externo_id: inv.id || null,
       origem: "pluggy", resgate: T } };
   }
+  // O que merece o aviso "chame o Claude" (Resumo e Vencimentos): a ultima sincronizacao
+  // falhou; corretora com problema ou parada ha dias (o Meu Pluggy atualiza a cada 24 h);
+  // consentimento do Open Finance vencendo; posicao velha. info = sincInfo do app,
+  // posicao = "AAAA-MM-DD", agora em ms. Devolve frases (vazio = tudo certo).
+  const STATUS_TXT = { LOGIN_ERROR: "precisa reconectar", OUTDATED: "desatualizada", WAITING_USER_INPUT: "esperando você",
+                       CREATING: "ainda conectando", CREATE_ERROR: "erro ao conectar" };
+  function problemasConexao(info, posicao, agora) {
+    const p = [], dia = 86400000;
+    if (!info) return p;
+    if (info.erro && (!info.em || !info.erroEm || info.erroEm > info.em))
+      p.push("a última sincronização falhou: " + info.erro);
+    for (const it of info.itens || []) {
+      const nome = it.conector || "conexão";
+      if (it.erro || (it.status && it.status !== "UPDATED" && it.status !== "UPDATING"))
+        p.push(nome + ": " + (STATUS_TXT[it.status] || it.status || "com erro") + (it.erro ? " — " + it.erro : ""));
+      else if (it.atualizadoEm && agora - Date.parse(it.atualizadoEm) > 3 * dia)
+        p.push(nome + ": o Meu Pluggy não atualiza desde " + dataBR(diaBrasilia(it.atualizadoEm)));
+      if (it.consentimentoAte) {
+        const resta = Math.floor((Date.parse(it.consentimentoAte) - agora) / dia);
+        if (resta < 0) p.push(nome + ": a autorização do Open Finance venceu");
+        else if (resta <= 15) p.push(nome + ": a autorização do Open Finance vence em " + resta + " dia" + (resta === 1 ? "" : "s"));
+      }
+    }
+    if (posicao && agora - Date.parse(posicao + "T12:00:00Z") > 5 * dia) p.push("a posição é de " + dataBR(posicao));
+    return p;
+  }
   const proxMesDe = k => { let a = +k.slice(0, 4), m = +k.slice(5, 7) + 1; if (m > 12) { m = 1; a++; }
                            return a + "-" + String(m).padStart(2, "0"); };
   // Resposta da Edge Function pluggy-cdbs -> linhas para gravar, avisos e a posicao
@@ -1688,7 +1716,7 @@ window.VENC = (function () {
   }
 
   return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
-           diaBrasilia, taxaPluggy, dePluggy, lerPluggy, rendimentoMensal,
+           diaBrasilia, taxaPluggy, dePluggy, lerPluggy, rendimentoMensal, problemasConexao,
            dataReuniao, curvaCDI, cdiEm, fator, projetar, datasCupom, agenda,
            norm, numBR, parseData, parseTaxa, emissor, mapearColunas, ler, lerAbas };
 })();
@@ -2247,6 +2275,9 @@ function render(){
      plano:renderPlano, ajustes:renderAjustes })[aba]();
   marcarDisfarce();
   ligarExcel();
+  ligarAvisoConexao();
+  // a Resumo e a porta de entrada: dali tambem a posicao se atualiza (e o erro aparece)
+  if (aba === "resumo") talvezSincronizar();
 }
 const EXPORTS = {
   resumo:     [["Resumo " + "", () => abaResumo()],           "Financas resumo"],
@@ -2269,6 +2300,34 @@ function ligarExcel(){
 }
 const avisoTravado = () => dadosTravados
   ? '<div class="aviso">Sem conexão. Você está vendo a última cópia salva neste aparelho — nada será gravado até reconectar.</div>' : "";
+// Conexao com as corretoras com problema (VENC.problemasConexao): aviso para chamar o
+// Claude, com o diagnostico pronto para colar. Disfarcado, nao aparece (entregaria que
+// ha investimentos na XP e no BTG).
+const problemasAgora = () => disfarce || !fontePluggy() ? [] : VENC.problemasConexao(sincInfo, posicaoAtual(), Date.now());
+function avisoConexao(){
+  const ps = problemasAgora();
+  if (!ps.length) return "";
+  return '<div class="aviso chame"><b>Algo deu errado na conexão com as corretoras — chame o Claude.</b><br>' +
+    ps.map(esc).join("<br>") + '<div class="acoes"><button class="btn mini copiar-diag">Copiar para o Claude</button>' +
+    (aba !== "vencimentos" ? '<button class="btn mini plain ir-venc">Ver na aba Vencimentos</button>' : '') + '</div></div>';
+}
+function diagConexao(){
+  const s = sincInfo || {};
+  return ["App Finanças — conexão Open Finance (" + new Date().toLocaleString("pt-BR") + ")"]
+    .concat(problemasAgora().map(p => "- " + p))
+    .concat(["última sincronização boa: " + (s.em || "nunca"), "último erro: " + (s.erro || "-") + (s.erroEm ? " em " + s.erroEm : ""),
+      "posição: " + posicaoAtual(), "conexões: " + JSON.stringify((s.itens || []).map(i =>
+        ({ corretora: i.conector, status: i.status, atualizado: i.atualizadoEm, consentimento: i.consentimentoAte, erro: i.erro })))]).join("\n");
+}
+function ligarAvisoConexao(){
+  document.querySelectorAll(".copiar-diag").forEach(b => b.onclick = () => {
+    const txt = diagConexao();
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+      .then(() => toast("Copiado — cole na conversa com o Claude"))
+      .catch(() => { window.prompt("Copie e cole na conversa com o Claude:", txt); });
+  });
+  document.querySelectorAll(".ir-venc").forEach(b => b.onclick = () => irPara("vencimentos"));
+}
 const semDados = () =>
   '<div class="vazio"><b>Nada por aqui ainda.</b><br>Cadastre categorias e contas em Ajustes.</div>';
 
@@ -2299,7 +2358,7 @@ function renderResumo(){
     mesCorrente(ult) +
     fatos(fechados, fim);
 
-  el.innerHTML = avisoTravado() +
+  el.innerHTML = avisoTravado() + avisoConexao() +
     '<div class="col-a">' + heroi + leitura() + '</div>' +
     '<div class="col-b">' +
       '<div class="hdr"><h2>Mês a mês</h2>' +
@@ -3863,7 +3922,8 @@ function sincronizarPluggy(manual){
       return false;
     } finally {
       guardarSincInfo(); sincronizando = null; agendaCache = null;
-      if (aba === "vencimentos") render();
+      // redesenha onde o aviso de conexao aparece (nunca na aba Mes: apagaria o que se digita)
+      if (aba === "vencimentos" || aba === "resumo") render();
     }
   })();
   if (aba === "vencimentos") render();       // mostra o "sincronizando..." enquanto espera
@@ -3887,8 +3947,8 @@ function renderVencimentos(){
   if (!estado.cdbs.length){
     el.innerHTML = avisoTravado() + (cdbsIndisponivel
       ? '<div class="aviso">A tabela <b>fin_cdbs</b> ainda não existe no banco — rode <b>db/006_cdbs.sql</b> no Supabase.</div>' : "") +
-      (sincInfo && sincInfo.erro && !sincronizando
-        ? '<div class="aviso">Open Finance: ' + esc(sincInfo.erro) + '.</div>' : "") +
+      (avisoConexao() || (sincInfo && sincInfo.erro && !sincronizando
+        ? '<div class="aviso">Open Finance: ' + esc(sincInfo.erro) + '.</div>' : "")) +
       vazioVenc();
     ligarAcoesVenc(el);
     talvezSincronizar();
@@ -3900,7 +3960,7 @@ function renderVencimentos(){
     vencMes = VENC.iso(prox ? prox.dia : hoje).slice(0, 7);
   }
   const visao = prefVenc().visao === "rend" ? "rend" : "cal";
-  el.innerHTML = avisoTravado() + linhaPosicao() + segVisaoVenc(visao) +
+  el.innerHTML = avisoTravado() + avisoConexao() + linhaPosicao() + segVisaoVenc(visao) +
     (visao === "rend" ? blocoRendimento(hoje) :
       heroiVenc(ag, hoje) +
       '<div class="hdr"><h2>Quanto cai por mês</h2>' +
