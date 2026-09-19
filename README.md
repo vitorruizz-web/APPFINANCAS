@@ -110,10 +110,21 @@ Meu Pluggy.
 
 **Rendimento mês a mês** (chave *Calendário | Rendimento* na aba): quanto a carteira rendeu em
 cada mês, bruto e líquido. Com a data e o valor aplicados (Open Finance), o **passado** é
-reconstruído desde a aplicação de cada título, pela taxa contratada e pelo CDI que valeu em cada
-dia (o app busca o histórico no BC em pedaços de um ano, com prazo de 25 s por pedido); o futuro
-é a mesma projeção do calendário. Sem data/valor aplicados (planilha), só a partir da posição.
-Títulos que já venceram não estão na posição e não entram. Cálculo em `VENC.rendimentoMensal`.
+reconstruído desde a aplicação de cada título, pela taxa da compra e pelo CDI que valeu em cada
+dia (o app busca pelo menos 2 anos de histórico no BC, em pedaços de um ano, com prazo de 25 s por
+pedido); o futuro é a mesma projeção do calendário. Cálculo em `VENC.rendimentoMensal`.
+
+- **Quem comprou antes da janela do Open Finance** ganha a data de compra de trás para a frente
+  (o aplicado crescendo pela taxa — ou pelo CDI — até o bruto de hoje), conferida com a faixa de
+  IR que a corretora provisiona.
+- **Os que já venceram entram até o vencimento**: a função traz as movimentações de quem venceu
+  no último ano; com a compra na janela, o título vira uma linha com `resgate` preenchido em
+  `fin_cdbs` (migração 007), fora do calendário e da posição, e **fica guardado** — o app leva essas
+  linhas de uma importação para a outra, porque o Open Finance para de mostrar o título.
+- **Mês parcial**: antes do mês em que o histórico fica completo (depois do último vencimento sem
+  a compra na janela, e nunca antes do primeiro vencimento que o Open Finance ainda mostra), o mês
+  aparece como "parcial" — o valor é "pelo menos isso". Daqui para a frente, os meses fecham
+  completos.
 
 O cálculo mora no bloco `/*<vencimentos>*/` do `index.html` (função pura: dias úteis
 ANBIMA, IR regressivo, curva do CDI, projeção, leitura da planilha) e o leitor de
@@ -160,6 +171,7 @@ do repositório** (`.gitignore`): o repo é público e não guarda dado financei
 | `db/schema.sql` | as 8 tabelas base, constraints, índices e RLS |
 | `db/002_compromissos.sql` | `fin_installments` (parcelas) + RLS |
 | `db/006_cdbs.sql` | `fin_cdbs` (posição de CDBs da aba Vencimentos) + RLS |
+| `db/007_cdbs_resgate.sql` | `fin_cdbs.resgate`: títulos que já venceram, guardados para o rendimento do passado |
 | `db/seed.sql` | os 4 anos da planilha (gerado, fora do git) |
 
 A proteção do dado é **RLS + cadastro de novos usuários desligado** no painel do

@@ -552,6 +552,7 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
 .vvisao{margin:14px 0 0}
 .rrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
 .rrow.futuro .vr-nm,.rrow.futuro .vr-v{color:var(--ink-2)}
+.rrow.parcial .vr-v{color:var(--ink-2)}
 .rrow.atual{background:var(--sand-g);box-shadow:inset 2px 0 0 var(--sand);padding-left:10px;padding-right:6px;border-radius:6px}
 @media (max-width:420px){ .rrow .cart{display:none} }
 .sel{background:var(--bg);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:13.5px}
@@ -1534,14 +1535,81 @@ window.VENC = (function () {
       instituicao: conector || inv.instituicao || null, externo_id: inv.id || null, origem: "pluggy",
     } };
   }
+  // Faixa de dias corridos em carteira pela aliquota de IR que a corretora provisiona
+  // hoje (22,5% ate 180 dias, 20% ate 360, 17,5% ate 720, 15% depois).
+  function faixaIR(inv) {
+    const g = +inv.amount - +inv.amountOriginal, t = +inv.taxes;
+    if (!(g > 0) || !(t > 0)) return null;
+    const a = t / g;
+    return a > 0.21 ? [0, 180] : a > 0.19 ? [181, 360] : a > 0.16 ? [361, 720] : [721, Infinity];
+  }
+  // Data da aplicacao de tras para a frente, para quem comprou antes da janela do Open
+  // Finance: quantos dias uteis antes da posicao o aplicado, crescendo pela taxa (ou pelo
+  // CDI que valeu), vira o bruto de hoje. So vale se cair na faixa de IR da corretora.
+  function estimarAplicacao(cdb, inv, cdi) {
+    const P = +cdb.valor_aplicado, B = +inv.amount, pos = cdb.data_posicao ? dn(cdb.data_posicao) : NaN;
+    if (!(P > 0) || !(B > P) || !isFinite(pos) || cdb.juros_mensais) return null;
+    let d = pos;
+    if (cdb.indexador === "pre") {
+      const n = Math.round(252 * Math.log(B / P) / Math.log(1 + +cdb.taxa));
+      for (let k = 0; k < n && pos - d < 20000; ) { d--; if (ehUtil(d)) k++; }
+    } else if (cdb.indexador === "cdi" && cdi && cdi.degraus && cdi.desde) {
+      const lim = dn(cdi.desde), sp = cdb.spread ? Math.pow(1 + +cdb.spread, 1 / 252) : 1, alvo = B / P;
+      for (let f = 1; f < alvo * (1 - 1e-10); ) {         // (a ordem do produto muda o ultimo digito)
+        d--;
+        if (d < lim) return null;                       // o historico do CDI nao chega la
+        if (ehUtil(d)) f *= (1 + +cdb.taxa * (Math.pow(1 + cdiEm(cdi.degraus, d), 1 / 252) - 1)) * sp;
+      }
+    } else return null;
+    const fx = faixaIR(inv);
+    if (fx && !cdb.isento_ir && (pos - d < fx[0] - 10 || pos - d > fx[1] + 10)) return null;
+    return iso(d);
+  }
+  // Titulo que ja venceu (o saldo vem zerado) com a compra na janela do Open Finance:
+  // entra no "quanto rendeu por mes" da compra ate o vencimento. Prefixado de corretora
+  // cuja emissao confere: o resgate sai da emissao (lotes comprados x PU x taxa) e dele a
+  // taxa da compra; senao, a da emissao (aproximado -- no CDI, sempre).
+  function resgatadoPluggy(inv, conector, confere) {
+    const nome = String(inv.name || inv.code || "").replace(/\s+/g, " ").trim() || "(sem nome)";
+    const sub = String(inv.subtype || "").toUpperCase(), T = diaBrasilia(inv.dueDate), tx = taxaPluggy(inv);
+    if (!BANCARIA[sub] || !T || tx.erro) return null;
+    const compras = (Array.isArray(inv.movimentos) ? inv.movimentos : []).filter(m => m && m.tipo === "BUY");
+    const dias = [...new Set(compras.map(m => diaBrasilia(m.data || m.liquidacao)))];
+    const P = compras.reduce((s, m) => s + (+m.valor > 0 ? +m.valor : 0), 0);
+    if (dias.length !== 1 || !dias[0] || !(P > 0) || dn(dias[0]) >= dn(T)) return { falta: T };
+    const d0 = dias[0], qtd = compras.reduce((s, m) => s + (+m.qtd > 0 ? +m.qtd : 0), 0), pu = +compras[0].pu;
+    const em = diaBrasilia(inv.issueDate);
+    let taxa = tx.taxa, taxaDe = "aproximada", F = null;
+    if (tx.indexador === "pre") {
+      if (confere && qtd > 0 && pu > 0 && em) {
+        const Fe = qtd * (pu < 50 ? 1 : 1000) * Math.pow(1 + tx.taxa, du(dn(em), dn(T)) / 252);
+        const r = Math.pow(Fe / P, 252 / du(dn(d0), dn(T))) - 1;
+        if (r > 0 && r < 0.5) { taxa = Math.round(r * 1e6) / 1e6; taxaDe = "exata"; F = Fe; }
+      }
+      if (F === null) F = P * Math.pow(1 + taxa, du(dn(d0), dn(T)) / 252);
+    }
+    return { taxaDe, cdb: {
+      nome, emissor: inv.issuer ? String(inv.issuer).replace(/\s+/g, " ").trim() : emissor(nome), tipo: sub,
+      indexador: tx.indexador, taxa, spread: tx.spread, vencimento: T, saldo_liquido: 0, valor_bruto: F,
+      valor_aplicado: P, data_aplicacao: d0, data_posicao: T, juros_mensais: /juros?\s*mensa/i.test(nome),
+      isento_ir: sub === "LCI" || sub === "LCA", instituicao: conector || null, externo_id: inv.id || null,
+      origem: "pluggy", resgate: T } };
+  }
+  const proxMesDe = k => { let a = +k.slice(0, 4), m = +k.slice(5, 7) + 1; if (m > 12) { m = 1; a++; }
+                           return a + "-" + String(m).padStart(2, "0"); };
   // Resposta da Edge Function pluggy-cdbs -> linhas para gravar, avisos e a posicao
-  // (a data de referencia mais recente; cada linha guarda a sua).
+  // (a data de referencia mais recente; cada linha guarda a sua). `resgatados` = os que
+  // ja venceram, para o rendimento do passado; `historico` diz a partir de que mes ele
+  // esta completo (antes disso falta titulo que o Open Finance nao mostra mais).
   function lerPluggy(resp, opts) {
     const hoje = opts && isFinite(opts.hoje) ? opts.hoje : undefined;
     const cdbs = [], avisos = [], taxas = { compra: 0, vencimento: 0, emissao: 0, juros: 0, aguardando: 0 };
-    const lidos = [];
+    const lidos = [], brutosResg = [];
     let posicao = null;
     for (const inv of (resp && resp.investimentos) || []) {
+      const venceu = inv.status === "TOTAL_WITHDRAWAL" ||
+        (!(+inv.balance > 0) && inv.dueDate && isFinite(hoje) && dn(diaBrasilia(inv.dueDate)) <= hoje);
+      if (venceu && BANCARIA[String(inv.subtype || "").toUpperCase()]) { brutosResg.push(inv); continue; }
       const r = dePluggy(inv, inv.conector, hoje, opts && opts.cdi);
       if (r.aviso) { avisos.push(Object.assign({ instituicao: inv.conector || null }, r.aviso)); continue; }
       cdbs.push(r.cdb);
@@ -1551,7 +1619,7 @@ window.VENC = (function () {
     // Prefixado sem a compra: se, NESTA corretora, a conta pela emissao bate com a taxa
     // de compra dos titulos que tem compra (>= 5 testados, 90% em 0,05 ponto), ela vale
     // para os sem compra. Em 19/09/2026: XP 102 de 102; BTG nao confere -- fica a emissao.
-    const porCorretora = {};
+    const porCorretora = {}, confere = {};
     for (const x of lidos) if (x.r.cdb.indexador === "pre" && !x.r.cdb.juros_mensais)
       (porCorretora[x.r.cdb.instituicao || ""] = porCorretora[x.r.cdb.instituicao || ""] || []).push(x);
     for (const k in porCorretora) {
@@ -1564,6 +1632,7 @@ window.VENC = (function () {
         if (Math.abs(rf - r.cdb.taxa) <= 5e-4) batem++;
       }
       if (testados < 5 || batem < 0.9 * testados) continue;
+      confere[k] = true;
       for (const { inv, r } of porCorretora[k]) {
         if (r.taxaDe !== "emissao") continue;
         const rf = pelaEmissao(inv, r.cdb.data_posicao, r.cdb.vencimento);
@@ -1581,7 +1650,37 @@ window.VENC = (function () {
       }
     }
     for (const { r } of lidos) taxas[r.taxaDe]++;
-    return { cdbs, avisos, taxas, posicao, itens: (resp && resp.itens) || [] };
+    // quem comprou antes da janela: a data de tras para a frente, conferida no IR
+    let estimadas = 0;
+    for (const { inv, r } of lidos) {
+      if (r.cdb.data_aplicacao) continue;
+      const d = estimarAplicacao(r.cdb, inv, opts && opts.cdi);
+      if (d) { r.cdb.data_aplicacao = d; estimadas++; }
+    }
+    // os que ja venceram
+    const resgatados = [], faltam = [];
+    let exatos = 0;
+    for (const inv of brutosResg) {
+      const x = resgatadoPluggy(inv, inv.conector, !!confere[inv.conector || ""]);
+      if (!x) continue;
+      if (x.falta) { faltam.push(x.falta); continue; }
+      resgatados.push(x.cdb);
+      if (x.taxaDe === "exata") exatos++;
+    }
+    // A partir de que mes o rendimento do passado esta completo: depois do ultimo
+    // vencimento de quem venceu sem a compra na janela; depois da posicao, se ainda ha
+    // titulo sem data de compra (ele so conta dali); e nunca antes do primeiro
+    // vencimento que o Open Finance ainda mostra (o que venceu antes some de la).
+    const vencs = brutosResg.map(i => diaBrasilia(i.dueDate)).filter(Boolean).sort();
+    const semData = cdbs.filter(c => !c.data_aplicacao).length;
+    const marcos = [];
+    if (faltam.length) marcos.push(proxMesDe(faltam.slice().sort().pop().slice(0, 7)));
+    if (semData && posicao) marcos.push(proxMesDe(posicao.slice(0, 7)));
+    if (vencs.length) marcos.push(proxMesDe(vencs[0].slice(0, 7)));
+    const historico = { completoDesde: marcos.sort().pop() || null, faltam: faltam.length,
+      faltamDe: faltam.length ? faltam.slice().sort()[0] : null, faltamAte: faltam.length ? faltam.slice().sort().pop() : null,
+      horizonte: vencs[0] || null, semData, estimadas, resgatados: resgatados.length, exatos };
+    return { cdbs, avisos, taxas, posicao, resgatados, historico, itens: (resp && resp.itens) || [] };
   }
 
   return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
@@ -1958,8 +2057,11 @@ function indexar(cats, conts, regras, plan, ents, bals, mss, sets, parc, cdbs){
   // convivem no banco e somar os dois dobraria a carteira
   const lotes = (cdbs || []).map(c => c.lote).sort();
   const ultLote = lotes[lotes.length - 1];
-  estado.cdbs = ordenarCdbs((cdbs || []).filter(c => c.lote === ultLote)
-    .map(c => Object.assign(c, { nome: repara(c.nome), emissor: repara(c.emissor) })));
+  const doLote = (cdbs || []).filter(c => c.lote === ultLote)
+    .map(c => Object.assign(c, { nome: repara(c.nome), emissor: repara(c.emissor) }));
+  // os que ja venceram (resgate preenchido) so servem ao rendimento do passado
+  estado.cdbs = ordenarCdbs(doLote.filter(c => !c.resgate));
+  estado.cdbsResgatados = doLote.filter(c => c.resgate);
   agendaCache = null;
   horizonte();
 }
@@ -3475,9 +3577,15 @@ const ordenarCdbs = l => l.slice().sort((a, b) =>
 // A planilha e a carteira INTEIRA: grava o lote novo e so entao apaga os
 // anteriores. Se o DELETE falhar, indexar() fica so com o lote mais recente.
 const tipoDoNome = nome => (/^\s*(CDB|RDB|LCI|LCA|LC)\b/i.exec(nome || "") || [0, "CDB"])[1].toUpperCase();
+// sem as colunas do banco: vira linha nova de insert
+const semIds = c => { const o = Object.assign({}, c); delete o.id; delete o.user_id; delete o.lote; delete o.created_at; return o; };
 async function gravarPosicao(cdbs, pos){
   const lote = new Date().toISOString();
   const nulo = v => v === undefined ? null : v;
+  // O que ja venceu fica guardado PARA SEMPRE: o Open Finance para de mostrar o titulo
+  // uns meses depois do vencimento, e o rendimento do passado dependeria disso.
+  const ids = new Set(cdbs.map(c => c.externo_id).filter(Boolean));
+  cdbs = cdbs.concat((estado.cdbsResgatados || []).filter(c => !c.externo_id || !ids.has(c.externo_id)).map(semIds));
   // mesmas chaves em todas as linhas (exigencia do insert em lote do PostgREST);
   // linha da planilha nao traz corretora, id externo, bruto nem spread
   const linhas = cdbs.map(c => ({ lote: lote, origem: c.origem || "planilha", data_posicao: c.data_posicao || pos,
@@ -3485,13 +3593,15 @@ async function gravarPosicao(cdbs, pos){
     nome: c.nome, emissor: c.emissor, indexador: c.indexador, taxa: c.taxa, spread: nulo(c.spread),
     vencimento: c.vencimento, saldo_liquido: c.saldo_liquido, valor_bruto: nulo(c.valor_bruto),
     data_aplicacao: nulo(c.data_aplicacao), valor_aplicado: nulo(c.valor_aplicado), juros_mensais: !!c.juros_mensais,
-    isento_ir: c.isento_ir !== undefined && c.isento_ir !== null ? !!c.isento_ir : /^\s*(LCI|LCA)\b/i.test(c.nome || "") }));
+    isento_ir: c.isento_ir !== undefined && c.isento_ir !== null ? !!c.isento_ir : /^\s*(LCI|LCA)\b/i.test(c.nome || ""),
+    resgate: nulo(c.resgate) }));
   let r;
   try { r = await salvar("fin_cdbs", linhas); } catch (e){ return false; }
   if (!r || !r.length) return false;
   try { await sbFetch("fin_cdbs?lote=neq." + encodeURIComponent(r[0].lote), { method:"DELETE" }); }
   catch (e){ console.warn("lotes antigos ficaram no banco:", e.message); }
-  estado.cdbs = ordenarCdbs(r);
+  estado.cdbs = ordenarCdbs(r.filter(c => !c.resgate));
+  estado.cdbsResgatados = r.filter(c => c.resgate);
   cdbsIndisponivel = false; agendaCache = null;
   // o cache offline tambem passa a ter a posicao nova (posicao 9 = fin_cdbs)
   try {
@@ -3514,7 +3624,9 @@ const isoDeBR = s => s.slice(6, 10) + "-" + s.slice(3, 5) + "-" + s.slice(0, 2);
 // so os pontos em que o valor muda, mais o ultimo dia (que diz ate onde a serie vai)
 const mudancas = (l, campo) => l.filter((x, i) => i === 0 || i === l.length - 1 || x[campo] !== l[i - 1][campo]);
 function buscarTaxas(forcar){
-  const inicio = VENC.dn(inicioHistorico()) - 10, hoje = VENC.dn(hojeISO());
+  // pelo menos 2 anos de CDI: a data de compra de quem comprou antes da janela do Open
+  // Finance sai de tras para a frente pelo CDI que valeu (VENC.lerPluggy)
+  const hoje = VENC.dn(hojeISO()), inicio = Math.min(VENC.dn(inicioHistorico()), hoje - 800) - 10;
   const idade = taxas && taxas.buscado ? Date.now() - Date.parse(taxas.buscado) : Infinity;
   const cobre = !!(taxas && taxas.desde && VENC.dn(taxas.desde) <= inicio);
   if (!forcar && idade < TAXAS_VALIDADE && cobre) return Promise.resolve(taxas);
@@ -3599,7 +3711,8 @@ function inicioPosicao(){
 // sem data/valor aplicados (planilha), ate a posicao mais antiga.
 function inicioHistorico(){
   let m = inicioPosicao();
-  for (const c of estado.cdbs) if (c.data_aplicacao && +c.valor_aplicado > 0 && c.data_aplicacao < m) m = c.data_aplicacao;
+  for (const c of estado.cdbs.concat(estado.cdbsResgatados || []))
+    if (c.data_aplicacao && +c.valor_aplicado > 0 && c.data_aplicacao < m) m = c.data_aplicacao;
   return m;
 }
 // A marcacao manual de "paga juros todo mes" (o Open Finance pode nao trazer isso no
@@ -3706,24 +3819,32 @@ function sincronizarPluggy(manual){
   sincronizando = (async () => {
     try {
       const resp = await chamarFuncaoPluggy();
-      // o CDI que valeu desde a compra da o percentual de quem comprou no secundario
+      // o CDI que valeu desde a compra da o percentual de quem comprou no secundario e a
+      // data de quem comprou antes da janela: o historico do BC tem de estar em dia
+      try { await buscarTaxas(); } catch (e){}
       const deg = ctxVenc().degraus;
       const lido = VENC.lerPluggy(resp, { hoje: VENC.dn(hojeISO()),
         cdi: deg && taxas && taxas.historicoDesde ? { degraus: deg, desde: taxas.historicoDesde } : null });
       const mantidos = manterQuemFalhou(lido);
+      // titulo que venceu e sumiu do Open Finance sem aparecer como resgatado (o app ficou
+      // fechado meses): vira historico com o que ja se sabia dele, em vez de sumir
+      const hojeI = hojeISO(), novos = new Set(lido.cdbs.concat(lido.resgatados).map(c => c.externo_id));
+      const responderam = new Set(lido.cdbs.concat(lido.resgatados).map(c => c.instituicao));
+      const sumidos = estado.cdbs.filter(c => c.origem === "pluggy" && c.externo_id && responderam.has(c.instituicao) &&
+          !novos.has(c.externo_id) && c.vencimento <= hojeI && c.data_aplicacao && +c.valor_aplicado > 0)
+        .map(c => Object.assign(semIds(c), { resgate: c.vencimento, data_posicao: c.vencimento, saldo_liquido: 0 }));
       sincInfo = { em: new Date().toISOString(), itens: lido.itens, avisos: lido.avisos, taxas: lido.taxas, n: lido.cdbs.length,
-                   mantidos: [...new Set(mantidos.map(c => c.instituicao))], erro: null };
-      const todos = lido.cdbs.concat(mantidos);
-      if (!todos.length){
+                   mantidos: [...new Set(mantidos.map(c => c.instituicao))], historico: lido.historico, erro: null };
+      const todos = lido.cdbs.concat(mantidos, lido.resgatados, sumidos);
+      if (!lido.cdbs.length && !mantidos.length){
         sincInfo.erro = "o Open Finance não devolveu nenhum título de renda fixa bancária";
         if (manual) toast(sincInfo.erro);
         return false;
       }
       if (!(await gravarPosicao(todos, lido.posicao || hojeISO()))){ sincInfo.erro = "não gravou a posição"; return false; }
-      if (prefVenc().fonte !== "pluggy"){
-        estado.settings.venc = Object.assign(prefVenc(), { fonte: "pluggy" });
-        gravarPrefs().catch(() => {});
-      }
+      // a fonte e o "completo desde" ficam no banco: o celular le daqui sem sincronizar
+      estado.settings.venc = Object.assign(prefVenc(), { fonte: "pluggy", historico: lido.historico });
+      gravarPrefs().catch(() => {});
       if (manual){
         toast("Sincronizado: " + lido.cdbs.length + " títulos" +
               (sincInfo.mantidos.length ? " · " + sincInfo.mantidos.join(", ") + " mantido da última vez" : ""));
@@ -4027,11 +4148,17 @@ function premissasVenc(){
 let rendCache = null, rendAno = null;
 function rendimentoAtual(){
   const ctx = ctxVenc();
-  const chave = JSON.stringify([estado.cdbs.length, estado.cdbs.length ? estado.cdbs[0].lote : "",
+  const resg = estado.cdbsResgatados || [];
+  const chave = JSON.stringify([estado.cdbs.length, estado.cdbs.length ? estado.cdbs[0].lote : "", resg.length,
     ctx.posicao, ctx.hoje, ctx.irPresumido, ctx.degraus, prefVenc().jurosMensais || {}]);
-  if (!rendCache || rendCache.chave !== chave) rendCache = { chave: chave, r: VENC.rendimentoMensal(cdbsComAjustes(), ctx) };
+  // os que ja venceram entram no passado ate o vencimento deles
+  if (!rendCache || rendCache.chave !== chave) rendCache = { chave: chave, r: VENC.rendimentoMensal(cdbsComAjustes().concat(resg), ctx) };
   return rendCache.r;
 }
+// A partir de que mes o passado esta completo (VENC.lerPluggy): antes disso falta
+// titulo que venceu sem a compra na janela do Open Finance.
+const historicoVenc = () => (prefVenc().historico) || (sincInfo && sincInfo.historico) || null;
+const mesParcial = (m, h) => !!(h && h.completoDesde && m.mes < h.completoDesde && m.situacao !== "futuro");
 function segVisaoVenc(visao){
   return '<div class="vvisao"><span class="seg" id="seg-venc-visao">' +
     [["cal", "Calendário"], ["rend", "Rendimento"]].map(k =>
@@ -4042,41 +4169,60 @@ const rendCorrido = m => m.situacao === "futuro" ? 0 : m.situacao === "atual" ? 
 function blocoRendimento(hoje){
   const r = rendimentoAtual();
   if (!r.meses.length) return '<div class="vazio">Nenhum título para calcular o rendimento.</div>';
-  const mesH = VENC.iso(hoje).slice(0, 7), anoH = mesH.slice(0, 4);
+  const mesH = VENC.iso(hoje).slice(0, 7), anoH = mesH.slice(0, 4), hist = historicoVenc();
   const atual = r.meses.find(m => m.mes === mesH);
   const passados = r.meses.filter(m => m.situacao === "passado");
   const ult = passados[passados.length - 1];
   const de12 = somaMes(mesH + "-01", -11).slice(0, 7), ate12 = somaMes(mesH + "-01", 12).slice(0, 7);
   const soma = f => r.meses.filter(f).reduce((s, m) => s + rendCorrido(m), 0);
   const noAno = soma(m => m.mes.slice(0, 4) === anoH), ult12 = soma(m => m.mes >= de12);
+  // soma que passa por mes parcial e "pelo menos isso"
+  const parc = f => r.meses.some(m => f(m) && mesParcial(m, hist)) ? '<small> parcial</small>' : '';
   const prox12 = r.meses.filter(m => m.situacao === "futuro" && m.mes <= ate12).reduce((s, m) => s + m.bruto, 0) +
                  (atual ? atual.bruto - atual.ateHoje : 0);
   const topo = ult
     ? '<div class="hero"><div><div class="k-hero">rendeu em ' + MESES_L[+ult.mes.slice(5, 7) - 1] + ' de ' + ult.mes.slice(0, 4) + '</div>' +
       '<div class="val"><span class="cur">R$</span>' + esc(fmtn(ult.bruto)) + '</div>' +
       '<div class="cap">bruto · <b>' + esc(fmt(ult.liquido)) + '</b> depois do IR · ' + ult.titulos + ' título' +
-        (ult.titulos === 1 ? '' : 's') + '</div></div></div>'
+        (ult.titulos === 1 ? '' : 's') + (mesParcial(ult, hist) ? ' · <span class="abr">parcial</span>' : '') + '</div></div></div>'
     : '<div class="hero"><div><div class="k-hero">rendimento de ' + MESES_L[+mesH.slice(5, 7) - 1] + ' (projeção)</div>' +
       '<div class="val"><span class="cur">R$</span>' + esc(fmtn(atual ? atual.bruto : 0)) + '</div>' +
       '<div class="cap">o passado aparece quando a posição traz a data e o valor aplicados (Open Finance)</div></div></div>';
   const fatos = [
-    ["Este mês até hoje", esc(fmt(atual ? atual.ateHoje : 0)), atual ? '<small> de ' + esc(fmt(atual.bruto)) + ' no mês</small>' : ''],
-    ["Em " + anoH + " até hoje", esc(fmt(noAno)), ""],
-    ["Últimos 12 meses", esc(fmt(ult12)), ""],
+    ["Este mês até hoje", esc(fmt(atual ? atual.ateHoje : 0)), (atual ? '<small> de ' + esc(fmt(atual.bruto)) + ' no mês</small>' : '') +
+      parc(m => m.mes === mesH)],
+    ["Em " + anoH + " até hoje", esc(fmt(noAno)), parc(m => m.mes.slice(0, 4) === anoH)],
+    ["Últimos 12 meses", esc(fmt(ult12)), parc(m => m.mes >= de12)],
     ["Próximos 12 meses", esc(fmt(prox12)), "<small> projeção</small>"],
   ];
   const anos = [...new Set(r.meses.map(m => m.mes.slice(0, 4)))].sort();
   if (!rendAno || !anos.includes(rendAno)) rendAno = anos.includes(anoH) ? anoH : anos[anos.length - 1];
   const avisos = [];
-  if (r.semHistorico) avisos.push(r.semHistorico + (r.semHistorico === 1 ? " título não traz" : " títulos não trazem") +
+  const nResg = (estado.cdbsResgatados || []).length;
+  if (hist && hist.completoDesde && r.meses.some(m => mesParcial(m, hist))){
+    const partes = [];
+    if (hist.faltam) partes.push(hist.faltam + (hist.faltam === 1 ? " título que venceu" : " títulos que venceram") +
+      (hist.faltamDe ? " entre " + VENC.dataBR(hist.faltamDe) + " e " + VENC.dataBR(hist.faltamAte) : "") +
+      " sem a compra na janela do Open Finance (a XP manda ~12 meses de movimentações; o BTG, ~3)");
+    if (hist.semData) partes.push(hist.semData === 1 ? "1 título ainda sem data de compra, que só conta a partir da posição"
+      : hist.semData + " títulos ainda sem data de compra, que só contam a partir da posição");
+    if (hist.horizonte) partes.push("o que venceu antes de " + VENC.dataBR(hist.horizonte) + ", que o Open Finance já não mostra");
+    avisos.push("Meses marcados \"parcial\" (antes de " + rotuloL(hist.completoDesde + "-01") + "): faltam " + partes.join("; ") +
+      ". Daqui em diante os meses fecham completos — o que vence fica guardado.");
+  } else if (r.semHistorico) avisos.push(r.semHistorico + (r.semHistorico === 1 ? " título não traz" : " títulos não trazem") +
     " a data e o valor aplicados (planilha): o rendimento deles só conta a partir da data da posição.");
+  if (nResg) avisos.push(nResg + (nResg === 1 ? " título que já venceu entra" : " títulos que já venceram entram") +
+    " no passado até o vencimento" + (hist && hist.resgatados && hist.exatos < hist.resgatados
+      ? " (" + (hist.resgatados - hist.exatos) + " pela taxa da emissão, aproximado)" : "") + ".");
+  if (hist && hist.estimadas) avisos.push(hist.estimadas + (hist.estimadas === 1 ? " data de compra estimada" : " datas de compra estimadas") +
+    " pelo crescimento do saldo (compra anterior à janela do Open Finance), conferidas com a faixa de IR da corretora.");
   const precisaDesde = inicioHistorico();
   if (estado.cdbs.some(c => c.indexador !== "pre") && (!taxas || !taxas.historicoDesde || taxas.historicoDesde > precisaDesde))
     avisos.push("O Banco Central ainda não mandou o CDI desde " + VENC.dataBR(precisaDesde) +
       (taxas && taxas.historicoDesde ? " (chegou a partir de " + VENC.dataBR(taxas.historicoDesde) + ")" : "") +
       ": até lá, o passado dos pós-fixados usa o CDI mais antigo que chegou — aproximado. Toque em Atualizar, em Premissas.");
-  avisos.push("O passado é calculado pela taxa de cada título e pelo CDI que valeu em cada dia (Banco Central) — o valor " +
-    "\"na curva\". Títulos que já venceram não estão na posição e não entram. Líquido = bruto menos o IR na alíquota do mês.");
+  avisos.push("O passado é calculado da compra de cada título, pela taxa dele e pelo CDI que valeu em cada dia (Banco Central) — " +
+    "o valor \"na curva\". Líquido = bruto menos o IR na alíquota do mês.");
   return topo + '<div class="fatos">' + fatos.map(f =>
       '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
     '<div class="hdr"><h2>Quanto rendeu por mês</h2>' +
@@ -4089,11 +4235,12 @@ function blocoRendimento(hoje){
     '<div class="nota fria">' + avisos.map(esc).join("<br>") + '</div>';
 }
 function listaRend(r, ano){
-  const ms = r.meses.filter(m => m.mes.slice(0, 4) === ano);
+  const ms = r.meses.filter(m => m.mes.slice(0, 4) === ano), hist = historicoVenc();
   const rotSit = { passado: "", atual: " · em curso", futuro: " · projeção" };
   return '<div class="grupo gv"><span>' + ano + '</span><span class="soma">' +
       esc(fmt(ms.reduce((s, m) => s + m.bruto, 0))) + '</span></div>' +
-    ms.map(m => '<div class="rrow ' + m.situacao + '"><span class="vr-nm">' + MESES_L[+m.mes.slice(5, 7) - 1] + rotSit[m.situacao] + '</span>' +
+    ms.map(m => '<div class="rrow ' + m.situacao + (mesParcial(m, hist) ? ' parcial' : '') + '"><span class="vr-nm">' +
+      MESES_L[+m.mes.slice(5, 7) - 1] + rotSit[m.situacao] + (mesParcial(m, hist) ? ' · parcial' : '') + '</span>' +
       '<span class="vr-v">' + esc(fmt(m.bruto)) + '</span>' +
       '<span class="vr-sub">' + m.titulos + ' título' + (m.titulos === 1 ? '' : 's') +
         (m.carteira ? '<span class="cart"> · carteira ' + esc(fmt(m.carteira)) + '</span>' : '') + '</span>' +
@@ -4105,7 +4252,7 @@ function listaRend(r, ano){
 function desenharBarrasRend(){
   const box = document.getElementById("graf-rend");
   if (!box || !estado.cdbs.length || !rendAno) return;
-  const r = rendimentoAtual(), mesH = hojeISO().slice(0, 7);
+  const r = rendimentoAtual(), mesH = hojeISO().slice(0, 7), hist = historicoVenc();
   const W = Math.max(280, Math.round(box.getBoundingClientRect().width) || 340);
   const H = 176, PT = 20, PB = 24;
   const ks = MESES.map((_, i) => rendAno + "-" + String(i + 1).padStart(2, "0"));
@@ -4126,8 +4273,12 @@ function desenharBarrasRend(){
                   '<rect x="' + x0 + '" y="' + yh.toFixed(1) + '" width="' + bar.toFixed(1) + '" height="' +
                   Math.max(1, H - PB - yh).toFixed(1) + '" rx="3" fill="var(--tif)" opacity=".62"/>';
       } else {
+        // mes parcial: contorno tracejado -- "pelo menos isso"
+        const parcial = mesParcial(m, hist);
         barras += '<rect x="' + x0 + '" y="' + yb.toFixed(1) + '" width="' + bar.toFixed(1) + '" height="' +
-                  Math.max(2, H - PB - yb).toFixed(1) + '" rx="3" fill="var(--tif)" opacity="' + (m.situacao === "passado" ? ".62" : ".28") + '"/>';
+                  Math.max(2, H - PB - yb).toFixed(1) + '" rx="3" fill="var(--tif)" opacity="' +
+                  (m.situacao === "passado" ? (parcial ? ".38" : ".62") : ".28") + '"' +
+                  (parcial ? ' stroke="var(--tif)" stroke-dasharray="3 2"' : '') + '/>';
       }
       if (bw >= 24) rot += '<text x="' + cx.toFixed(1) + '" y="' + (yb - 6).toFixed(1) +
         '" text-anchor="middle" font-size="10" fill="var(--ink-3)">' + esc(fmtCurto(m.bruto)) + '</text>';
@@ -4141,7 +4292,10 @@ function desenharBarrasRend(){
   box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' +
       esc("Quanto a carteira rendeu por mês em " + rendAno) + '">' +
     '<line x1="0" y1="' + (H - PB) + '" x2="' + W + '" y2="' + (H - PB) + '" stroke="var(--line)"/>' + barras + rot + alvos + '</svg>' +
-    '<div class="legenda"><span><i class="sw-bar"></i>rendeu</span><span><i class="sw-bar" style="opacity:.28"></i>projeção</span></div>';
+    '<div class="legenda"><span><i class="sw-bar"></i>rendeu</span>' +
+      (ks.some(k => porMes[k] && mesParcial(porMes[k], hist))
+        ? '<span><i class="sw-bar" style="opacity:.38;outline:1px dashed var(--tif)"></i>parcial</span>' : '') +
+      '<span><i class="sw-bar" style="opacity:.28"></i>projeção</span></div>';
 }
 
 // Conexoes do Open Finance: o que cada corretora respondeu na ultima sincronizacao e

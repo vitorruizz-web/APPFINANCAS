@@ -77,9 +77,15 @@ const BANCARIA = { CDB: 1, RDB: 1, LC: 1, LCI: 1, LCA: 1 };
 // secundario rende a taxa da COMPRA -- e so a data e o valor da compra permitem
 // chegar nela. Vem das movimentacoes de cada investimento (1 pedido por titulo;
 // o limite da Pluggy e 360/min por rota).
+const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
 async function movimentosDe(x, h) {
   try {
-    const r = await fetch(API + "/investments/" + encodeURIComponent(x.id) + "/transactions?pageSize=500", { headers: h });
+    let r;
+    for (let tentativa = 0; tentativa < 3; tentativa++) {     // 429: a Pluggy pediu calma
+      r = await fetch(API + "/investments/" + encodeURIComponent(x.id) + "/transactions?pageSize=500", { headers: h });
+      if (r.status !== 429) break;
+      await esperar(1500 * (tentativa + 1));
+    }
     if (!r.ok) return null;
     const p = await r.json();
     return (p.results || []).map((t) => ({
@@ -90,9 +96,12 @@ async function movimentosDe(x, h) {
     return null;
   }
 }
+// Tambem os resgatados/vencidos do ultimo ano: o que renderam ate sair entra no
+// "quanto rendeu por mes" (o saldo deles vem zerado; a compra e o resgate, nao).
 async function comMovimentos(lista, h) {
+  const corte = Date.now() - 400 * 86400000;
   const alvo = lista.filter((x) => BANCARIA[String(x.subtype || "").toUpperCase()] &&
-                                   x.status !== "TOTAL_WITHDRAWAL" && +x.balance > 0);
+    ((x.status !== "TOTAL_WITHDRAWAL" && +x.balance > 0) || Date.parse(x.dueDate || "") >= corte));
   let i = 0;
   const trabalhador = async () => { while (i < alvo.length) { const x = alvo[i++]; x.movimentos = await movimentosDe(x, h); } };
   await Promise.all([1, 2, 3, 4, 5, 6].map(trabalhador));

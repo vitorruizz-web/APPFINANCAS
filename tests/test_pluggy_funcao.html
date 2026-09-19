@@ -194,8 +194,25 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
   igual(c.itens.map(i => i.id + ":" + i.conector), ["it-mp1:XP", "it-mp2:BTG"], "rotulo XP:<id> / BTG=<id> vira o nome da corretora");
   igual(c.investimentos.map(i => i.id + ":" + i.conector), ["e:XP", "t:XP", "v:XP", "f:BTG"], "cada investimento leva o rotulo do seu item");
   const movPedidos = chamadas.filter(x => /\/transactions/.test(x.url)).map(x => decodeURIComponent(x.url.match(/investments\/([^/]+)\//)[1])).sort();
-  igual(movPedidos, ["e", "f"], "movimentacoes so da renda fixa bancaria ativa com saldo (Tesouro e resgatado ficam fora)");
-  igual(c.investimentos.filter(i => i.id === "t" || i.id === "v").map(i => i.movimentos), [null, null], "quem fica fora nao tem movimentacoes");
+  igual(movPedidos, ["e", "f", "v"], "movimentacoes da renda fixa bancaria ativa e da resgatada no ultimo ano (Tesouro fica fora)");
+  igual(c.investimentos.filter(i => i.id === "t").map(i => i.movimentos), [null], "quem fica fora nao tem movimentacoes");
+  // resgatado ha mais de 400 dias: nenhuma janela do Open Finance chega la
+  PAGINAS["it-mp1"][0].push(inv("velho", { status: "TOTAL_WITHDRAWAL", balance: 0, dueDate: "2020-01-10T03:00:00.000Z" }));
+  chamadas.length = 0;
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  ok(!chamadas.some(x => /investments\/velho\//.test(x.url)), "resgatado ha mais de 400 dias: nem pede as movimentacoes");
+  PAGINAS["it-mp1"][0].pop();
+  // 429: espera e tenta de novo (sao ~1 pedido por titulo; o limite e 360/min)
+  let vezes429 = 0;
+  const fetchAntes = window.fetch;
+  window.fetch = async (url, opts) => {
+    if (/investments\/e\/transactions/.test(String(url)) && vezes429 < 1) { vezes429++; return new Response('{"message":"calma"}', { status: 429 }); }
+    return fetchAntes(url, opts);
+  };
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  c = await corpo(r);
+  window.fetch = fetchAntes;
+  ok(vezes429 === 1 && Array.isArray(c.investimentos.find(i => i.id === "e").movimentos), "429 na movimentacao: espera e tenta de novo");
   ENV.PLUGGY_ITEM_IDS = "it-mp1,it-mp2";
   r = await HANDLER(req("POST", undefined, TOKEN("u1")));
   c = await corpo(r);

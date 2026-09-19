@@ -429,6 +429,42 @@ function fim(){
   igual([outra.taxas.vencimento, outra.cdbs.find(c => c.externo_id === "sem").taxa], [0, 0.12],
         "corretora cuja emissao nao confere com as compras: fica a taxa da emissao");
 
+  // ------------------------------------------ rendimento do passado: datas e vencidos
+  // compra antes da janela: a data sai de tras para a frente, conferida na faixa de IR
+  const gan = Bv - Pv, diasCart = d(POS) - d(D0);                               // 192 dias corridos
+  const estim = (extra) => V.lerPluggy({ itens: [], investimentos: [Object.assign({}, INV, { id: "est", conector: "BTG", rate: 15,
+      rateType: null, amount: Bv, amountOriginal: Pv, movimentos: [], date: POS + "T03:00:00.000Z" }, extra || {})] },
+    { hoje: d("2026-09-19"), cdi: { degraus: degC, desde: "2025-10-06" } });
+  const e1 = estim({ taxes: 0.20 * gan });
+  igual([e1.cdbs[0].data_aplicacao, e1.historico.estimadas, e1.historico.semData], [D0, 1, 0],
+        "sem a compra: data estimada pelo crescimento do saldo (" + diasCart + " dias, IR 20% = 181 a 360 dias)");
+  igual(estim({ taxes: 0.225 * gan }).cdbs[0].data_aplicacao, null, "estimativa que nao cabe na faixa de IR (22,5% = ate 180 dias): fica em branco");
+  const brC = 1000 * V.fator({ indexador:"cdi", taxa:1.18 }, d(D0), d(POS), degC);
+  igual(estim({ rate: 118, rateType: "CDI", amount: brC, amountOriginal: 1000, taxes: 0.20 * (brC - 1000) }).cdbs[0].data_aplicacao, D0,
+        "no CDI, de tras para a frente pelo CDI que valeu");
+  igual(V.lerPluggy({ itens: [], investimentos: [Object.assign({}, INV, { id: "est", conector: "BTG", rate: 118, rateType: "CDI",
+          amount: brC, amountOriginal: 1000, movimentos: [], taxes: 0.20 * (brC - 1000), date: POS + "T03:00:00.000Z" })] },
+        { hoje: d("2026-09-19"), cdi: { degraus: degC, desde: "2026-06-01" } }).cdbs[0].data_aplicacao, null,
+        "historico do CDI que nao chega na compra: nao estima");
+  // venceu (saldo zerado) com a compra na janela: entra no passado ate o vencimento
+  const E2 = "2025-02-17", T2 = "2026-08-17", D1 = "2025-12-01";
+  const F2 = 1000 * Math.pow(1.12, V.du(d(E2), d(T2)) / 252), P2 = F2 / Math.pow(1.15, V.du(d(D1), d(T2)) / 252);
+  const venc = (id, movs) => Object.assign({}, INV, { id, conector: "XP", status: "TOTAL_WITHDRAWAL", balance: 0, amount: 0,
+    amountOriginal: 0, quantity: 0, rate: 12, rateType: null, issueDate: E2 + "T03:00:00.000Z", dueDate: T2 + "T03:00:00.000Z", movimentos: movs });
+  const lr = V.lerPluggy({ itens: [], investimentos: comCompra.concat([venc("resg", [{ tipo:"BUY", data: D1 + "T00:00:00.000Z", qtd: 1,
+      pu: P2, valor: P2 }]), Object.assign(venc("semc", []), { dueDate: "2026-07-10T03:00:00.000Z" })]) }, { hoje: d("2026-09-19") });
+  const rg = lr.resgatados[0];
+  perto(rg.taxa, 0.15, "vencido onde a emissao confere: a taxa da compra sai do resgate da emissao (15%, nao os 12%)");
+  igual([lr.resgatados.length, rg.resgate, rg.data_aplicacao, rg.saldo_liquido, lr.cdbs.length, lr.avisos.length],
+        [1, T2, D1, 0, 5, 0], "... com a compra e o vencimento; nao entra na posicao nem nos avisos");
+  perto(rg.valor_bruto, F2, "... e o resgate", 1e-6);
+  igual([lr.historico.faltam, lr.historico.faltamAte, lr.historico.completoDesde], [1, "2026-07-10", "2026-08"],
+        "venceu sem a compra na janela: o passado so fica completo a partir do mes seguinte");
+  const rm = V.rendimentoMensal([rg], { posicao: d("2026-09-19"), hoje: d("2026-09-19"), degraus: degC, irPresumido: 0.15 });
+  perto(rm.meses.reduce((s, m) => s + m.bruto, 0), F2 - P2, "o vencido rende, somando os meses, exatamente resgate - aplicado", 1e-6);
+  igual([rm.meses[0].mes, rm.meses[rm.meses.length - 1].mes, rm.meses.every(m => m.situacao === "passado")], ["2025-12", "2026-08", true],
+        "... da compra ate o mes do vencimento, tudo passado");
+
   // ------------------------------------------ motor: o que a Pluggy traz a mais
   const ctxI = extra => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),
     degraus: V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", d("2026-09-19")), irPresumido: 0.15 }, extra || {});
