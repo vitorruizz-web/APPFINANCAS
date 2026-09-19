@@ -555,6 +555,93 @@ function fim(){
   perto(mm6(rm6, "2026-10").bruto, mm6(rm1, "2026-10").bruto + mm6(rmC2, "2026-10").bruto, "varios titulos: o mes soma todos");
   igual([mm6(rm6, "2026-10").titulos, mm6(rm6, "2026-07").titulos, mm6(rm6, "2027-01").titulos], [2, 1, 1], "conta os titulos vivos em cada mes");
 
+  // ------------------------------------------ taxa media da carteira (ponderada)
+  const TM = V.taxaMedia;
+  const diario = Math.pow(1.1365, 1 / 252) - 1;      // CDI ao dia com a curva parada em 13,65%
+  const ctxT = extra => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),
+    degraus: V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", d("2026-09-21")), irPresumido: 0.15 }, extra || {});
+  // dois prefixados no dia da posicao: o peso e o proprio saldo, e a taxa efetiva de
+  // um prefixado E a taxa contratada -- da para conferir a ponderacao na mao.
+  const tp1 = { indexador:"pre", taxa:0.10, vencimento:"2028-09-21", saldo_liquido:9000, data_posicao:"2026-09-21", isento_ir:true };
+  const tp2 = { indexador:"pre", taxa:0.20, vencimento:"2027-09-21", saldo_liquido:1000, data_posicao:"2026-09-21", isento_ir:true };
+  const t1 = TM([tp1, tp2], ctxT());
+  perto(t1.ponderada, 0.11, "ponderada pelo valor: 9 mil a 10% + 1 mil a 20% = 11% a.a.", 1e-9);
+  perto(t1.simples, 0.15, "media simples dos mesmos dois = 15% a.a. (e por isso que a ponderada existe)", 1e-9);
+  perto(t1.valor, 10000, "carteira considerada = soma do valor de hoje de cada titulo", 1e-9);
+  igual([t1.n, t1.fora], [2, 0], "dois titulos dentro, nenhum de fora");
+  perto(t1.liquida, t1.ponderada, "isento de IR (LCI/LCA): liquida = ponderada", 1e-12);
+  perto(t1.prazoMedio, (9000 * du("2026-09-21", "2028-09-21") + 1000 * du("2026-09-21", "2027-09-21")) / 10000 / 252,
+        "prazo medio em anos, ponderado pelo valor", 1e-12);
+  igual(t1.porTipo.map(g => [g.tipo, g.n, g.valor, +g.fatia.toFixed(6), +g.taxa.toFixed(6)]), [["pre", 2, 10000, 1, 0.11]],
+        "por indexador: um grupo pre, fatia inteira, taxa contratada media 11%");
+
+  // IR: o liquido desconta a aliquota do vencimento sobre o ganho, depois anualiza
+  const t2 = TM([Object.assign({}, tp1, { isento_ir: false })], ctxT());
+  const duL = du("2026-09-21", "2028-09-21"), fL = Math.pow(1.10, duL / 252);
+  perto(t2.liquida, Math.pow(1 + (fL - 1) * 0.85, 252 / duL) - 1, "liquida: IR presumido de 15% sobre o ganho ate o vencimento", 1e-12);
+  ok(t2.liquida < t2.ponderada, "a liquida fica abaixo da bruta");
+  const t2b = TM([Object.assign({}, tp1, { isento_ir: false, data_aplicacao: "2026-09-01", valor_aplicado: 8900 })], ctxT());
+  perto(t2b.liquida, Math.pow(1 + (fL - 1) * 0.85, 252 / duL) - 1,
+        "com data de aplicacao: 2 anos depois a aliquota tambem cai para 15%", 1e-12);
+
+  // pos-fixado: a taxa efetiva vem da curva, e a razao com o CDI puro e o "% do CDI"
+  const t3 = TM([{ indexador:"cdi", taxa:1, vencimento:"2027-09-21", saldo_liquido:1000, data_posicao:"2026-09-21" }], ctxT());
+  perto(t3.ponderada, 0.1365, "100% do CDI com a curva parada em 13,65% = 13,65% a.a.", 1e-9);
+  perto(t3.equivCDI, 1, "...e equivale a 100% do CDI", 1e-12);
+  const t4 = TM([{ indexador:"cdi", taxa:1.2, vencimento:"2027-09-21", saldo_liquido:1000, data_posicao:"2026-09-21" }], ctxT());
+  perto(t4.ponderada, Math.pow(1 + 1.2 * diario, 252) - 1, "120% do CDI: 1,2 x o CDI do DIA, capitalizado", 1e-9);
+  perto(t4.cdiMedio, 0.1365, "o CDI medio da mesma janela", 1e-9);
+  perto(t4.equivCDI, 1.2, "o '% do CDI' devolve o percentual CONTRATADO: 120% do CDI da 120%, e nao os " +
+        "121,6% que sairiam de dividir taxa anual por taxa anual", 1e-9);
+  // prefixado traduzido para a mesma escala, um por um (a media e das partes, nao da media)
+  const pctPre = t => (Math.pow(1 + t, 1 / 252) - 1) / diario;
+  perto(t1.equivCDI, 0.9 * pctPre(0.10) + 0.1 * pctPre(0.20),
+        "prefixado traduzido: o % do CDI diario que da a mesma taxa, ponderado pelo valor", 1e-9);
+  ok(t1.equivCDI > 0.80 && t1.equivCDI < 0.83, "...11% a.a. valem uns 81% de um CDI de 13,65%: a carteira pre esta ABAIXO do CDI");
+  const t5 = TM([{ indexador:"cdi+", taxa:0.02, vencimento:"2027-09-21", saldo_liquido:1000, data_posicao:"2026-09-21" }], ctxT());
+  perto(t5.ponderada, Math.pow((1 + diario) * Math.pow(1.02, 1 / 252), 252) - 1, "CDI + 2%: o spread entra ao dia", 1e-9);
+  igual(t5.porTipo.map(g => [g.tipo, +g.taxa.toFixed(6)]), [["cdi+", 0.02]], "no cdi+ a taxa contratada media e o spread");
+  const t6 = TM([{ indexador:"cdi", taxa:1.1, spread:0.01, vencimento:"2027-09-21", saldo_liquido:1000, data_posicao:"2026-09-21" }], ctxT());
+  igual(t6.porTipo.map(g => [g.tipo, +g.taxa.toFixed(6), +g.spread.toFixed(6)]), [["cdi", 1.1, 0.01]], "hibrido: 110% do CDI + 1% guarda os dois");
+
+  // mistura: os grupos saem na ordem cdi, pre, cdi+ e as fatias fecham em 1
+  const t7 = TM([tp1, tp2, { indexador:"cdi", taxa:1.1, vencimento:"2027-09-21", saldo_liquido:10000, data_posicao:"2026-09-21" },
+                 { indexador:"cdi+", taxa:0.02, vencimento:"2027-09-21", saldo_liquido:5000, data_posicao:"2026-09-21" }], ctxT());
+  igual(t7.porTipo.map(g => g.tipo), ["cdi", "pre", "cdi+"], "grupos na ordem cdi, pre, cdi+");
+  perto(t7.porTipo.reduce((s, g) => s + g.fatia, 0), 1, "as fatias somam a carteira inteira", 1e-12);
+  perto(t7.ponderada, t7.porTipo.reduce((s, g) => s + g.fatia * g.efetiva, 0), "a ponderada e a media das efetivas de cada grupo", 1e-12);
+  // os quatro sozinhos, cada um com a fatia que tem na carteira de 25 mil
+  const so = c => TM([c], ctxT()).equivCDI;
+  const eq7 = so(tp1) * 9000 / 25000 + so(tp2) * 1000 / 25000 +
+              so({ indexador:"cdi", taxa:1.1, vencimento:"2027-09-21", saldo_liquido:10000, data_posicao:"2026-09-21" }) * 10000 / 25000 +
+              so({ indexador:"cdi+", taxa:0.02, vencimento:"2027-09-21", saldo_liquido:5000, data_posicao:"2026-09-21" }) * 5000 / 25000;
+  perto(t7.equivCDI, eq7, "o % do CDI da carteira e a media ponderada do % de cada titulo", 1e-9);
+
+  // sem a curva do CDI: o prefixado continua valendo, o "% do CDI" nao existe
+  const t8 = TM([tp1], ctxT({ degraus: null }));
+  perto(t8.ponderada, 0.10, "sem curva do CDI o prefixado continua com a propria taxa", 1e-9);
+  igual([t8.cdiMedio, t8.equivCDI], [null, null], "...mas nao ha CDI medio nem equivalencia");
+
+  // quem nao tem taxa daqui em diante fica de fora
+  const t9 = TM([tp1,
+    { indexador:"pre", taxa:0.30, vencimento:"2026-09-18", saldo_liquido:5000, data_posicao:"2026-09-21" },
+    { indexador:"pre", taxa:0.30, vencimento:"2026-09-21", saldo_liquido:5000, data_posicao:"2026-09-21" },
+    { indexador:"pre", taxa:0.30, vencimento:"2027-09-21", saldo_liquido:5000, data_posicao:"2026-09-21", resgate:"2027-09-21" },
+    { indexador:"pre", taxa:0.30, vencimento:"2027-09-21", saldo_liquido:0, data_posicao:"2026-09-21" }], ctxT());
+  igual([t9.n, t9.fora], [1, 4], "vencido, vencendo hoje, resgatado e saldo zero nao entram na taxa media");
+  perto(t9.ponderada, 0.10, "...e nao mexem na media", 1e-9);
+  const t0 = TM([], ctxT());
+  igual([t0.n, t0.valor, t0.ponderada, t0.equivCDI, t0.porTipo.length], [0, 0, null, null, 0], "carteira vazia: tudo nulo, sem divisao por zero");
+
+  // valor_bruto manda no peso (o liquido e o bruto menos o IR), e juros mensais nao capitaliza
+  const t10 = TM([{ indexador:"pre", taxa:0.10, vencimento:"2028-09-21", saldo_liquido:900, valor_bruto:1000, data_posicao:"2026-09-21" }], ctxT());
+  perto(t10.valor, 1000, "o peso e o valor BRUTO: e sobre ele que o rendimento corre", 1e-9);
+  const jmAntes = TM([{ indexador:"pre", taxa:0.10, vencimento:"2028-09-21", saldo_liquido:1000, data_posicao:"2026-06-01" }], ctxT());
+  const jmDepois = TM([{ indexador:"pre", taxa:0.10, vencimento:"2028-09-21", saldo_liquido:1000, data_posicao:"2026-06-01", juros_mensais:true }], ctxT());
+  perto(jmAntes.valor, 1000 * Math.pow(1.10, du("2026-06-01", "2026-09-21") / 252), "posicao antiga: o peso anda ate hoje pela taxa", 1e-9);
+  perto(jmDepois.valor, 1000, "juros mensais: o juro sai todo mes, o peso fica no principal", 1e-12);
+  perto(jmDepois.ponderada, 0.10, "...com a mesma taxa", 1e-9);
+
   // ==MAIS_TESTES==
 
   fim();

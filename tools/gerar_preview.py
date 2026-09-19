@@ -31,7 +31,9 @@ MOCK = r"""
   async function garantir(){
     // guarda a PROMESSA, nao o resultado: as 9 tabelas carregam em paralelo e
     // cada uma disparava o proprio fetch do mock.json
-    if (!carregado) carregado = realFetch("./mock.json").then(r => r.json());
+    // cache-buster: sem ele o navegador serve o mock.json velho e o preview
+    // mostra dados de antes -- ja me custou uma rodada inteira de conferencia
+    if (!carregado) carregado = realFetch("./mock.json?v=" + Date.now()).then(r => r.json());
     return carregado;
   }
   const realFetch = window.fetch.bind(window);

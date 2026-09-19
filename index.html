@@ -1405,6 +1405,88 @@ window.VENC = (function () {
     return { meses: lista, semHistorico };
   }
 
+  // -------------------------------------------------- taxa media da carteira
+  // Os dias uteis de [a, b) agrupados por degrau da curva: a curva tem um punhado
+  // de degraus, entao o fator do CDI de uma janela vira meia duzia de potencias --
+  // e da para tentar varios percentuais do CDI na mesma janela sem custo.
+  function segmentosCDI(a, b, degraus) {
+    const segs = [];
+    let u = null;
+    for (let x = a; x < b; x++) {
+      if (!ehUtil(x)) continue;
+      const c = cdiEm(degraus, x);
+      if (!u || u.cdi !== c) segs.push(u = { cdi: c, n: 0 });
+      u.n++;
+    }
+    return segs;
+  }
+  const fatorSegs = (pct, segs) => segs.reduce((p, s) =>
+    p * Math.pow(1 + pct * (Math.pow(1 + s.cdi, 1 / 252) - 1), s.n), 1);
+  // Quanto do CDI um fator representa: o percentual que, aplicado ao CDI de cada dia
+  // da janela, chega no mesmo fator. Por BISSECAO, porque Prod(1 + x * diario) nao se
+  // inverte -- e a mesma conta que a leitura do Open Finance faz para achar o
+  // percentual do CDI de um titulo pelo saldo. Devolve exatamente o percentual
+  // contratado de um pos-fixado, e traduz um prefixado para a mesma escala.
+  function pctDoCDI(f, segs) {
+    if (!segs.length || !(fatorSegs(1, segs) > 1) || !(f > 1)) return null;
+    let lo = 0, hi = 2;
+    while (fatorSegs(hi, segs) < f && hi < 1e4) hi *= 2;
+    for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (fatorSegs(m, segs) < f) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  }
+  // A taxa que a carteira paga daqui em diante, PONDERADA PELO VALOR: cada titulo
+  // entra com o que vale hoje. Taxa de pre e de pos nao se somam direto, entao cada
+  // uma vira a TAXA EFETIVA em % a.a. de hoje ate o vencimento do PROPRIO titulo,
+  // sob a curva do CDI em vigor -- no prefixado da a propria taxa contratada; no
+  // pos-fixado, o que a projecao do CDI entrega.
+  //   ponderada / simples : taxa efetiva media (a.a.), com e sem peso pelo valor
+  //   liquida             : a ponderada depois do IR que vence com o titulo
+  //   equivCDI            : media do percentual do CDI de cada titulo (120% do CDI
+  //                         devolve 120%; um prefixado entra traduzido)
+  //   cdiMedio            : o que o proprio CDI paga nas mesmas janelas
+  //   prazoMedio          : anos ate o vencimento, ponderado (252 dias uteis = 1)
+  //   porTipo             : pre / cdi / cdi+ com a media da taxa CONTRATADA (a que
+  //                         esta no papel), a efetiva, o valor e a fatia da carteira
+  // Titulo que ja venceu (ou que vence hoje) fica de fora: nao ha taxa daqui em
+  // diante. O peso e o valor BRUTO -- e sobre ele que o rendimento corre.
+  function taxaMedia(cdbs, ctx) {
+    const degraus = ctx.degraus || [{ desde: -Infinity, cdi: 0 }];
+    const aa = (f, n) => Math.pow(f, 252 / n) - 1;                   // fator -> % a.a.
+    let W = 0, Wef = 0, Wliq = 0, Wcdi = 0, Wdu = 0, Wpct = 0, Wpctb = 0, somaEf = 0, n = 0, fora = 0;
+    const tipos = {};
+    for (const cdb of cdbs || []) {
+      const t = cdb.data_posicao ? dn(cdb.data_posicao) : ctx.posicao, T = dn(cdb.vencimento);
+      const h = Math.max(t, isFinite(ctx.hoje) ? ctx.hoje : t);
+      const nu = du(h, T);
+      const B = valor(cdb.valor_bruto), N = valor(cdb.saldo_liquido);
+      const base = B !== null && B > 0 ? B : N;
+      if (cdb.resgate || !isFinite(T) || T <= h || nu <= 0 || base === null || base <= 0) { fora++; continue; }
+      // juros mensais nao capitaliza: o juro sai todo mes, o valor fica no principal
+      const w = cdb.juros_mensais ? base : base * fator(cdb, t, h, degraus);
+      const f = fator(cdb, h, T, degraus), ef = aa(f, nu);
+      const d0 = cdb.data_aplicacao ? dn(cdb.data_aplicacao) : null;
+      const aliq = cdb.isento_ir ? 0 : d0 !== null ? aliquotaIR(T - d0) : ctx.irPresumido;
+      const segs = segmentosCDI(h, T, degraus), pct = ctx.degraus ? pctDoCDI(f, segs) : null;
+      W += w; Wef += w * ef; Wliq += w * aa(1 + (f - 1) * (1 - aliq), nu);
+      Wcdi += w * aa(fatorSegs(1, segs), nu); Wdu += w * nu;
+      if (pct !== null) { Wpct += w * pct; Wpctb += w; }
+      somaEf += ef; n++;
+      const k = cdb.indexador === "pre" ? "pre" : cdb.indexador === "cdi+" ? "cdi+" : "cdi";
+      const g = tipos[k] || (tipos[k] = { valor: 0, n: 0, taxa: 0, spread: 0, ef: 0 });
+      g.valor += w; g.n++; g.ef += w * ef;
+      g.taxa += w * (+cdb.taxa || 0); g.spread += w * (+cdb.spread || 0);
+    }
+    if (!W) return { n: 0, fora, valor: 0, ponderada: null, simples: null, liquida: null,
+                     cdiMedio: null, equivCDI: null, prazoMedio: null, porTipo: [] };
+    return { n, fora, valor: W, ponderada: Wef / W, simples: somaEf / n, liquida: Wliq / W,
+             cdiMedio: ctx.degraus ? Wcdi / W : null, equivCDI: Wpctb ? Wpct / Wpctb : null,
+             prazoMedio: Wdu / W / 252,
+             porTipo: ["cdi", "pre", "cdi+"].filter(k => tipos[k]).map(k => ({
+               tipo: k, n: tipos[k].n, valor: tipos[k].valor, fatia: tipos[k].valor / W,
+               taxa: tipos[k].taxa / tipos[k].valor, spread: tipos[k].spread / tipos[k].valor,
+               efetiva: tipos[k].ef / tipos[k].valor })) };
+  }
+
   // ---------------------------------------------------- Open Finance (Pluggy)
   // A posicao vem da XP e do BTG pelo Open Finance, via Meu Pluggy. Entra a renda
   // fixa BANCARIA (CDB, RDB, LC, LCI, LCA); Tesouro, debenture, CRI/CRA, LF e LIG
@@ -1716,7 +1798,7 @@ window.VENC = (function () {
   }
 
   return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
-           diaBrasilia, taxaPluggy, dePluggy, lerPluggy, rendimentoMensal, problemasConexao,
+           diaBrasilia, taxaPluggy, dePluggy, lerPluggy, rendimentoMensal, taxaMedia, problemasConexao,
            dataReuniao, curvaCDI, cdiEm, fator, projetar, datasCupom, agenda,
            norm, numBR, parseData, parseTaxa, emissor, mapearColunas, ler, lerAbas };
 })();
@@ -4232,6 +4314,57 @@ function segVisaoVenc(visao){
 }
 // o que o mes ja rendeu de fato: o mes inteiro no passado, ate hoje no mes em curso
 const rendCorrido = m => m.situacao === "futuro" ? 0 : m.situacao === "atual" ? m.ateHoje : m.bruto;
+// ------------------------------------------------------------ taxa media da carteira
+// Quanto a carteira paga daqui em diante. O numero que importa e a media PONDERADA
+// PELO VALOR -- R$ 200 mil a 112% do CDI mandam mais do que R$ 2 mil a 90% --, com a
+// media simples ao lado justamente para se ver o peso dos titulos grandes. O calculo
+// e o VENC.taxaMedia. Percentual fica FORA do disfarce (e razao, nao valor); o R$ de
+// cada tipo passa pelo fmt, como todo o resto.
+let txMedCache = null;
+function taxaMediaAtual(){
+  const ctx = ctxVenc();
+  const chave = JSON.stringify([estado.cdbs.length, estado.cdbs.length ? estado.cdbs[0].lote : "",
+    ctx.posicao, ctx.hoje, ctx.irPresumido, ctx.degraus, prefVenc().jurosMensais || {}]);
+  if (!txMedCache || txMedCache.chave !== chave) txMedCache = { chave: chave, t: VENC.taxaMedia(cdbsComAjustes(), ctx) };
+  return txMedCache.t;
+}
+const ROT_TIPO = { cdi: "Pós-fixados (CDI)", pre: "Prefixados", "cdi+": "CDI + spread" };
+const aaTxt = v => pctTxt(v * 100, 2) + " a.a.";
+function prazoTxt(anos){
+  if (anos < 1){ const m = Math.max(1, Math.round(anos * 12)); return m + (m === 1 ? " mês" : " meses"); }
+  const s = anos.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  return s + (s === "1" ? " ano" : " anos");
+}
+// a taxa CONTRATADA media do grupo, escrita como ela aparece no papel do titulo
+function mediaContratada(g){
+  const p = (v, c) => pctTxt(Math.round(v * 1e6) / 1e4, c);
+  if (g.tipo === "pre") return p(g.taxa, 2) + " a.a.";
+  if (g.tipo === "cdi+") return "CDI + " + p(g.taxa, 2);
+  return p(g.taxa, 1) + " do CDI" + (g.spread > 1e-9 ? " + " + p(g.spread, 2) : "");
+}
+function blocoTaxaMedia(){
+  const t = taxaMediaAtual();
+  if (!t.n) return "";
+  const fatos = [
+    ["Taxa média ponderada", aaTxt(t.ponderada), "<small> pelo valor de cada título</small>"],
+    ["Equivale a", t.equivCDI === null ? "—" : pctTxt(t.equivCDI * 100, 1) + " do CDI",
+      "<small>" + (t.cdiMedio === null ? " sem a curva do CDI" : " CDI médio de " + aaTxt(t.cdiMedio)) + "</small>"],
+    ["Líquida de IR", aaTxt(t.liquida), "<small> alíquota do vencimento</small>"],
+    ["Média simples", aaTxt(t.simples), "<small> sem ponderar</small>"],
+  ];
+  return '<div class="hdr"><h2>Taxa média da carteira</h2><span class="aux">' +
+      t.n + ' título' + (t.n === 1 ? '' : 's') + ' · ' + esc(fmt(t.valor)) +
+      ' · prazo médio ' + prazoTxt(t.prazoMedio) + '</span></div>' +
+    '<div class="fatos">' + fatos.map(f =>
+      '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
+    (t.porTipo.length > 1 ? '<div class="hdr"><h2>Por indexador</h2><span class="aux">média da taxa contratada</span></div>' +
+      t.porTipo.map(g => '<div class="rrow"><span class="vr-nm">' + ROT_TIPO[g.tipo] + '</span>' +
+        '<span class="vr-v">' + mediaContratada(g) + '</span>' +
+        '<span class="vr-sub">' + g.n + ' título' + (g.n === 1 ? '' : 's') + ' · ' +
+          pctTxt(g.fatia * 100, 0) + ' da carteira</span>' +
+        '<span class="vr-sub r">' + esc(fmt(g.valor)) +
+          (g.tipo === "pre" ? '' : ' · ' + aaTxt(g.efetiva)) + '</span></div>').join("") : "");
+}
 function blocoRendimento(hoje){
   const r = rendimentoAtual();
   if (!r.meses.length) return '<div class="vazio">Nenhum título para calcular o rendimento.</div>';
@@ -4240,6 +4373,7 @@ function blocoRendimento(hoje){
   const passados = r.meses.filter(m => m.situacao === "passado");
   const ult = passados[passados.length - 1];
   const de12 = somaMes(mesH + "-01", -11).slice(0, 7), ate12 = somaMes(mesH + "-01", 12).slice(0, 7);
+  const tm = taxaMediaAtual();
   const soma = f => r.meses.filter(f).reduce((s, m) => s + rendCorrido(m), 0);
   const noAno = soma(m => m.mes.slice(0, 4) === anoH), ult12 = soma(m => m.mes >= de12);
   // soma que passa por mes parcial e "pelo menos isso"
@@ -4259,7 +4393,8 @@ function blocoRendimento(hoje){
       parc(m => m.mes === mesH)],
     ["Em " + anoH + " até hoje", esc(fmt(noAno)), parc(m => m.mes.slice(0, 4) === anoH)],
     ["Últimos 12 meses", esc(fmt(ult12)), parc(m => m.mes >= de12)],
-    ["Próximos 12 meses", esc(fmt(prox12)), "<small> projeção</small>"],
+    ["Próximos 12 meses", esc(fmt(prox12)), "<small> projeção" +
+      (tm.valor ? " · " + pctTxt(prox12 / tm.valor * 100, 1) + " da carteira" : "") + "</small>"],
   ];
   const anos = [...new Set(r.meses.map(m => m.mes.slice(0, 4)))].sort();
   if (!rendAno || !anos.includes(rendAno)) rendAno = anos.includes(anoH) ? anoH : anos[anos.length - 1];
@@ -4289,8 +4424,12 @@ function blocoRendimento(hoje){
       ": até lá, o passado dos pós-fixados usa o CDI mais antigo que chegou — aproximado. Toque em Atualizar, em Premissas.");
   avisos.push("O passado é calculado da compra de cada título, pela taxa dele e pelo CDI que valeu em cada dia (Banco Central) — " +
     "o valor \"na curva\". Líquido = bruto menos o IR na alíquota do mês.");
+  avisos.push("A taxa média pondera cada título pelo que ele vale hoje e vale de hoje até o vencimento dele, na curva do CDI de "
+    + "hoje: o prefixado entra com a própria taxa contratada, o pós-fixado com o que a projeção do CDI entrega. O percentual "
+    + "dos próximos 12 meses supõe que o dinheiro que vencer no meio do caminho não é reaplicado.");
   return topo + '<div class="fatos">' + fatos.map(f =>
       '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
+    blocoTaxaMedia() +
     '<div class="hdr"><h2>Quanto rendeu por mês</h2>' +
       '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' +
       (anos.length > 1 ? '<span class="seg" id="seg-rend-ano">' + anos.map(a =>
