@@ -82,6 +82,7 @@ body.discreto .ponto{opacity:1}
    nem no detalhe por categoria nem no saldo das contas */
 body.discreto nav button[data-tab="mes"],
 body.discreto nav button[data-tab="patrimonio"],
+body.discreto nav button[data-tab="vencimentos"],
 body.discreto nav button[data-tab="plano"]{display:none}
 main{padding:0 var(--pad) 128px;max-width:760px;margin:0 auto}
 /* no desktop o conteudo vira duas colunas: acaba o vazio da direita */
@@ -510,6 +511,57 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
   box-shadow:0 8px 26px rgba(0,0,0,.5);
 }
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+/* ---------------- vencimentos ---------------- */
+.vpos{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 0;font-size:12px}
+.k-hero{font-size:11.5px;color:var(--ink-3);letter-spacing:.02em;margin-bottom:8px}
+.hero .val.v-vazio{font-size:clamp(28px,8vw,40px);line-height:1.05}
+/* o calendario: segunda a domingo; o dia com credito acende em tiffany, mais
+   forte quanto maior o valor (--a vem do render, teto .45 para o texto) */
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
+.cal-sem{font-size:10.5px;color:var(--ink-3);text-align:center;padding:0 0 3px;letter-spacing:.02em}
+.cal-d{min-height:50px;border-radius:8px;padding:5px 5px 6px;display:flex;flex-direction:column;
+  justify-content:space-between;align-items:stretch;background:var(--surface);
+  border:1px solid transparent;text-align:left;font:inherit;color:inherit}
+.cal-d.fora{background:none}
+.cal-d .n{font-size:11px;line-height:1;color:var(--ink-3)}
+.cal-d.nu .n{color:var(--ink-4)}
+.cal-d.tem{background:rgba(62,207,200,var(--a,.2));cursor:pointer;transition:border-color .15s}
+.cal-d.tem .n{color:var(--ink-2)}
+.cal-d.tem:hover{border-color:var(--tif-d)}
+.cal-d .v{font-size:11.5px;font-weight:600;color:var(--ink);text-align:center;white-space:nowrap;letter-spacing:-.01em}
+.cal-d.hoje{border-color:var(--sand)}
+.cal-d.sel{border-color:var(--tif);box-shadow:inset 0 0 0 1px var(--tif)}
+.cal-d.pass{opacity:.5}
+.cal-tot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 0;
+  font-size:13px;color:var(--ink-2);flex-wrap:wrap}
+.cal-tot b{color:var(--ink);font-weight:500}
+@media (max-width:380px){ .cal{gap:3px} .cal-d{min-height:46px;padding:4px 3px 5px} .cal-d .v{font-size:10.5px} }
+.grupo.gv .soma{order:2;color:var(--ink-2);font-size:12px}
+.grupo.gv::after{order:1}
+.grupo.d-pass{opacity:.55}
+.vrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;width:100%;
+  padding:10px 0;border-bottom:1px solid var(--line);text-align:left}
+.vrow:hover .vr-nm{color:var(--steel)}
+.vr-nm{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vr-v{font-size:14px;text-align:right;white-space:nowrap;letter-spacing:-.01em}
+.vr-sub{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vr-sub.r{text-align:right}
+.vr-sub em{font-style:normal;color:var(--sand)}
+.vr-sub b{font-weight:500}
+.row.prem{flex-wrap:wrap}
+.sel{background:var(--bg);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:13.5px}
+/* as regras da planilha: a propria tela diz quais colunas manter */
+.cols{margin:16px 0 0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:6px 14px 12px}
+.cols-t{font-size:11px;color:var(--ink-3);letter-spacing:.03em;margin:10px 0 2px}
+.col-r{display:grid;grid-template-columns:128px minmax(0,1fr);gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.col-r b{font-weight:600;color:var(--ink)}
+.col-r span{color:var(--ink-2)}
+.cols-pe{font-size:12px;color:var(--ink-3);margin-top:10px;line-height:1.5}
+/* o input de arquivo invisivel POR CIMA do botao: tocar no botao abre o seletor
+   direto, inclusive no iPhone */
+.arq{position:relative;overflow:hidden;display:inline-flex;align-items:center;cursor:pointer}
+.arq input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+@media (max-width:520px){ .col-r{grid-template-columns:1fr;gap:2px} }
 </style>
 </head>
 <body>
@@ -546,6 +598,7 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
     <section id="s-resumo" class="on"></section>
     <section id="s-mes"></section>
     <section id="s-patrimonio"></section>
+    <section id="s-vencimentos"></section>
     <section id="s-plano"></section>
     <section id="s-ajustes"></section>
   </main>
@@ -554,6 +607,7 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
     <button data-tab="resumo" class="on"><svg viewBox="0 0 24 24"><path d="M3 16.5l5.5-6 4 3.5L20 6"/><path d="M15 6h5v5"/></svg><span class="lb">Resumo</span></button>
     <button data-tab="mes"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Mês</span></button>
     <button data-tab="patrimonio"><svg viewBox="0 0 24 24"><path d="M3 7.5l9-4 9 4-9 4-9-4z"/><path d="M3 12.5l9 4 9-4"/><path d="M3 17.5l9 4 9-4"/></svg><span class="lb">Patrimônio</span></button>
+    <button data-tab="vencimentos"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4 14v4.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V14"/></svg><span class="lb">Vencimentos</span></button>
     <button data-tab="plano"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M9.5 9.5V20"/></svg><span class="lb">Plano</span></button>
     <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 7h8M17 7h3M4 12h3M12 12h8M4 17h10M19 17h1"/><circle cx="14.5" cy="7" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><circle cx="16.5" cy="17" r="2.2"/></svg><span class="lb">Ajustes</span></button>
   </nav>
@@ -1795,8 +1849,8 @@ async function gravarPrefs(){
 // NAVEGACAO
 // ============================================================
 let aba = "resumo";
-const ORDEM_ABAS = ["resumo","mes","patrimonio","plano","ajustes"];
-const ABAS_OCULTAS = ["mes","patrimonio","plano"];
+const ORDEM_ABAS = ["resumo","mes","patrimonio","vencimentos","plano","ajustes"];
+const ABAS_OCULTAS = ["mes","patrimonio","vencimentos","plano"];
 function irPara(nome){
   // guarda no ponto UNICO de navegacao: tocar num mes no Resumo, um atalho do
   // manifest ou um botao interno tambem chegam aqui, e nenhum deles pode furar
@@ -1832,7 +1886,7 @@ function marcarDisfarce(){
 function render(){
   const ch = document.getElementById("chip-mes");
   ch.innerHTML = '<b>' + rotulo(mesAtual) + '</b>';
-  ({ resumo:renderResumo, mes:renderMes, patrimonio:renderPatrimonio,
+  ({ resumo:renderResumo, mes:renderMes, patrimonio:renderPatrimonio, vencimentos:renderVencimentos,
      plano:renderPlano, ajustes:renderAjustes })[aba]();
   marcarDisfarce();
   ligarExcel();
@@ -1851,7 +1905,9 @@ function ligarExcel(){
     else if (q === "mes")   exportarXLSX([abaMes], "Financas " + rotulo(mesAtual).replace("/","-"));
     else if (q === "patrimonio") exportarXLSX([abaPatrimonio, abaContasMes], "Financas patrimonio");
     else if (q === "plano") exportarXLSX([abaPlano], "Financas plano");
-    else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos], "Financas completo");
+    else if (q === "vencimentos") exportarXLSX([abaVencCalendario, abaVencMeses, abaVencCDBs], "Financas vencimentos");
+    else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos,
+                      abaVencCalendario, abaVencMeses, abaVencCDBs], "Financas completo");
   });
 }
 const avisoTravado = () => dadosTravados
@@ -3189,6 +3245,556 @@ async function gravarPosicao(cdbs, pos){
   return true;
 }
 
+// ---------------------------------------------------------------- taxas do BC
+// CDI publicado (SGS 4389) e Selic meta (SGS 432) desde a data da posicao, mais
+// as medianas do Focus. Dado publico: cache NO APARELHO, nao no banco. Cada
+// fonte vale por si -- o Focus fora do ar nao apaga a Selic que chegou.
+let taxas = null;
+try { taxas = JSON.parse(localStorage.getItem("fin_taxas_bcb") || "null"); } catch (e){}
+let buscandoTaxas = null, taxasTentouEm = 0;
+const TAXAS_VALIDADE = 6 * 3600 * 1000;
+const OLINDA = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/";
+const isoDeBR = s => s.slice(6, 10) + "-" + s.slice(3, 5) + "-" + s.slice(0, 2);
+// so os pontos em que o valor muda, mais o ultimo dia (que diz ate onde a serie vai)
+const mudancas = (l, campo) => l.filter((x, i) => i === 0 || i === l.length - 1 || x[campo] !== l[i - 1][campo]);
+function buscarTaxas(forcar){
+  const inicio = VENC.dn(posicaoAtual()) - 10, hoje = VENC.dn(hojeISO());
+  const idade = taxas && taxas.buscado ? Date.now() - Date.parse(taxas.buscado) : Infinity;
+  const cobre = !!(taxas && taxas.desde && VENC.dn(taxas.desde) <= inicio);
+  if (!forcar && idade < TAXAS_VALIDADE && cobre) return Promise.resolve(taxas);
+  // uma tentativa a cada 5 min no maximo: com o BC fora do ar, cada redesenho
+  // dispararia quatro requisicoes
+  if (!forcar && Date.now() - taxasTentouEm < 5 * 60 * 1000) return Promise.resolve(taxas);
+  if (buscandoTaxas) return buscandoTaxas;
+  taxasTentouEm = Date.now();
+  const br = d => VENC.dataBR(VENC.iso(d));
+  const sgs = (n, ate) => "https://api.bcb.gov.br/dados/serie/bcdata.sgs." + n +
+    "/dados?formato=json&dataInicial=" + br(inicio) + "&dataFinal=" + br(ate);
+  const j = u => fetch(u, { cache:"no-store" }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  buscandoTaxas = Promise.allSettled([
+    j(sgs(4389, hoje)), j(sgs(432, hoje + 200)),
+    j(OLINDA + "ExpectativasMercadoSelic?$top=60&$orderby=Data%20desc&$filter=baseCalculo%20eq%200" +
+      "&$select=Data,Reuniao,Mediana&$format=json"),
+    j(OLINDA + "ExpectativasMercadoAnuais?$top=40&$orderby=Data%20desc&$filter=Indicador%20eq%20'Selic'%20and%20baseCalculo%20eq%200" +
+      "&$select=Data,DataReferencia,Mediana&$format=json"),
+  ]).then(([c, s, fr, fa]) => {
+    const lista = r => r.status === "fulfilled" && Array.isArray(r.value) && r.value.length ? r.value : null;
+    const odata = r => r.status === "fulfilled" && r.value && Array.isArray(r.value.value) && r.value.value.length ? r.value.value : null;
+    const novo = Object.assign({}, taxas || {});
+    let chegou = false;
+    const cv = lista(c), sv = lista(s), rv = odata(fr), av = odata(fa);
+    if (cv){
+      novo.historico = mudancas(cv.map(x => ({ dia: isoDeBR(x.data), cdi: +x.valor })), "cdi");
+      novo.cdi = +cv[cv.length - 1].valor; novo.cdiData = isoDeBR(cv[cv.length - 1].data); chegou = true;
+    }
+    if (sv){
+      novo.meta = mudancas(sv.map(x => ({ dia: isoDeBR(x.data), selic: +x.valor })), "selic");
+      novo.selic = +sv[sv.length - 1].valor; novo.metaAte = isoDeBR(sv[sv.length - 1].data); chegou = true;
+    }
+    if (rv || av){
+      const f = {};
+      if (rv){ f.data = rv[0].Data; f.reunioes = rv.filter(x => x.Data === rv[0].Data).map(x => ({ r: x.Reuniao, v: +x.Mediana })); }
+      if (av){ f.data = f.data || av[0].Data; f.anuais = av.filter(x => x.Data === av[0].Data).map(x => ({ ano: +x.DataReferencia, v: +x.Mediana })); }
+      novo.focus = f; chegou = true;
+    }
+    if (!chegou) throw new Error("o Banco Central não respondeu");
+    if (cv && sv) novo.desde = VENC.iso(inicio);
+    novo.buscado = new Date().toISOString();
+    taxas = novo;
+    try { localStorage.setItem("fin_taxas_bcb", JSON.stringify(taxas)); } catch (e){}
+    return taxas;
+  }).finally(() => { buscandoTaxas = null; });
+  return buscandoTaxas;
+}
+
+// ---------------------------------------------------------------- contexto
+const prefVenc = () => Object.assign({ curva:"focus", ir:0.15, selicManual:null }, estado.settings.venc || {});
+function posicaoAtual(){ return estado.cdbs.length ? estado.cdbs[0].data_posicao : hojeISO(); }
+function ctxVenc(){
+  const p = prefVenc(), hoje = VENC.dn(hojeISO());
+  return { posicao: VENC.dn(posicaoAtual()), hoje: hoje, irPresumido: +p.ir || 0.15,
+           degraus: VENC.curvaCDI(taxas, p.curva, hoje, p.selicManual) };
+}
+// A agenda so e refeita quando algo que entra no calculo muda -- render() e
+// chamado a cada toque, e projetar 173 CDBs dia util a dia util a cada toque e
+// trabalho jogado fora.
+function agendaAtual(){
+  const ctx = ctxVenc();
+  const chave = JSON.stringify([estado.cdbs.length, estado.cdbs.length ? estado.cdbs[0].lote : "",
+                                ctx.posicao, ctx.hoje, ctx.irPresumido, ctx.degraus]);
+  if (!agendaCache || agendaCache.chave !== chave) agendaCache = { chave: chave, ag: VENC.agenda(estado.cdbs, ctx) };
+  return agendaCache.ag;
+}
+async function gravarPrefVenc(campos){
+  estado.settings.venc = Object.assign(prefVenc(), campos);
+  agendaCache = null; render();
+  try { await gravarPrefs(); } catch (e){}
+}
+
+// ---------------------------------------------------------------- formatos
+const pctTxt = (v, casas) => vazio(v) ? "—" : (+v).toLocaleString("pt-BR",
+  { minimumFractionDigits: casas === undefined ? 2 : casas, maximumFractionDigits: casas === undefined ? 2 : casas }) + "%";
+const diaBR = d => VENC.dataBR(VENC.iso(d));
+const DIAS_SEMANA = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
+const SEMANA_CURTA = ["seg","ter","qua","qui","sex","sáb","dom"];
+function descTaxa(c){
+  const t = Math.round(+c.taxa * 1e6) / 1e4;         // em %, sem ruido de ponto flutuante
+  if (c.indexador === "pre") return pctTxt(t) + " a.a.";
+  if (c.indexador === "cdi") return pctTxt(t, t % 1 ? 2 : 0) + " do CDI";
+  return "CDI + " + pctTxt(t);
+}
+// valor compacto para caber na celula do calendario: 486 · 6,3k · 13k
+function fmtCurto(v){
+  if (vazio(v)) return "";
+  v = dis(v);
+  const a = Math.abs(v);
+  if (a < 1000) return Math.round(v).toLocaleString("pt-BR");
+  if (a < 10000) return (v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "k";
+  if (a < 1e6) return Math.round(v / 1000).toLocaleString("pt-BR") + "k";
+  return (v / 1e6).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mi";
+}
+function horaCurta(isoStr){
+  const d = new Date(isoStr), p = n => String(n).padStart(2, "0");
+  return p(d.getDate()) + "/" + p(d.getMonth() + 1) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+
+// ---------------------------------------------------------------- tela
+let vencMes = null, vencDia = null;        // mes aberto ("AAAA-MM") e dia escolhido (numero de dia)
+function renderVencimentos(){
+  const el = document.getElementById("s-vencimentos");
+  ligarArrastoVenc(el);
+  if (!estado.cdbs.length){
+    el.innerHTML = avisoTravado() + (cdbsIndisponivel
+      ? '<div class="aviso">A tabela <b>fin_cdbs</b> ainda não existe no banco — rode <b>db/006_cdbs.sql</b> no Supabase.</div>' : "") +
+      vazioVenc();
+    ligarAcoesVenc(el);
+    return;
+  }
+  const ag = agendaAtual(), hoje = VENC.dn(hojeISO());
+  if (!vencMes){
+    const prox = ag.eventos.find(e => e.dia >= hoje);
+    vencMes = VENC.iso(prox ? prox.dia : hoje).slice(0, 7);
+  }
+  el.innerHTML = avisoTravado() + linhaPosicao() + heroiVenc(ag, hoje) +
+    '<div class="hdr"><h2>Quanto cai por mês</h2>' +
+      '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' + segAnosVenc(ag) + '</div>' +
+    '<div class="grafwrap" id="graf-venc"></div>' +
+    navMesVenc() + calendarioVenc(ag, hoje) + resumoMesVenc(ag) +
+    '<div class="vlista">' + listaVenc(ag, hoje) + '</div>' +
+    premissasVenc();
+  desenharBarrasVenc();
+  ligarAcoesVenc(el);
+  // taxa velha: busca em segundo plano e redesenha UMA vez quando chegar
+  const antes = taxas;
+  buscarTaxas(false).then(t => {
+    if (t !== antes && aba === "vencimentos"){ agendaCache = null; render(); }
+  }).catch(() => {});
+}
+function linhaPosicao(){
+  const pos = posicaoAtual(), velha = VENC.dn(hojeISO()) - VENC.dn(pos) > 31;
+  return '<div class="vpos"><span class="' + (velha ? "abr" : "d3") + '">planilha de ' + VENC.dataBR(pos) +
+    ' · ' + estado.cdbs.length + ' CDBs' + (velha ? ' — suba a posição nova' : '') + '</span>' +
+    '<button class="btn mini plain" id="v-importar">Atualizar posição</button></div>';
+}
+function heroiVenc(ag, hoje){
+  const futuros = ag.eventos.filter(e => e.dia >= hoje);
+  let topo;
+  if (futuros.length){
+    const dia = futuros[0].dia, info = ag.porDia[dia];
+    const nV = info.eventos.filter(e => e.tipo === "vencimento").length, nJ = info.eventos.length - nV;
+    const falta = dia - hoje;
+    topo = '<div class="hero"><div>' +
+      '<div class="k-hero">próximo crédito · ' + (falta === 0 ? "hoje" : falta === 1 ? "amanhã" : "em " + falta + " dias") + '</div>' +
+      '<div class="val"><span class="cur">R$</span>' + esc(fmtn(info.total)) + '</div>' +
+      '<div class="cap">' + DIAS_SEMANA[VENC.dow(dia)] + ', <b>' + diaBR(dia).slice(0, 5) + '</b> — ' +
+        [nV ? nV + (nV > 1 ? " CDBs vencem" : " CDB vence") : "",
+         nJ ? "juros de " + nJ + (nJ > 1 ? " CDBs" : " CDB") : ""].filter(Boolean).join(" e ") + '</div>' +
+    '</div></div>';
+  } else {
+    topo = '<div class="hero"><div><div class="k-hero">vencimentos</div>' +
+      '<div class="val serif v-vazio">Nada mais a vencer</div>' +
+      '<div class="cap">Todos os CDBs desta planilha já caíram na conta — suba a posição nova.</div></div></div>';
+  }
+  const mesH = hojeISO().slice(0, 7);
+  const soma = f => futuros.filter(f).reduce((s, e) => s + e.liquido, 0);
+  const ult = ag.eventos.length ? ag.eventos[ag.eventos.length - 1].dia : hoje;
+  const fatos = [
+    ["Ainda em " + MESES_L[+mesH.slice(5, 7) - 1], esc(fmt(soma(e => VENC.iso(e.dia).slice(0, 7) === mesH))), ""],
+    ["Próximos 90 dias", esc(fmt(soma(e => e.dia < hoje + 90))), ""],
+    ["Carteira hoje (estimada)", esc(fmt(ag.hoje)), '<small> planilha ' + esc(fmt(ag.posicao)) + '</small>'],
+    ["A receber até " + rotulo(VENC.iso(ult).slice(0, 7) + "-01"), esc(fmt(ag.aReceber)),
+      '<small class="pos"> ' + esc(fmtsin(ag.aReceber - ag.hoje)) + '</small>'],
+  ];
+  return topo + '<div class="fatos">' + fatos.map(f =>
+    '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>';
+}
+function segAnosVenc(ag){
+  const anos = [...new Set(Object.keys(ag.porMes).map(k => k.slice(0, 4)))].sort();
+  if (anos.length < 2) return "";
+  const sel = vencMes.slice(0, 4);
+  return '<span class="seg" id="seg-venc-ano">' + anos.map(a =>
+    '<button data-a="' + a + '"' + (a === sel ? ' class="on"' : '') + '>' + a + '</button>').join("") + '</span>';
+}
+// Barras = o que cai em cada mes do ano aberto. Base no ZERO: e montante, nao
+// nivel. Largura MEDIDA do container (viewBox fixo esmaga o texto).
+function desenharBarrasVenc(){
+  const box = document.getElementById("graf-venc");
+  if (!box || !estado.cdbs.length || !vencMes) return;
+  const ag = agendaAtual(), ano = vencMes.slice(0, 4), mesH = hojeISO().slice(0, 7);
+  const W = Math.max(280, Math.round(box.getBoundingClientRect().width) || 340);
+  const H = 176, PT = 20, PB = 24;
+  const ks = MESES.map((_, i) => ano + "-" + String(i + 1).padStart(2, "0"));
+  const vs = ks.map(k => ag.porMes[k] ? ag.porMes[k].total : 0);
+  const mx = Math.max.apply(null, vs) || 1;
+  const bw = W / 12, bar = Math.min(26, bw * 0.6);
+  const y = v => PT + (1 - v / mx) * (H - PT - PB);
+  let barras = "", rot = "", alvos = "";
+  ks.forEach((k, i) => {
+    const cx = bw * i + bw / 2, v = vs[i], sel = k === vencMes;
+    if (v > 0){
+      const yb = y(v);
+      barras += '<rect x="' + (cx - bar / 2).toFixed(1) + '" y="' + yb.toFixed(1) + '" width="' + bar.toFixed(1) +
+        '" height="' + Math.max(2, H - PB - yb).toFixed(1) + '" rx="3" fill="var(--tif)" opacity="' + (sel ? ".9" : ".42") + '"/>';
+      if (bw >= 24) rot += '<text x="' + cx.toFixed(1) + '" y="' + (yb - 6).toFixed(1) + '" text-anchor="middle" font-size="10" fill="' +
+        (sel ? "var(--ink)" : "var(--ink-3)") + '">' + esc(fmtCurto(v)) + '</text>';
+    }
+    rot += '<text x="' + cx.toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="' +
+      (sel ? "var(--tif)" : k === mesH ? "var(--sand)" : "var(--ink-3)") + '"' + (sel ? ' font-weight="600"' : '') + '>' + MESES[i] + '</text>';
+    alvos += '<rect data-mes="' + k + '" x="' + (bw * i).toFixed(1) + '" y="0" width="' + bw.toFixed(1) + '" height="' + H +
+      '" fill="transparent" style="cursor:pointer"><title>' + esc(rotuloL(k + "-01") + (v > 0 ? " — " + fmt(v) : " — nada cai")) + '</title></rect>';
+  });
+  box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' +
+      esc('Quanto cai na conta por mês em ' + ano) + '">' +
+    '<line x1="0" y1="' + (H - PB) + '" x2="' + W + '" y2="' + (H - PB) + '" stroke="var(--line)"/>' + barras + rot + alvos + '</svg>';
+  box.querySelectorAll("[data-mes]").forEach(r => r.onclick = () => { vencMes = r.dataset.mes; vencDia = null; render(); });
+}
+function navMesVenc(){
+  return '<div class="mnav"><button id="v-ant" aria-label="Mês anterior">' + ICO.ant + '</button>' +
+    '<span class="lbl">' + rotuloL(vencMes + "-01") + '</span>' +
+    '<button id="v-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
+}
+// Calendario do mes: segunda a domingo. Dia com credito mostra o valor e fica
+// mais aceso quanto maior o valor (a transparencia para em .45 para o texto
+// continuar legivel sobre o tiffany).
+function calendarioVenc(ag, hoje){
+  const ini = VENC.dn(vencMes + "-01");
+  const nDias = new Date(Date.UTC(+vencMes.slice(0, 4), +vencMes.slice(5, 7), 0)).getUTCDate();
+  const vazios = (VENC.dow(ini) + 6) % 7;
+  let mx = 0;
+  for (let d = ini; d < ini + nDias; d++) if (ag.porDia[d]) mx = Math.max(mx, ag.porDia[d].total);
+  let h = '<div class="cal">' + SEMANA_CURTA.map(s => '<span class="cal-sem">' + s + '</span>').join("");
+  for (let i = 0; i < vazios; i++) h += '<span class="cal-d fora"></span>';
+  for (let k = 0; k < nDias; k++){
+    const d = ini + k, info = ag.porDia[d];
+    const cls = "cal-d" + (VENC.ehUtil(d) ? "" : " nu") + (d === hoje ? " hoje" : "") + (d < hoje ? " pass" : "") +
+                (d === vencDia ? " sel" : "") + (info ? " tem" : "");
+    h += info
+      ? '<button class="' + cls + '" data-dia="' + d + '" style="--a:' + (0.12 + 0.33 * info.total / (mx || 1)).toFixed(3) +
+        '" aria-label="' + esc(diaBR(d) + ": " + fmt(info.total)) + '"><span class="n">' + (k + 1) + '</span>' +
+        '<span class="v">' + esc(fmtCurto(info.total)) + '</span></button>'
+      : '<span class="' + cls + '"><span class="n">' + (k + 1) + '</span></span>';
+  }
+  return h + '</div>';
+}
+function resumoMesVenc(ag){
+  const x = ag.porMes[vencMes], nome = MESES_L[+vencMes.slice(5, 7) - 1];
+  if (!x) return '<div class="cal-tot"><span class="d3">Nada cai em ' + nome + '.</span></div>';
+  return '<div class="cal-tot"><span>' + (vencDia !== null
+      ? '<button class="btn mini plain" id="v-todos">ver o mês todo</button>' : 'Em ' + nome) + '</span>' +
+    '<span><b>' + esc(fmt(x.total)) + '</b> <span class="d3">· ' + x.vencimentos + ' vencimento' +
+      (x.vencimentos === 1 ? '' : 's') + (x.juros ? ' + ' + x.juros + ' de juros' : '') + '</span></span></div>';
+}
+function listaVenc(ag, hoje){
+  const ini = VENC.dn(vencMes + "-01"), fim = VENC.dn(somaMes(vencMes + "-01", 1));
+  const dias = Object.keys(ag.porDia).map(Number)
+    .filter(d => d >= ini && d < fim && (vencDia === null || d === vencDia)).sort((a, b) => a - b);
+  return dias.map(d => {
+    const info = ag.porDia[d];
+    return '<div class="grupo gv' + (d < hoje ? ' d-pass' : '') + '"><span>' + DIAS_SEMANA[VENC.dow(d)] + ', ' +
+      diaBR(d).slice(0, 5) + '</span><span class="soma">' + esc(fmt(info.total)) + '</span></div>' +
+      info.eventos.map(e => linhaEventoVenc(ag, e)).join("");
+  }).join("");
+}
+function linhaEventoVenc(ag, e){
+  const it = ag.itens[e.i], c = it.cdb, p = it.p;
+  const juros = e.tipo === "juros";
+  const sub = juros ? '<em>juros do mês</em> · ' + esc(descTaxa(c))
+    : esc(descTaxa(c)) + (c.juros_mensais ? ' · <em>principal + último juro</em>' : '') +
+      (p.semTaxa ? ' · <em>sem taxa do CDI</em>' : '');
+  const dir = juros ? 'IR ' + esc(fmt(e.ir))
+    : p.pago ? 'já caiu'
+    : 'hoje ' + esc(fmt(p.valorHoje)) + ' <b class="pos">' + esc(fmtsin(e.liquido - p.valorHoje)) + '</b>';
+  return '<button class="vrow" data-i="' + e.i + '">' +
+    '<span class="vr-nm">' + esc(c.nome) + '</span><span class="vr-v">' + esc(fmt(e.liquido)) + '</span>' +
+    '<span class="vr-sub">' + sub + '</span><span class="vr-sub r">' + dir + '</span></button>';
+}
+function folhaCDB(i){
+  const ag = agendaAtual(), it = ag.itens[i];
+  if (!it) return;
+  const c = it.cdb, p = it.p, T = VENC.dn(c.vencimento);
+  const expl = {
+    exato: "IR exato: a planilha trouxe a data e o valor aplicados.",
+    parcial: "IR pela " + (c.data_aplicacao ? "data de aplicação; o valor aplicado saiu da própria taxa." : "alíquota presumida; o valor aplicado veio da planilha."),
+    estimado: "A planilha não traz a data de aplicação: o rendimento daqui até o vencimento paga " +
+      pctTxt(ctxVenc().irPresumido * 100, 1) + " de IR (ajuste em Premissas).",
+  }[p.qual];
+  const cup = c.juros_mensais ? p.eventos : [];
+  abrirFolha(
+    '<h3>' + esc(c.nome) + '</h3>' +
+    '<div class="sub">' + esc(descTaxa(c)) + ' · vence ' + VENC.dataBR(c.vencimento) +
+      (p.credito !== T ? ' (cai em ' + diaBR(p.credito) + ')' : '') + ' · ' + p.du + ' dias úteis desde a planilha</div>' +
+    '<div class="tot" style="margin-top:0">' +
+      '<div><span>Saldo líquido na planilha (' + VENC.dataBR(c.data_posicao || posicaoAtual()).slice(0, 5) + ')</span><span>' + esc(fmt(+c.saldo_liquido)) + '</span></div>' +
+      '<div><span>Hoje (estimado pela taxa)</span><span>' + (p.pago ? 'já caiu' : esc(fmt(p.valorHoje))) + '</span></div>' +
+      '<div><span>Bruto ' + (c.juros_mensais ? 'a receber (juros + principal)' : 'no vencimento') + '</span><span>' + esc(fmt(p.bruto)) + '</span></div>' +
+      '<div><span>IR' + (p.qual === "estimado" ? ' sobre o rendimento futuro' : '') + ' (' + pctTxt(p.aliquota * 100, 1) + ')</span>' +
+        '<span class="neg">' + esc(fmt(-p.ir)) + '</span></div>' +
+      '<div class="destaque"><span>Cai na conta</span><span>' + esc(fmt(p.liquido)) + '</span></div>' +
+      '<div><span>Rendimento líquido daqui até lá</span><span class="pos">' + esc(fmtsin(p.rendimento)) + '</span></div>' +
+    '</div>' +
+    (cup.length ? '<div class="hdr"><h2>Juros mês a mês</h2></div><div class="rule"></div>' + cup.map(e =>
+      '<div class="row"><span class="nm">' + diaBR(e.dia) + (e.tipo === "vencimento" ? ' · principal + juro' : '') + '</span>' +
+      '<span class="vl">' + esc(fmt(e.liquido)) + '</span></div>').join("") : '') +
+    '<div class="nota fria">' + expl + (p.semTaxa ? '<br><b>Sem taxa do CDI</b>: este CDB aparece pelo saldo até a taxa chegar.' : '') + '</div>' +
+    '<div class="acoes"><button class="btn plain" id="fechar">Fechar</button></div>',
+    () => { document.getElementById("fechar").onclick = fecharFolha; });
+}
+function premissasVenc(){
+  const p = prefVenc(), tx = taxas;
+  const partes = [];
+  if (tx && tx.cdiData) partes.push("CDI que valeu até " + VENC.dataBR(tx.cdiData).slice(0, 5) + " (" + pctTxt(tx.cdi) + ")");
+  if (tx && tx.selic != null) partes.push("Selic meta " + pctTxt(tx.selic) +
+    (tx.metaAte ? " até a reunião de " + VENC.dataBR(tx.metaAte).slice(0, 5) : ""));
+  const anoH = +hojeISO().slice(0, 4);
+  const exp = tx && tx.focus && tx.focus.anuais
+    ? tx.focus.anuais.filter(x => x.ano >= anoH).sort((a, b) => a.ano - b.ano).slice(0, 3) : [];
+  partes.push({
+    focus: exp.length ? "depois, o Focus: " + exp.map(x => pctTxt(x.v) + " no fim de " + x.ano).join(" · ")
+                      : "depois, o Focus (mediana do mercado por reunião do Copom)",
+    hoje: "depois, a Selic de hoje até o fim",
+    manual: p.selicManual ? "depois, " + pctTxt(p.selicManual) + " (digitada) até o fim" : "digite a Selic para o cálculo",
+  }[p.curva]);
+  const fonte = tx && tx.buscado ? "Banco Central · buscado " + horaCurta(tx.buscado)
+                                 : "nenhuma taxa do Banco Central neste aparelho ainda";
+  const irOpts = [[0.15, "15%"], [0.175, "17,5%"], [0.20, "20%"], [0.225, "22,5%"]];
+  return '<div class="hdr"><h2>Premissas</h2></div><div class="rule"></div>' +
+    '<div class="row prem"><span class="nm">Curva do CDI (pós-fixados)<br><span class="t11 d3">' + esc(partes.join(" → ")) + '</span></span>' +
+      '<span class="seg" id="seg-curva">' + [["focus","Focus"],["hoje","Selic de hoje"],["manual","Manual"]].map(k =>
+        '<button data-c="' + k[0] + '"' + (k[0] === p.curva ? ' class="on"' : '') + '>' + k[1] + '</button>').join("") + '</span></div>' +
+    (p.curva === "manual" ? '<div class="row"><span class="nm">Selic para o cálculo (% a.a.)</span>' +
+      '<input class="cel" id="v-selic" inputmode="decimal" placeholder="13,75" value="' +
+      (p.selicManual ? String(p.selicManual).replace(".", ",") : "") + '"></div>' : '') +
+    '<div class="row"><span class="nm">IR quando a planilha não traz a data de aplicação' +
+      '<br><span class="t11 d3">sobre o rendimento daqui até o vencimento</span></span>' +
+      '<select class="sel" id="v-ir">' + irOpts.map(o => '<option value="' + o[0] + '"' +
+        (Math.abs(o[0] - p.ir) < 1e-9 ? ' selected' : '') + '>' + o[1] + '</option>').join("") + '</select></div>' +
+    '<div class="row"><span class="nm">Taxas<br><span class="t11 d3">' + esc(fonte) + '</span></span>' +
+      '<button class="btn mini plain" id="v-taxas">Atualizar</button></div>';
+}
+
+// ---------------------------------------------------------------- acoes
+let arrastoVencLigado = false;
+// Arrastar para o lado SOBRE O CALENDARIO troca o mes. Ligado uma vez so: a
+// section sobrevive aos render(), e ligar de novo a cada desenho empilharia
+// ouvintes (um arrasto pularia varios meses).
+function ligarArrastoVenc(el){
+  if (arrastoVencLigado) return;
+  arrastoVencLigado = true;
+  let x0 = 0, y0 = 0, valido = false;
+  el.addEventListener("touchstart", ev => {
+    const t = ev.changedTouches[0]; x0 = t.clientX; y0 = t.clientY;
+    valido = !!ev.target.closest(".cal");
+  }, { passive:true });
+  el.addEventListener("touchend", ev => {
+    if (!valido || aba !== "vencimentos") return;
+    const t = ev.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 45) return;
+    mudarMesVenc(dx < 0 ? 1 : -1);
+  }, { passive:true });
+}
+function mudarMesVenc(n){ vencMes = somaMes(vencMes + "-01", n).slice(0, 7); vencDia = null; render(); }
+function ligarAcoesVenc(el){
+  const q = id => document.getElementById(id);
+  if (q("v-importar")) q("v-importar").onclick = folhaImportar;
+  if (q("v-modelo")) q("v-modelo").onclick = baixarModelo;
+  if (q("v-ant")) q("v-ant").onclick = () => mudarMesVenc(-1);
+  if (q("v-prox")) q("v-prox").onclick = () => mudarMesVenc(1);
+  if (q("v-todos")) q("v-todos").onclick = () => { vencDia = null; render(); };
+  el.querySelectorAll("#seg-venc-ano button").forEach(b => b.onclick = () => {
+    const a = b.dataset.a, k = Object.keys(agendaAtual().porMes).filter(x => x.slice(0, 4) === a).sort()[0];
+    vencMes = k || (a + "-01"); vencDia = null; render();
+  });
+  el.querySelectorAll(".cal-d.tem").forEach(b => b.onclick = () => {
+    const d = +b.dataset.dia; vencDia = vencDia === d ? null : d; render();
+  });
+  el.querySelectorAll(".vrow").forEach(b => b.onclick = () => folhaCDB(+b.dataset.i));
+  el.querySelectorAll("#seg-curva button").forEach(b => b.onclick = () => gravarPrefVenc({ curva: b.dataset.c }));
+  if (q("v-ir")) q("v-ir").onchange = ev => gravarPrefVenc({ ir: +ev.target.value });
+  if (q("v-selic")) q("v-selic").onchange = ev => {
+    const v = parseNum(ev.target.value);
+    gravarPrefVenc({ selicManual: v && v > 0 && v < 100 ? v : null });
+  };
+  if (q("v-taxas")) q("v-taxas").onclick = () => {
+    toast("Buscando no Banco Central…");
+    buscarTaxas(true).then(() => { agendaCache = null; render(); toast("Taxas atualizadas"); })
+      .catch(e => toast("O Banco Central não respondeu: " + e.message));
+  };
+}
+
+// ---------------------------------------------------------------- importacao
+function regrasColunas(){
+  return '<div class="cols">' +
+    '<div class="cols-t">Colunas que precisam existir</div>' +
+    '<div class="col-r"><b>CDB</b><span>nome do título — ex.: CDB BANCO X - NOV/2027. Com “JURO MENSAL” no nome, entra o juro de todo mês.</span></div>' +
+    '<div class="col-r"><b>Rentabilidade</b><span>+15,50% (pré, ao ano) · 120,00% CDI · CDI + 1,5%</span></div>' +
+    '<div class="col-r"><b>Data vencimento</b><span>24/11/2027</span></div>' +
+    '<div class="col-r"><b>Saldo líquido</b><span>R$ 3.702,38 — o valor já sem IR e IOF</span></div>' +
+    '<div class="cols-t">Opcionais — deixam o IR exato</div>' +
+    '<div class="col-r"><b>Data aplicação</b><span>15/03/2025</span></div>' +
+    '<div class="col-r"><b>Valor aplicado</b><span>R$ 3.000,00</span></div>' +
+    '<div class="cols-pe">Os nomes podem variar — “Taxa”, “Vencimento”, “Valor líquido”, “Ativo” também servem — ' +
+      'e colunas a mais são ignoradas. A data da posição é a do arquivo (dá para mudar antes de gravar). IPCA+ ainda não entra no cálculo.</div>' +
+  '</div>';
+}
+function vazioVenc(){
+  return '<div class="hero"><div><div class="k-hero">vencimentos</div>' +
+      '<div class="val serif v-vazio">Quanto cai na conta, dia a dia</div>' +
+      '<div class="cap">Suba a planilha de posição da corretora: o app projeta o valor líquido de cada CDB no vencimento — ' +
+      'prefixado pela taxa, pós-fixado pelo CDI do Banco Central.</div></div></div>' +
+    '<div class="acoes"><button class="btn pri" id="v-importar">Subir planilha</button>' +
+    '<button class="btn plain" id="v-modelo">Baixar modelo</button></div>' + regrasColunas();
+}
+let importacao = null;       // { arquivo, abas }
+function folhaImportar(){
+  if (bloqueadoPeloDisfarce()) return;
+  importacao = null;
+  abrirFolha(
+    '<h3>Atualizar posição</h3>' +
+    '<div class="sub">Suba a planilha da corretora (.xlsx ou .csv). O app acha sozinho a linha de títulos e ignora o resto. ' +
+      'A planilha nova <b>substitui</b> a posição inteira.</div>' +
+    regrasColunas() +
+    '<div class="acoes"><label class="btn pri arq">Escolher arquivo' +
+      '<input type="file" id="imp-arq" accept=".xlsx,.csv,.txt"></label>' +
+      '<button class="btn plain" id="imp-modelo">Baixar modelo</button></div>' +
+    '<div id="imp-res"></div>',
+    () => {
+      document.getElementById("imp-modelo").onclick = baixarModelo;
+      document.getElementById("imp-arq").onchange = ev => {
+        const f = ev.target.files && ev.target.files[0];
+        if (f) analisarArquivo(f);
+      };
+    });
+}
+async function analisarArquivo(arquivo){
+  const box = document.getElementById("imp-res");
+  if (!box) return;
+  box.innerHTML = '<div class="nota fria">Lendo ' + esc(arquivo.name) + '…</div>';
+  let abas;
+  try { abas = await XLSXLER.lerArquivo(arquivo); }
+  catch (e){ box.innerHTML = '<div class="aviso">Não consegui abrir o arquivo: ' + esc(e.message) + '</div>'; return; }
+  // data da posicao = dia em que o arquivo foi salvo (a exportacao da corretora)
+  const d = new Date(arquivo.lastModified || Date.now()), p2 = n => String(n).padStart(2, "0");
+  const pos = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  importacao = { arquivo: arquivo, abas: abas };
+  mostrarImportacao(pos > hojeISO() ? hojeISO() : pos);
+}
+function mostrarImportacao(pos){
+  const box = document.getElementById("imp-res"), imp = importacao;
+  if (!box || !imp) return;
+  const res = VENC.lerAbas(imp.abas, { posicao: pos });
+  if (!res.ok){
+    box.innerHTML = '<div class="aviso">Não achei ' + (res.faltando && res.faltando.length
+      ? 'as colunas <b>' + esc(res.faltando.join(", ")) + '</b>' : 'a linha de títulos') + ' em ' + esc(imp.arquivo.name) +
+      '. O nome da coluna pode variar, mas os títulos precisam estar na mesma linha.</div>';
+    return;
+  }
+  const cd = res.cdbs, n = cd.length;
+  const pre = cd.filter(c => c.indexador === "pre").length, jm = cd.filter(c => c.juros_mensais).length;
+  const soma = cd.reduce((s, c) => s + c.saldo_liquido, 0);
+  const vs = cd.map(c => c.vencimento).sort();
+  const opc = [res.cols.aplicacao !== undefined ? "data de aplicação" : null,
+               res.cols.valorAplicado !== undefined ? "valor aplicado" : null].filter(Boolean);
+  box.innerHTML =
+    '<div class="hdr"><h2>' + esc(imp.arquivo.name) + (res.aba && res.aba !== "csv" ? ' · aba “' + esc(res.aba) + '”' : '') +
+      '</h2></div><div class="rule"></div>' +
+    (n ? '<div class="tot" style="margin-top:0">' +
+      '<div><span>CDBs</span><span>' + n + ' <span class="d3">· ' + pre + ' pré · ' + (n - pre) + ' CDI' +
+        (jm ? ' · ' + jm + ' com juros mensais' : '') + '</span></span></div>' +
+      '<div><span>Saldo líquido somado</span><span>' + esc(fmt(soma)) + '</span></div>' +
+      '<div><span>Vencimentos</span><span>' + VENC.dataBR(vs[0]) + ' a ' + VENC.dataBR(vs[vs.length - 1]) + '</span></div>' +
+      '<div><span>IR</span><span>' + (opc.length === 2 ? 'exato (data e valor aplicados)' : opc.length
+        ? 'pela ' + opc[0] : 'presumido — a planilha não traz a data de aplicação') + '</span></div>' +
+    '</div>' : '<div class="aviso">Nenhum CDB válido nesta planilha.</div>') +
+    '<label class="f">Data da posição (o dia do saldo)<input type="date" id="imp-data" value="' + pos + '" max="' + hojeISO() + '"></label>' +
+    (res.avisos.length ? '<div class="aviso">' + res.avisos.length + (res.avisos.length === 1 ? ' linha ficou' : ' linhas ficaram') +
+      ' de fora:<br>' + res.avisos.slice(0, 8).map(a => 'linha ' + a.linha + (a.nome ? ' (' + esc(a.nome) + ')' : '') +
+      ': ' + esc(a.msg)).join('<br>') + (res.avisos.length > 8 ? '<br>… e mais ' + (res.avisos.length - 8) : '') + '</div>' : '') +
+    (estado.cdbs.length ? '<div class="sub" style="margin:14px 0 0">Substitui a posição atual: ' + estado.cdbs.length +
+      ' CDBs da planilha de ' + VENC.dataBR(posicaoAtual()) + '.</div>' : '') +
+    '<div class="acoes"><button class="btn pri" id="imp-ok"' + (n ? '' : ' disabled') + '>Substituir posição</button>' +
+    '<button class="btn plain" id="imp-cancel">Cancelar</button></div>';
+  document.getElementById("imp-data").onchange = ev => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ev.target.value)) mostrarImportacao(ev.target.value);
+  };
+  document.getElementById("imp-cancel").onclick = fecharFolha;
+  document.getElementById("imp-ok").onclick = async ev => {
+    const b = ev.currentTarget;
+    b.disabled = true; b.textContent = "Gravando…";
+    const ok = await gravarPosicao(cd, pos);
+    if (ok){
+      fecharFolha(); vencMes = null; vencDia = null; render();
+      toast("Posição atualizada: " + n + " CDBs"); tremer([8, 40, 8]);
+    } else { b.disabled = false; b.textContent = "Substituir posição"; }
+  };
+}
+function baixarModelo(){
+  baixar(planilhaXLSX([{ nome: "Posição",
+    colunas: [{t:"CDB",largura:44},{t:"Rentabilidade",largura:16},{t:"Data vencimento",largura:16},
+              {t:"Saldo líquido",largura:16},{t:"Data aplicação",largura:16},{t:"Valor aplicado",largura:16}],
+    linhas: [
+      [T("CDB BANCO EXEMPLO - NOV/2027"), T("+15,50%"), T("24/11/2027"), M(1234.56), T("24/11/2025"), M(1000)],
+      [T("CDB FINANCEIRA EXEMPLO - MAI/2027"), T("120,00% CDI"), T("14/05/2027"), M(2345.67), null, null],
+      [T("CDB BANCO EXEMPLO - JURO MENSAL - DEZ/2027"), T("+16,10%"), T("27/12/2027"), M(1007.37), null, null],
+    ] }]), "Modelo posicao CDBs.xlsx");
+  toast("Modelo baixado");
+}
+
+// ---------------------------------------------------------------- Excel
+function abaVencCDBs(){
+  if (!estado.cdbs.length) return null;
+  const ag = agendaAtual();
+  return { nome: "CDBs",
+    colunas: [{t:"Vencimento",largura:12},{t:"Cai na conta",largura:12},{t:"CDB",largura:46},{t:"Emissor",largura:30},
+              {t:"Taxa",largura:16},{t:"Juros mensais",largura:10},{t:"Saldo na planilha",largura:16},
+              {t:"Hoje (estimado)",largura:16},{t:"Bruto",largura:16},{t:"IR",largura:13},{t:"Alíquota IR",largura:11},
+              {t:"Cai na conta (líquido)",largura:18},{t:"Rendimento daqui até lá",largura:18},{t:"Dias úteis",largura:10},
+              {t:"IR calculado",largura:12}],
+    linhas: ag.itens.map(it => { const c = it.cdb, p = it.p;
+      return [T(VENC.dataBR(c.vencimento)), T(diaBR(p.credito)), T(c.nome), T(c.emissor || ""), T(descTaxa(c)),
+              T(c.juros_mensais ? "sim" : ""), M(+c.saldo_liquido), M(p.valorHoje), M(p.bruto), M(p.ir), P(p.aliquota),
+              M(p.liquido, true), M(p.rendimento), N(p.du), T(p.qual)]; }) };
+}
+function abaVencCalendario(){
+  if (!estado.cdbs.length) return null;
+  const ag = agendaAtual();
+  return { nome: "Calendário",
+    colunas: [{t:"Data",largura:12},{t:"Dia",largura:10},{t:"Tipo",largura:12},{t:"CDB",largura:46},{t:"Taxa",largura:16},
+              {t:"Bruto",largura:16},{t:"IR",largura:13},{t:"Cai na conta",largura:16}],
+    linhas: ag.eventos.map(e => { const c = ag.itens[e.i].cdb;
+      return [T(diaBR(e.dia)), T(DIAS_SEMANA[VENC.dow(e.dia)]), T(e.tipo === "juros" ? "juros" : "vencimento"),
+              T(c.nome), T(descTaxa(c)), M(e.bruto), M(e.ir), M(e.liquido, true)]; }) };
+}
+function abaVencMeses(){
+  if (!estado.cdbs.length) return null;
+  const ag = agendaAtual();
+  let acum = 0;
+  return { nome: "Por mês",
+    colunas: [{t:"Mês",largura:12},{t:"Cai na conta",largura:16},{t:"Vencimentos",largura:12},
+              {t:"Pagamentos de juros",largura:18},{t:"Acumulado",largura:16}],
+    linhas: Object.keys(ag.porMes).sort().map(k => { const x = ag.porMes[k]; acum += x.total;
+      return [T(rotulo(k + "-01")), M(x.total, true), N(x.vencimentos), N(x.juros), M(acum)]; }) };
+}
+
 // ============================================================
 // PLANO
 // ============================================================
@@ -3871,6 +4477,7 @@ window.addEventListener("resize", () => {
     if (!estado.categorias.length) return;
     if (aba === "resumo"){ desenharArco(); desenharCombo(anoSel); }
     if (aba === "patrimonio") desenharEvolucao();
+    if (aba === "vencimentos") desenharBarrasVenc();
   }, 180);
 });
 
@@ -3889,7 +4496,7 @@ marcarDisfarce();
 // atalhos do manifest (?ir=mes) e deep link
 function abaDaURL(){
   const q = new URLSearchParams(location.search).get("ir");
-  return ["resumo","mes","patrimonio","plano","ajustes"].includes(q) ? q : null;
+  return ["resumo","mes","patrimonio","vencimentos","plano","ajustes"].includes(q) ? q : null;
 }
 
 // convite de instalacao: discreto, dispensavel, e a dispensa e lembrada
