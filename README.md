@@ -76,9 +76,16 @@ CDI que valeu em cada dia útil (histórico do BC — se ele ainda não cobre a 
 da emissão até a próxima sincronização). Conferido com a planilha da XP em 19/09/2026: dos 105
 prefixados com a compra registrada, 102 batem em 0,01 ponto (os 3 restantes vencem no dia útil
 seguinte), e os 49 do CDI com compra batem em 0,05 ponto. Título que quase não cresceu desde a
-compra paga **juros todo mês** (o cupom sai do saldo) e é marcado sozinho. Sem a compra na
-janela do Open Finance (título comprado há mais tempo), fica a taxa da emissão e a data de
-aplicação em branco — a Conexões mostra quantos são.
+compra paga **juros todo mês** (o cupom sai do saldo) e é marcado sozinho. Vários lotes no
+mesmo dia contam como uma compra.
+
+Sem a compra na janela do Open Finance (a XP manda ~12 meses de movimentações; o BTG, ~3), o
+prefixado vai **pelo resgate da emissão**: quantidade × PU de emissão (R$ 1.000, ou R$ 1 no
+fracionado) × (1 + taxa da emissão)^(du/252) é o que o título paga no vencimento, e a taxa de
+quem o tem é a que leva o bruto de hoje até lá (a data da compra sai de trás para a frente). Isso
+só vale onde a corretora manda a emissão certa: o app confere, em cada corretora, nos títulos que
+têm compra — em 19/09/2026 a XP bateu 102 de 102; o BTG não confere, e fica a taxa da emissão.
+A Conexões mostra de onde veio a taxa de cada título.
 
 Configuração (uma vez):
 

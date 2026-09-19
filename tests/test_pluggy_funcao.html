@@ -160,7 +160,8 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
         "junta as duas paginas da XP e a do BTG, com a corretora de cada um");
   igual(Object.keys(c.investimentos[0]).sort(),
         ["conector", "id", "name", "code", "type", "subtype", "issuer", "status", "balance", "amount", "amountOriginal", "taxes",
-         "taxes2", "date", "dueDate", "issueDate", "rate", "rateType", "fixedAnnualRate", "instituicao", "movimentos"].sort(),
+         "taxes2", "date", "dueDate", "issueDate", "rate", "rateType", "fixedAnnualRate", "quantity", "value", "lastMonthRate",
+         "annualRate", "instituicao", "movimentos"].sort(),
         "so os campos que o app usa: sem nome do titular nem numero de conta");
   const pedidos = chamadas.filter(x => x.url.indexOf("/investments?") >= 0);
   ok(pedidos.length === 3 && pedidos.every(x => /type=FIXED_INCOME/.test(x.url) && /pageSize=500/.test(x.url)),

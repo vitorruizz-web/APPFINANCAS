@@ -405,7 +405,29 @@ function fim(){
         "lerPluggy: 2 CDBs, 1 aviso, posicao = a data mais recente");
   igual(lp.cdbs.map(c => c.instituicao + ":" + c.data_posicao), ["XP Investimentos:2026-09-18", "BTG Pactual:2026-09-17"],
         "cada CDB guarda a propria data de posicao e a corretora");
-  igual(lp.taxas, { compra: 0, emissao: 2, juros: 0, aguardando: 0 }, "lerPluggy conta de onde veio a taxa de cada titulo");
+  igual(lp.taxas, { compra: 0, vencimento: 0, emissao: 2, juros: 0, aguardando: 0 }, "lerPluggy conta de onde veio a taxa de cada titulo");
+  // lotes no mesmo dia (o BTG divide a compra assim) = uma compra so
+  const lotes = V.dePluggy(Object.assign({}, INV, { amount: brutoC, amountOriginal: null,
+                  movimentos: [COMPRA("2026-03-10", 600), COMPRA("2026-03-10", 400)] }), "BTG", d("2026-09-19"));
+  igual([lotes.taxaDe, lotes.cdb.data_aplicacao, lotes.cdb.valor_aplicado], ["compra", "2026-03-10", 1000],
+        "dois lotes no mesmo dia: uma compra de 1000 na data deles");
+  perto(lotes.cdb.taxa, 0.155, "... e a taxa sai do saldo como numa compra so");
+  // sem a compra: pelo resgate da emissao -- so onde a corretora manda a emissao certa
+  const E = "2025-03-10", Tv = "2028-03-15", POS = "2026-09-18", D0 = "2026-03-10";
+  const Fv = 1000 * Math.pow(1.12, V.du(d(E), d(Tv)) / 252);                 // 1 titulo de PU 1.000 a 12% da emissao
+  const Bv = Fv / Math.pow(1.15, V.du(d(POS), d(Tv)) / 252);                 // quem tem rende 15% ate la
+  const Pv = Fv / Math.pow(1.15, V.du(d(D0), d(Tv)) / 252);                  // e pagou isto em D0
+  const tit = (id, extra) => Object.assign({}, INV, { id, conector: "XP", dueDate: Tv + "T03:00:00.000Z", issueDate: E + "T03:00:00.000Z",
+    rate: 12, rateType: null, quantity: 1, amount: Bv, amountOriginal: Pv, date: POS + "T03:00:00.000Z" }, extra || {});
+  const comCompra = [1, 2, 3, 4, 5].map(i => tit("c" + i, { movimentos: [COMPRA(D0, Pv)] }));
+  const lv = V.lerPluggy({ itens: [], investimentos: comCompra.concat([tit("sem", { movimentos: [] })]) }, { hoje: d("2026-09-19") });
+  const semCp = lv.cdbs.find(c => c.externo_id === "sem");
+  perto(semCp.taxa, 0.15, "sem a compra, onde a emissao confere: a taxa sai do resgate da emissao (15%, nao os 12% dela)", 1e-6);
+  igual([lv.taxas.vencimento, lv.taxas.compra, semCp.data_aplicacao], [1, 5, D0], "... e a data da compra sai de tras para a frente");
+  const outra = V.lerPluggy({ itens: [], investimentos: comCompra.map(x => Object.assign({}, x, { issueDate: "2024-03-10T03:00:00.000Z" }))
+                  .concat([tit("sem", { movimentos: [], issueDate: "2024-03-10T03:00:00.000Z" })]) }, { hoje: d("2026-09-19") });
+  igual([outra.taxas.vencimento, outra.cdbs.find(c => c.externo_id === "sem").taxa], [0, 0.12],
+        "corretora cuja emissao nao confere com as compras: fica a taxa da emissao");
 
   // ------------------------------------------ motor: o que a Pluggy traz a mais
   const ctxI = extra => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),

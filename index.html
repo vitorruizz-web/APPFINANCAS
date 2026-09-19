@@ -1451,10 +1451,25 @@ window.VENC = (function () {
     const movs = inv.movimentos;
     if (!Array.isArray(movs)) return null;
     const compras = movs.filter(m => m && m.tipo === "BUY");
-    const um = compras.length === 1 ? compras[0] : null;
-    return { n: compras.length, dia: um ? diaBrasilia(um.data || um.liquidacao) : null,
-             valor: um && +um.valor > 0 ? +um.valor : null,
+    // varios lotes no MESMO dia (o BTG divide assim) sao uma compra so
+    const dias = [...new Set(compras.map(m => diaBrasilia(m.data || m.liquidacao)))];
+    const unica = compras.length >= 1 && dias.length === 1 && !!dias[0];
+    const soma = compras.reduce((s, m) => s + (+m.valor > 0 ? +m.valor : 0), 0);
+    return { n: compras.length, dia: unica ? dias[0] : null, valor: unica && soma > 0 ? soma : null,
              limpa: !movs.some(m => m && m.tipo && m.tipo !== "BUY" && m.tipo !== "TAX") };
+  }
+  // Prefixado pelas condicoes de EMISSAO: o resgate e quantidade x PU de emissao (R$ 1.000,
+  // ou R$ 1 em quem negocia fracionado) x (1 + taxa da emissao)^(du emissao->vencimento/252),
+  // e a taxa de quem tem o titulo hoje e a que leva o bruto de hoje ate ele. So vale onde a
+  // corretora manda a emissao certa -- lerPluggy confere antes nos titulos com compra.
+  function pelaEmissao(inv, posicao, venc) {
+    const q = +inv.quantity, B = +inv.amount, em = diaBrasilia(inv.issueDate), tx = taxaPluggy(inv);
+    if (!(q > 0) || !(B > 0) || !em || !posicao || tx.indexador !== "pre") return null;
+    const T = dn(venc), duR = du(dn(posicao), T);
+    if (duR < 5) return null;                      // perto do vencimento a conta fica sensivel demais
+    const F = q * (B / q < 50 ? 1 : 1000) * Math.pow(1 + tx.taxa, du(dn(em), T) / 252);
+    const r = Math.pow(F / B, 252 / duR) - 1;
+    return r > 0 && r < 0.5 ? r : null;
   }
   // Um investimento da Pluggy -> { cdb, taxaDe } (linha de fin_cdbs) ou { aviso }.
   // A taxa que a Pluggy manda e a da EMISSAO do titulo; quem comprou depois, no mercado
@@ -1523,15 +1538,49 @@ window.VENC = (function () {
   // (a data de referencia mais recente; cada linha guarda a sua).
   function lerPluggy(resp, opts) {
     const hoje = opts && isFinite(opts.hoje) ? opts.hoje : undefined;
-    const cdbs = [], avisos = [], taxas = { compra: 0, emissao: 0, juros: 0, aguardando: 0 };
+    const cdbs = [], avisos = [], taxas = { compra: 0, vencimento: 0, emissao: 0, juros: 0, aguardando: 0 };
+    const lidos = [];
     let posicao = null;
     for (const inv of (resp && resp.investimentos) || []) {
       const r = dePluggy(inv, inv.conector, hoje, opts && opts.cdi);
       if (r.aviso) { avisos.push(Object.assign({ instituicao: inv.conector || null }, r.aviso)); continue; }
       cdbs.push(r.cdb);
-      taxas[r.taxaDe]++;
+      lidos.push({ inv, r });
       if (r.cdb.data_posicao && (!posicao || r.cdb.data_posicao > posicao)) posicao = r.cdb.data_posicao;
     }
+    // Prefixado sem a compra: se, NESTA corretora, a conta pela emissao bate com a taxa
+    // de compra dos titulos que tem compra (>= 5 testados, 90% em 0,05 ponto), ela vale
+    // para os sem compra. Em 19/09/2026: XP 102 de 102; BTG nao confere -- fica a emissao.
+    const porCorretora = {};
+    for (const x of lidos) if (x.r.cdb.indexador === "pre" && !x.r.cdb.juros_mensais)
+      (porCorretora[x.r.cdb.instituicao || ""] = porCorretora[x.r.cdb.instituicao || ""] || []).push(x);
+    for (const k in porCorretora) {
+      let testados = 0, batem = 0;
+      for (const { inv, r } of porCorretora[k]) {
+        if (r.taxaDe !== "compra") continue;
+        const rf = pelaEmissao(inv, r.cdb.data_posicao, r.cdb.vencimento);
+        if (rf === null) continue;
+        testados++;
+        if (Math.abs(rf - r.cdb.taxa) <= 5e-4) batem++;
+      }
+      if (testados < 5 || batem < 0.9 * testados) continue;
+      for (const { inv, r } of porCorretora[k]) {
+        if (r.taxaDe !== "emissao") continue;
+        const rf = pelaEmissao(inv, r.cdb.data_posicao, r.cdb.vencimento);
+        if (rf === null) continue;
+        r.cdb.taxa = Math.round(rf * 1e6) / 1e6;
+        r.taxaDe = "vencimento";
+        // e a compra, de tras para a frente: o saldo cresce pela taxa desde o aplicado
+        const P = +r.cdb.valor_aplicado, B = +inv.amount;
+        if (P > 0 && B > P && !r.cdb.data_aplicacao) {
+          const n = Math.round(252 * Math.log(B / P) / Math.log(1 + rf));
+          let d = dn(r.cdb.data_posicao), k2 = 0;
+          while (k2 < n && k2 < 5000) { d--; if (ehUtil(d)) k2++; }
+          r.cdb.data_aplicacao = iso(d);
+        }
+      }
+    }
+    for (const { r } of lidos) taxas[r.taxaDe]++;
     return { cdbs, avisos, taxas, posicao, itens: (resp && resp.itens) || [] };
   }
 
@@ -4125,9 +4174,10 @@ function conexoesVenc(){
   }
   // a Pluggy manda a taxa da EMISSAO; a da compra sai do saldo (VENC.dePluggy)
   const tx = sincInfo && sincInfo.taxas;
-  if (tx && (tx.compra || tx.emissao || tx.juros || tx.aguardando)){
+  if (tx && (tx.compra || tx.vencimento || tx.emissao || tx.juros || tx.aguardando)){
     const partes = [];
     if (tx.compra) partes.push(tx.compra + ' pela taxa da compra (calculada do saldo)');
+    if (tx.vencimento) partes.push(tx.vencimento + ' pelo resgate da emissão (sem a compra; conferido nos que têm)');
     if (tx.emissao) partes.push(tx.emissao + ' pela taxa da emissão (a compra não veio no Open Finance)');
     if (tx.juros) partes.push(tx.juros + ' com juros todo mês');
     if (tx.aguardando) partes.push(tx.aguardando + ' esperando o histórico do CDI (acertam na próxima sincronização)');

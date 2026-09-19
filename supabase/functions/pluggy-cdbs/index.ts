@@ -24,7 +24,7 @@ const ORIGENS = ["https://vitorruizz-web.github.io", "http://localhost:8765", "h
 // transacoes vai so o enxuto de cada movimentacao (movimentosDe)
 const CAMPOS = ["id", "name", "code", "type", "subtype", "issuer", "status", "balance", "amount",
                 "amountOriginal", "taxes", "taxes2", "date", "dueDate", "issueDate", "rate", "rateType",
-                "fixedAnnualRate"];
+                "fixedAnnualRate", "quantity", "value", "lastMonthRate", "annualRate"];
 
 function cors(req) {
   const o = req.headers.get("origin") || "";
