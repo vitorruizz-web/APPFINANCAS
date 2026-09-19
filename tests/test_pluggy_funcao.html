@@ -1,0 +1,146 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste da funcao pluggy-cdbs</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+// Roda a Edge Function supabase/functions/pluggy-cdbs/index.ts INTEIRA no navegador,
+// com Deno e a API da Pluggy falsos. So dado inventado (repo publico).
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if (!cond) falhas++; return cond; }
+function igual(a, b, msg){
+  const ja = JSON.stringify(a), jb = JSON.stringify(b);
+  ok(ja === jb, msg + (ja === jb ? "" : " (obtido " + ja + ", esperado " + jb + ")"));
+}
+function fim(){
+  document.getElementById("out").textContent = log.join("\n") +
+    "\n\n=== " + (falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)") + " === (" + log.length + " asserções)";
+}
+// JWT falso: so o payload importa (no Supabase o gateway ja validou a assinatura)
+const b64u = o => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const TOKEN = sub => b64u({ alg: "HS256", typ: "JWT" }) + "." + b64u({ sub: sub, role: "authenticated" }) + ".assinatura";
+// Request de mentira: o navegador nao deixa um script montar o header Origin num Request
+// de verdade, e a funcao so usa method e headers.get
+const req = (metodo, origem, token) => ({ method: metodo, headers: { get: k => ({
+  origin: origem === undefined ? "https://vitorruizz-web.github.io" : origem,
+  authorization: token ? "Bearer " + token : null })[String(k).toLowerCase()] || null } });
+const corpo = async r => { try { return await r.json(); } catch (e) { return null; } };
+
+(async () => {
+  const fonte = await (await fetch("../supabase/functions/pluggy-cdbs/index.ts?v=" + Date.now())).text();
+  let HANDLER = null, ENV = {};
+  window.Deno = { env: { get: k => ENV[k] }, serve: h => { HANDLER = h; } };
+  (0, eval)(fonte);
+  if (!ok(typeof HANDLER === "function", "a funcao registra o handler com Deno.serve")) return fim();
+
+  // ---------------------------------------------------------------- Pluggy falsa
+  const chamadas = [];
+  let AUTH_STATUS = 200;
+  const ITEMS = {
+    "it-xp":  { id: "it-xp", connector: { name: "XP Investimentos" }, status: "UPDATED", executionStatus: "SUCCESS",
+                lastUpdatedAt: "2026-09-19T09:00:00.000Z", consentExpiresAt: "2027-09-01T00:00:00.000Z", error: null },
+    "it-btg": { id: "it-btg", connector: { name: "BTG Pactual" }, status: "OUTDATED", executionStatus: "ERROR",
+                lastUpdatedAt: "2026-09-18T09:00:00.000Z", consentExpiresAt: null, error: { code: "X", message: "instabilidade" } },
+  };
+  const inv = (id, extra) => Object.assign({ id: id, name: "CDB TESTE " + id, code: "C" + id, type: "FIXED_INCOME", subtype: "CDB",
+    issuer: "BANCO TESTE", status: "ACTIVE", balance: 1000, amount: 1010, amountOriginal: 950, taxes: 10, taxes2: 0,
+    date: "2026-09-18T03:00:00.000Z", dueDate: "2027-05-10T03:00:00.000Z", issueDate: "2025-05-10T03:00:00.000Z",
+    rate: 120, rateType: "CDI", fixedAnnualRate: null, owner: "NOME DO TITULAR", number: "123", transactions: [{ x: 1 }],
+    institution: { name: "XP" } }, extra || {});
+  const PAGINAS = { "it-xp": [[inv("a"), inv("b")], [inv("c")]], "it-btg": [[inv("d", { institution: { name: "BTG" } })]] };
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async (url, opts) => {
+    url = String(url); opts = opts || {};
+    if (url.indexOf("https://api.pluggy.ai") !== 0) return realFetch(url, opts);
+    chamadas.push({ url: url, metodo: opts.method || "GET", headers: opts.headers || {}, corpo: opts.body || null });
+    const u = new URL(url);
+    const j = (o, s) => new Response(JSON.stringify(o), { status: s || 200, headers: { "Content-Type": "application/json" } });
+    if (u.pathname === "/auth") return AUTH_STATUS === 200 ? j({ apiKey: "chave-api-falsa" }) : j({ message: "invalid" }, AUTH_STATUS);
+    if ((opts.headers || {})["X-API-KEY"] !== "chave-api-falsa") return j({ message: "sem chave" }, 403);
+    const m = u.pathname.match(/^\/items\/(.+)$/);
+    if (m) return ITEMS[decodeURIComponent(m[1])] ? j(ITEMS[decodeURIComponent(m[1])]) : j({ message: "not found" }, 404);
+    if (u.pathname === "/investments") {
+      const pags = PAGINAS[u.searchParams.get("itemId")] || [];
+      const p = +u.searchParams.get("page") || 1;
+      return j({ total: [].concat.apply([], pags).length, totalPages: pags.length || 1, page: p, results: pags[p - 1] || [] });
+    }
+    return j({ message: "?" }, 404);
+  };
+
+  // ---------------------------------------------------------------- CORS
+  let r = await HANDLER(req("OPTIONS"));
+  ok(r.status === 200 && r.headers.get("Access-Control-Allow-Origin") === "https://vitorruizz-web.github.io", "preflight: CORS para o site publicado");
+  ok(/authorization/i.test(r.headers.get("Access-Control-Allow-Headers") || "") && /apikey/i.test(r.headers.get("Access-Control-Allow-Headers") || ""),
+     "preflight libera Authorization e apikey");
+  r = await HANDLER(req("OPTIONS", "http://localhost:8765"));
+  igual(r.headers.get("Access-Control-Allow-Origin"), "http://localhost:8765", "preflight: CORS para o preview local");
+  r = await HANDLER(req("OPTIONS", "https://outro-site.example"));
+  igual(r.headers.get("Access-Control-Allow-Origin"), "https://vitorruizz-web.github.io", "origem desconhecida nao ganha CORS proprio");
+
+  // ---------------------------------------------------------------- sem segredos
+  ENV = {};
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  let c = await corpo(r);
+  ok(r.status === 500 && c.erro === "configuracao", "sem segredos: erro de configuracao");
+  igual(c.falta, ["PLUGGY_CLIENT_ID", "PLUGGY_CLIENT_SECRET", "PLUGGY_ITEM_IDS"], "e diz quais faltam");
+  ok(chamadas.length === 0, "sem segredos: nem chama a Pluggy");
+  igual(r.headers.get("Access-Control-Allow-Origin"), "https://vitorruizz-web.github.io", "erro tambem leva CORS (senao o navegador esconde a mensagem)");
+  r = await HANDLER(req("GET", undefined, TOKEN("u1")));
+  ok(r.status === 405, "GET nao e aceito");
+
+  // ---------------------------------------------------------------- dono
+  ENV = { PLUGGY_CLIENT_ID: "id", PLUGGY_CLIENT_SECRET: "segredo", PLUGGY_ITEM_IDS: " it-xp , it-btg ", DONO_UID: "u1" };
+  r = await HANDLER(req("POST", undefined, TOKEN("outro")));
+  ok(r.status === 403, "DONO_UID: token de outro usuario e barrado");
+  r = await HANDLER(req("POST", undefined, null));
+  ok(r.status === 403, "DONO_UID: sem token e barrado");
+  ok(chamadas.length === 0, "barrado antes de chamar a Pluggy");
+
+  // ---------------------------------------------------------------- chave recusada
+  AUTH_STATUS = 401;
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  c = await corpo(r);
+  ok(r.status === 502 && c.erro === "pluggy_auth" && c.status === 401, "Pluggy recusou a chave: 502 pluggy_auth");
+  const auth = chamadas[0];
+  ok(auth && auth.metodo === "POST" && JSON.parse(auth.corpo).clientId === "id" && JSON.parse(auth.corpo).clientSecret === "segredo",
+     "auth manda clientId e clientSecret no corpo, por POST");
+  ok(!/segredo/.test(JSON.stringify(c)), "a resposta nunca devolve o segredo");
+
+  // ---------------------------------------------------------------- caminho feliz
+  AUTH_STATUS = 200; chamadas.length = 0;
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  c = await corpo(r);
+  ok(r.status === 200 && !!c.geradoEm, "sincronizacao: 200 com a hora da geracao");
+  igual(c.itens.map(i => [i.id, i.conector, i.status, i.atualizadoEm, i.consentimentoAte, i.erro]),
+        [["it-xp", "XP Investimentos", "UPDATED", "2026-09-19T09:00:00.000Z", "2027-09-01T00:00:00.000Z", null],
+         ["it-btg", "BTG Pactual", "OUTDATED", "2026-09-18T09:00:00.000Z", null, "instabilidade"]],
+        "status de cada conexao (corretora, status, ultima atualizacao, consentimento, erro)");
+  igual(c.investimentos.map(i => i.id + ":" + i.conector + ":" + i.instituicao),
+        ["a:XP Investimentos:XP", "b:XP Investimentos:XP", "c:XP Investimentos:XP", "d:BTG Pactual:BTG"],
+        "junta as duas paginas da XP e a do BTG, com a corretora de cada um");
+  igual(Object.keys(c.investimentos[0]).sort(),
+        ["conector", "id", "name", "code", "type", "subtype", "issuer", "status", "balance", "amount", "amountOriginal", "taxes",
+         "taxes2", "date", "dueDate", "issueDate", "rate", "rateType", "fixedAnnualRate", "instituicao"].sort(),
+        "so os campos que o app usa: sem nome do titular, numero de conta ou transacoes");
+  const pedidos = chamadas.filter(x => x.url.indexOf("/investments") >= 0);
+  ok(pedidos.length === 3 && pedidos.every(x => /type=FIXED_INCOME/.test(x.url) && /pageSize=500/.test(x.url)),
+     "pede so renda fixa, 500 por pagina, e para no fim das paginas");
+  ok(chamadas.slice(1).every(x => x.headers["X-API-KEY"] === "chave-api-falsa"), "usa a apiKey no header X-API-KEY");
+  ok(chamadas.filter(x => x.url.indexOf("/auth") >= 0).length === 1, "uma autenticacao por sincronizacao");
+
+  // ---------------------------------------------------------------- item com erro
+  ENV.PLUGGY_ITEM_IDS = "it-xp;nao-existe";
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  c = await corpo(r);
+  ok(r.status === 200 && c.itens[1].erro === "item HTTP 404" && c.investimentos.length === 3,
+     "item inexistente: aparece o erro dele e o outro segue");
+
+  // ---------------------------------------------------------------- sem DONO_UID
+  delete ENV.DONO_UID; ENV.PLUGGY_ITEM_IDS = "it-xp";
+  r = await HANDLER(req("POST", undefined, TOKEN("qualquer")));
+  ok(r.status === 200, "sem DONO_UID: vale o JWT que o gateway validou (cadastro desligado)");
+
+  fim();
+})().catch(e => { ok(false, "excecao: " + (e && e.stack || e)); fim(); });
+</script>
