@@ -388,6 +388,59 @@ function fim(){
   const propria = V.projetar({ indexador:"pre", taxa:0.15, vencimento:"2027-09-21", saldo_liquido:1000, data_posicao:"2026-09-17" }, ctxI());
   igual(propria.du, 252, "cada CDB projeta a partir da PROPRIA data de posicao (17/09, nao 21/09)");
 
+  // ------------------------------------------ quanto rendeu, mes a mes
+  const RM = V.rendimentoMensal, du = (a, b) => V.du(d(a), d(b));
+  const ctxR = extra => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),
+    degraus: V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", d("2026-09-21")), irPresumido: 0.15 }, extra || {});
+  const cr1 = { indexador:"pre", taxa:0.12, vencimento:"2026-12-15", saldo_liquido:1030, data_aplicacao:"2026-06-15",
+                valor_aplicado:1000, data_posicao:"2026-09-21" };
+  const rm1 = RM([cr1], ctxR());
+  const mm1 = k => rm1.meses.find(m => m.mes === k);
+  igual(rm1.meses.map(m => m.mes + ":" + m.situacao),
+        ["2026-06:passado", "2026-07:passado", "2026-08:passado", "2026-09:atual", "2026-10:futuro", "2026-11:futuro", "2026-12:futuro"],
+        "com data e valor aplicados: desde a aplicacao (jun) ate o vencimento (dez); passado, mes atual e projecao");
+  perto(rm1.meses.reduce((s, m) => s + m.bruto, 0), 1000 * (Math.pow(1.12, du("2026-06-15", "2026-12-15") / 252) - 1),
+        "a soma dos meses = o que o titulo rende da aplicacao ao vencimento");
+  perto(mm1("2026-06").bruto, 1000 * (Math.pow(1.12, du("2026-06-15", "2026-07-01") / 252) - 1), "junho: da aplicacao (15/06) ao fim do mes");
+  const G0901 = 1000 * Math.pow(1.12, du("2026-06-15", "2026-09-01") / 252);
+  perto(mm1("2026-09").ateHoje, G0901 * (Math.pow(1.12, du("2026-09-01", "2026-09-21") / 252) - 1), "setembro ate hoje (21/09): so os dias ja corridos");
+  perto(mm1("2026-09").bruto, G0901 * (Math.pow(1.12, du("2026-09-01", "2026-10-01") / 252) - 1), "setembro inteiro (projecao do mes)");
+  perto(mm1("2026-06").liquido, mm1("2026-06").bruto * (1 - 0.225), "liquido de junho: IR de 22,5% (menos de 180 dias da aplicacao)");
+  perto(mm1("2026-06").carteira, 1000 * Math.pow(1.12, du("2026-06-15", "2026-07-01") / 252), "carteira no fim de junho = valor bruto do titulo");
+  ok(mm1("2026-12").carteira === 0 && mm1("2026-11").carteira > 0, "no mes em que vence, o titulo sai da carteira");
+  igual([rm1.semHistorico, mm1("2026-07").titulos], [0, 1], "sem titulo sem historico; 1 titulo por mes");
+
+  const rm2 = RM([{ indexador:"pre", taxa:0.12, vencimento:"2026-12-15", saldo_liquido:1000, data_posicao:"2026-09-21" }], ctxR());
+  igual([rm2.meses[0].mes, rm2.semHistorico], ["2026-09", 1], "sem data/valor aplicados (planilha): so a partir da posicao, e conta como sem historico");
+  perto(rm2.meses[0].bruto, 1000 * (Math.pow(1.12, du("2026-09-21", "2026-10-01") / 252) - 1), "...rendendo sobre o saldo da posicao");
+  perto(rm2.meses[0].liquido, rm2.meses[0].bruto * 0.85, "...com o IR presumido");
+  perto(rm2.meses[0].ateHoje, 0, "no dia da posicao, nada corrido ainda");
+
+  const HIST3 = [], META3 = [];
+  for (let x = d("2026-08-20"); x <= d("2026-09-17"); x++)
+    if (V.ehUtil(x)) HIST3.push({ dia: V.iso(x), cdi: x < d("2026-09-17") ? 13.90 : 13.65 });
+  for (let x = d("2026-08-20"); x <= d("2026-11-04"); x++) META3.push({ dia: V.iso(x), selic: x < d("2026-09-17") ? 14.00 : 13.75 });
+  const rm3 = RM([{ indexador:"cdi", taxa:1, vencimento:"2026-10-01", saldo_liquido:1, data_aplicacao:"2026-09-01",
+                    valor_aplicado:1000, data_posicao:"2026-09-21" }],
+                 ctxR({ degraus: V.curvaCDI({ historico: HIST3, meta: META3 }, "hoje", d("2026-09-21")) }));
+  perto(rm3.meses[0].bruto, 1000 * (Math.pow(1.139, du("2026-09-01", "2026-09-17") / 252) * Math.pow(1.1365, du("2026-09-17", "2026-10-01") / 252) - 1),
+        "pos-fixado no passado: o CDI que valeu em cada dia (13,90 ate 16/09, 13,65 depois)", 1e-9);
+
+  const rm4 = RM([Object.assign({}, cr1, { juros_mensais: true })], ctxR());
+  const mm4 = k => rm4.meses.find(m => m.mes === k);
+  perto(mm4("2026-07").bruto, 1000 * (Math.pow(1.12, du("2026-07-01", "2026-08-01") / 252) - 1), "juros mensais: rende sobre o principal, sem juro sobre juro");
+  perto(mm4("2026-07").carteira, 1000, "juros mensais: a carteira fica no principal");
+
+  const rm5 = RM([Object.assign({}, cr1, { isento_ir: true })], ctxR());
+  ok(rm5.meses.every(m => Math.abs(m.liquido - m.bruto) < 1e-9), "LCI/LCA: liquido = bruto");
+
+  const cr2 = { indexador:"pre", taxa:0.10, vencimento:"2027-01-10", saldo_liquido:500, data_aplicacao:"2026-08-10",
+                valor_aplicado:500, data_posicao:"2026-09-21" };
+  const rm6 = RM([cr1, cr2], ctxR()), rmC2 = RM([cr2], ctxR());
+  const mm6 = (r, k) => (r.meses.find(m => m.mes === k) || { bruto: 0, titulos: 0 });
+  perto(mm6(rm6, "2026-10").bruto, mm6(rm1, "2026-10").bruto + mm6(rmC2, "2026-10").bruto, "varios titulos: o mes soma todos");
+  igual([mm6(rm6, "2026-10").titulos, mm6(rm6, "2026-07").titulos, mm6(rm6, "2027-01").titulos], [2, 1, 1], "conta os titulos vivos em cada mes");
+
   // ==MAIS_TESTES==
 
   fim();

@@ -1342,6 +1342,61 @@ window.VENC = (function () {
     return melhor || { ok: false, achadas: 0, faltando: OBRIG.map(k => ROTULO[k]) };
   }
 
+  // --------------------------------------------------- quanto rendeu, mes a mes
+  // A linha do tempo de cada titulo desde que ele comecou a render. Com data e valor
+  // aplicados (Open Finance), desde a APLICACAO: o passado sai da propria taxa e do
+  // CDI que valeu em cada dia. Sem eles (planilha), so a partir da data da posicao.
+  //   bruto    = o que o titulo rendeu no mes (juros mensais: sobre o principal)
+  //   liquido  = o bruto menos o IR na aliquota do mes (a aliquota cai com o tempo;
+  //              no resgate vale a do dia)
+  //   ateHoje  = a parte do mes ja corrida (no mes atual; nos passados = bruto)
+  //   carteira = valor bruto dos titulos vivos no fim do mes
+  // Titulos que ja venceram antes da posicao nao estao nos dados e nao entram.
+  function rendimentoMensal(cdbs, ctx) {
+    const hoje = isFinite(ctx.hoje) ? ctx.hoje : ctx.posicao;
+    const mesDe = d => iso(d).slice(0, 7);
+    const proxMes = k => { let a = +k.slice(0, 4), m = +k.slice(5, 7) + 1; if (m > 12) { m = 1; a++; }
+                           return a + "-" + String(m).padStart(2, "0"); };
+    const degraus = ctx.degraus || [{ desde: -Infinity, cdi: 0 }];
+    const meses = {}, mesHoje = mesDe(hoje);
+    let semHistorico = 0;
+    for (const cdb of cdbs || []) {
+      const t0 = cdb.data_posicao ? dn(cdb.data_posicao) : ctx.posicao, T = dn(cdb.vencimento);
+      const d0 = cdb.data_aplicacao ? dn(cdb.data_aplicacao) : null;
+      let P = valor(cdb.valor_aplicado);
+      if (P !== null && P <= 0) P = null;
+      const isento = !!cdb.isento_ir;
+      const irEm = dia => isento ? 0 : d0 !== null ? aliquotaIR(dia - d0) : ctx.irPresumido;
+      const historico = d0 !== null && P !== null && d0 < t0;
+      if (!historico) semHistorico++;
+      const inicio = historico ? d0 : t0;
+      if (T <= inicio) continue;
+      const B = valor(cdb.valor_bruto);
+      let G = historico ? P : (P !== null && B !== null && B > 0 ? B : +cdb.saldo_liquido);
+      const cupom = !!cdb.juros_mensais, principal = G;
+      for (let k = mesDe(inicio); ; k = proxMes(k)) {
+        const ms = dn(k + "-01"), me = dn(proxMes(k) + "-01");
+        if (ms >= T) break;
+        const a = Math.max(ms, inicio), b = Math.min(me, T);
+        if (b <= a) continue;
+        const reg = meses[k] || (meses[k] = { mes: k, bruto: 0, liquido: 0, ateHoje: 0, carteira: 0, titulos: 0 });
+        const corte = Math.min(Math.max(hoje, a), b);          // o que ja correu x o que falta
+        const f1 = fator(cdb, a, corte, degraus), f2 = fator(cdb, corte, b, degraus);
+        const baseMes = cupom ? principal : G;
+        const bruto = baseMes * (f1 * f2 - 1);
+        reg.ateHoje += baseMes * (f1 - 1);
+        if (!cupom) G *= f1 * f2;
+        reg.bruto += bruto;
+        reg.liquido += bruto * (1 - irEm(b));
+        reg.titulos++;
+        if (b === me) reg.carteira += cupom ? principal : G;  // vivo no fim do mes
+      }
+    }
+    const lista = Object.keys(meses).sort().map(k => Object.assign(meses[k],
+      { situacao: k < mesHoje ? "passado" : k === mesHoje ? "atual" : "futuro" }));
+    return { meses: lista, semHistorico };
+  }
+
   // ---------------------------------------------------- Open Finance (Pluggy)
   // A posicao vem da XP e do BTG pelo Open Finance, via Meu Pluggy. Entra a renda
   // fixa BANCARIA (CDB, RDB, LC, LCI, LCA); Tesouro, debenture, CRI/CRA, LF e LIG
@@ -1425,7 +1480,7 @@ window.VENC = (function () {
   }
 
   return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
-           diaBrasilia, taxaPluggy, dePluggy, lerPluggy,
+           diaBrasilia, taxaPluggy, dePluggy, lerPluggy, rendimentoMensal,
            dataReuniao, curvaCDI, cdiEm, fator, projetar, datasCupom, agenda,
            norm, numBR, parseData, parseTaxa, emissor, mapearColunas, ler, lerAbas };
 })();
