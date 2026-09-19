@@ -1463,11 +1463,13 @@ window.VENC = (function () {
   // ou R$ 1 em quem negocia fracionado) x (1 + taxa da emissao)^(du emissao->vencimento/252),
   // e a taxa de quem tem o titulo hoje e a que leva o bruto de hoje ate ele. So vale onde a
   // corretora manda a emissao certa -- lerPluggy confere antes nos titulos com compra.
-  function pelaEmissao(inv, posicao, venc) {
+  function pelaEmissao(inv, posicao, venc, minDu) {
     const q = +inv.quantity, B = +inv.amount, em = diaBrasilia(inv.issueDate), tx = taxaPluggy(inv);
     if (!(q > 0) || !(B > 0) || !em || !posicao || tx.indexador !== "pre") return null;
     const T = dn(venc), duR = du(dn(posicao), T);
-    if (duR < 5) return null;                      // perto do vencimento a conta fica sensivel demais
+    // para CONFERIR a corretora, so longe do vencimento (perto, a conta fica sensivel);
+    // para APLICAR onde ja conferiu, vale ate o ultimo dia util
+    if (duR < (minDu === undefined ? 5 : minDu)) return null;
     const F = q * (B / q < 50 ? 1 : 1000) * Math.pow(1 + tx.taxa, du(dn(em), T) / 252);
     const r = Math.pow(F / B, 252 / duR) - 1;
     return r > 0 && r < 0.5 ? r : null;
@@ -1561,8 +1563,9 @@ window.VENC = (function () {
         if (ehUtil(d)) f *= (1 + +cdb.taxa * (Math.pow(1 + cdiEm(cdi.degraus, d), 1 / 252) - 1)) * sp;
       }
     } else return null;
-    const fx = faixaIR(inv);
+    const fx = faixaIR(inv), em = diaBrasilia(inv.issueDate);
     if (fx && !cdb.isento_ir && (pos - d < fx[0] - 10 || pos - d > fx[1] + 10)) return null;
+    if (em && d < dn(em)) return null;                 // ninguem compra antes da emissao
     return iso(d);
   }
   // Titulo que ja venceu (o saldo vem zerado) com a compra na janela do Open Finance:
@@ -1635,7 +1638,7 @@ window.VENC = (function () {
       confere[k] = true;
       for (const { inv, r } of porCorretora[k]) {
         if (r.taxaDe !== "emissao") continue;
-        const rf = pelaEmissao(inv, r.cdb.data_posicao, r.cdb.vencimento);
+        const rf = pelaEmissao(inv, r.cdb.data_posicao, r.cdb.vencimento, 1);
         if (rf === null) continue;
         r.cdb.taxa = Math.round(rf * 1e6) / 1e6;
         r.taxaDe = "vencimento";
@@ -1645,7 +1648,8 @@ window.VENC = (function () {
           const n = Math.round(252 * Math.log(B / P) / Math.log(1 + rf));
           let d = dn(r.cdb.data_posicao), k2 = 0;
           while (k2 < n && k2 < 5000) { d--; if (ehUtil(d)) k2++; }
-          r.cdb.data_aplicacao = iso(d);
+          const em = diaBrasilia(inv.issueDate);
+          if (!em || d >= dn(em)) r.cdb.data_aplicacao = iso(d);
         }
       }
     }

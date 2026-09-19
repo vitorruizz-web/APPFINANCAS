@@ -439,6 +439,8 @@ function fim(){
   igual([e1.cdbs[0].data_aplicacao, e1.historico.estimadas, e1.historico.semData], [D0, 1, 0],
         "sem a compra: data estimada pelo crescimento do saldo (" + diasCart + " dias, IR 20% = 181 a 360 dias)");
   igual(estim({ taxes: 0.225 * gan }).cdbs[0].data_aplicacao, null, "estimativa que nao cabe na faixa de IR (22,5% = ate 180 dias): fica em branco");
+  igual(estim({ taxes: 0.20 * gan, issueDate: "2026-04-01T03:00:00.000Z" }).cdbs[0].data_aplicacao, null,
+        "estimativa antes da emissao do titulo: fica em branco (ninguem compra antes da emissao)");
   const brC = 1000 * V.fator({ indexador:"cdi", taxa:1.18 }, d(D0), d(POS), degC);
   igual(estim({ rate: 118, rateType: "CDI", amount: brC, amountOriginal: 1000, taxes: 0.20 * (brC - 1000) }).cdbs[0].data_aplicacao, D0,
         "no CDI, de tras para a frente pelo CDI que valeu");
