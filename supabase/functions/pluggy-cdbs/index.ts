@@ -2,8 +2,9 @@
 // pelo Open Finance (Meu Pluggy), para a aba Vencimentos do app Financas.
 //
 // A chave da Pluggy NUNCA vai ao navegador: fica nos Secrets do Supabase e so esta
-// funcao a usa. O app chama com o JWT do usuario (o gateway do Supabase valida) e
+// funcao a usa. O app chama com o JWT do usuario (conferido no Auth do Supabase) e
 // recebe so os campos que usa; quem grava em fin_cdbs e o proprio app, com RLS.
+// No painel, "Verify JWT with legacy secret" fica DESLIGADO: a conferencia e aqui.
 //
 // Secrets (painel do Supabase > Edge Functions > Secrets):
 //   PLUGGY_CLIENT_ID      Client ID da Application no dashboard.pluggy.ai
@@ -31,13 +32,20 @@ function cors(req) {
   };
 }
 
-// uid (sub) do JWT. A assinatura ja foi conferida pelo gateway do Supabase.
-function uidDoToken(req) {
-  const partes = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").split(".");
-  if (partes.length !== 3) return null;
+// Quem chama. O gateway do Supabase so confere JWT assinado pelo segredo LEGADO -- e a
+// chave anon, que e publica, passaria por ele. A verificacao de verdade e aqui: o
+// proprio Auth do Supabase diz se o token e de um usuario valido (serve para as chaves
+// legadas e para as novas). A chave `apikey` e a publica que o app ja manda.
+async function usuarioDoToken(req) {
+  const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  const base = String(Deno.env.get("SUPABASE_URL") || "").replace(/\/+$/, "");
+  const chave = req.headers.get("apikey") || Deno.env.get("SUPABASE_ANON_KEY") || "";
+  if (!token || !base) return null;
   try {
-    const b = partes[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(b + "=".repeat((4 - b.length % 4) % 4))).sub || null;
+    const r = await fetch(base + "/auth/v1/user", { headers: { "Authorization": "Bearer " + token, "apikey": chave } });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u && u.id ? u : null;
   } catch (e) {
     return null;
   }
@@ -58,8 +66,10 @@ async function tratar(req) {
   if (req.method !== "POST") return responder({ erro: "metodo" }, 405);
 
   const env = (k) => String(Deno.env.get(k) || "").trim();
+  const usuario = await usuarioDoToken(req);
+  if (!usuario) return responder({ erro: "nao_autenticado" }, 401);
   const dono = env("DONO_UID");
-  if (dono && uidDoToken(req) !== dono) return responder({ erro: "proibido" }, 403);
+  if (dono && usuario.id !== dono) return responder({ erro: "proibido" }, 403);
   const falta = ["PLUGGY_CLIENT_ID", "PLUGGY_CLIENT_SECRET", "PLUGGY_ITEM_IDS"].filter((k) => !env(k));
   if (falta.length) return responder({ erro: "configuracao", falta: falta }, 500);
 

@@ -24,6 +24,7 @@ const TOKEN = sub => b64u({ alg: "HS256", typ: "JWT" }) + "." + b64u({ sub: sub,
 // de verdade, e a funcao so usa method e headers.get
 const req = (metodo, origem, token) => ({ method: metodo, headers: { get: k => ({
   origin: origem === undefined ? "https://vitorruizz-web.github.io" : origem,
+  apikey: "chave-publica-do-app",
   authorization: token ? "Bearer " + token : null })[String(k).toLowerCase()] || null } });
 const corpo = async r => { try { return await r.json(); } catch (e) { return null; } };
 
@@ -50,8 +51,16 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
     institution: { name: "XP" } }, extra || {});
   const PAGINAS = { "it-xp": [[inv("a"), inv("b")], [inv("c")]], "it-btg": [[inv("d", { institution: { name: "BTG" } })]] };
   const realFetch = window.fetch.bind(window);
+  const USUARIOS = { [TOKEN("u1")]: { id: "u1" }, [TOKEN("outro")]: { id: "outro" }, [TOKEN("qualquer")]: { id: "qualquer" } };
   window.fetch = async (url, opts) => {
     url = String(url); opts = opts || {};
+    // Auth do Supabase falso: so conhece os tokens acima (a chave anon nao e usuario)
+    if (url === "https://x.supabase.co/auth/v1/user"){
+      chamadas.push({ url: url, metodo: "GET", headers: opts.headers || {}, corpo: null });
+      const tok = String((opts.headers || {})["Authorization"] || "").replace(/^Bearer\s+/, "");
+      const u = USUARIOS[tok];
+      return u ? new Response(JSON.stringify(u), { status: 200 }) : new Response('{"msg":"invalid JWT"}', { status: 401 });
+    }
     if (url.indexOf("https://api.pluggy.ai") !== 0) return realFetch(url, opts);
     chamadas.push({ url: url, metodo: opts.method || "GET", headers: opts.headers || {}, corpo: opts.body || null });
     const u = new URL(url);
@@ -78,31 +87,46 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
   r = await HANDLER(req("OPTIONS", "https://outro-site.example"));
   igual(r.headers.get("Access-Control-Allow-Origin"), "https://vitorruizz-web.github.io", "origem desconhecida nao ganha CORS proprio");
 
+  // ---------------------------------------------------------------- quem chama
+  // O gateway do Supabase so confere JWT do segredo LEGADO (a chave anon passaria);
+  // a funcao pergunta ao Auth se o token e de um usuario de verdade.
+  ENV = { SUPABASE_URL: "https://x.supabase.co" };
+  let c;
+  r = await HANDLER(req("POST", undefined, null));
+  c = await corpo(r);
+  ok(r.status === 401 && c.erro === "nao_autenticado", "sem token: 401");
+  r = await HANDLER(req("POST", undefined, "chave.anon.publica"));
+  ok(r.status === 401, "chave anon (nao e usuario): 401");
+  ok(!chamadas.some(x => x.url.indexOf("api.pluggy.ai") >= 0), "barrado antes de chamar a Pluggy");
+  const aut = chamadas.filter(x => /auth\/v1\/user/.test(x.url)).pop();
+  ok(aut && aut.headers["apikey"] === "chave-publica-do-app", "confere o token no Auth com a chave publica que o app mandou");
+
   // ---------------------------------------------------------------- sem segredos
-  ENV = {};
+  chamadas.length = 0;
   r = await HANDLER(req("POST", undefined, TOKEN("u1")));
-  let c = await corpo(r);
-  ok(r.status === 500 && c.erro === "configuracao", "sem segredos: erro de configuracao");
+  c = await corpo(r);
+  ok(r.status === 500 && c.erro === "configuracao", "usuario valido, sem segredos: erro de configuracao");
   igual(c.falta, ["PLUGGY_CLIENT_ID", "PLUGGY_CLIENT_SECRET", "PLUGGY_ITEM_IDS"], "e diz quais faltam");
-  ok(chamadas.length === 0, "sem segredos: nem chama a Pluggy");
+  ok(!chamadas.some(x => x.url.indexOf("api.pluggy.ai") >= 0), "sem segredos: nem chama a Pluggy");
   igual(r.headers.get("Access-Control-Allow-Origin"), "https://vitorruizz-web.github.io", "erro tambem leva CORS (senao o navegador esconde a mensagem)");
   r = await HANDLER(req("GET", undefined, TOKEN("u1")));
   ok(r.status === 405, "GET nao e aceito");
 
   // ---------------------------------------------------------------- dono
-  ENV = { PLUGGY_CLIENT_ID: "id", PLUGGY_CLIENT_SECRET: "segredo", PLUGGY_ITEM_IDS: " it-xp , it-btg ", DONO_UID: "u1" };
+  ENV = { SUPABASE_URL: "https://x.supabase.co", PLUGGY_CLIENT_ID: "id", PLUGGY_CLIENT_SECRET: "segredo",
+          PLUGGY_ITEM_IDS: " it-xp , it-btg ", DONO_UID: "u1" };
+  chamadas.length = 0;
   r = await HANDLER(req("POST", undefined, TOKEN("outro")));
-  ok(r.status === 403, "DONO_UID: token de outro usuario e barrado");
-  r = await HANDLER(req("POST", undefined, null));
-  ok(r.status === 403, "DONO_UID: sem token e barrado");
-  ok(chamadas.length === 0, "barrado antes de chamar a Pluggy");
+  ok(r.status === 403, "DONO_UID: token valido de OUTRO usuario e barrado");
+  ok(!chamadas.some(x => x.url.indexOf("api.pluggy.ai") >= 0), "barrado antes de chamar a Pluggy");
+  chamadas.length = 0;
 
   // ---------------------------------------------------------------- chave recusada
   AUTH_STATUS = 401;
   r = await HANDLER(req("POST", undefined, TOKEN("u1")));
   c = await corpo(r);
   ok(r.status === 502 && c.erro === "pluggy_auth" && c.status === 401, "Pluggy recusou a chave: 502 pluggy_auth");
-  const auth = chamadas[0];
+  const auth = chamadas.find(x => x.url === "https://api.pluggy.ai/auth");
   ok(auth && auth.metodo === "POST" && JSON.parse(auth.corpo).clientId === "id" && JSON.parse(auth.corpo).clientSecret === "segredo",
      "auth manda clientId e clientSecret no corpo, por POST");
   ok(!/segredo/.test(JSON.stringify(c)), "a resposta nunca devolve o segredo");
@@ -126,8 +150,10 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
   const pedidos = chamadas.filter(x => x.url.indexOf("/investments") >= 0);
   ok(pedidos.length === 3 && pedidos.every(x => /type=FIXED_INCOME/.test(x.url) && /pageSize=500/.test(x.url)),
      "pede so renda fixa, 500 por pagina, e para no fim das paginas");
-  ok(chamadas.slice(1).every(x => x.headers["X-API-KEY"] === "chave-api-falsa"), "usa a apiKey no header X-API-KEY");
-  ok(chamadas.filter(x => x.url.indexOf("/auth") >= 0).length === 1, "uma autenticacao por sincronizacao");
+  const naPluggy = chamadas.filter(x => x.url.indexOf("https://api.pluggy.ai") === 0);
+  ok(naPluggy.filter(x => x.url !== "https://api.pluggy.ai/auth").every(x => x.headers["X-API-KEY"] === "chave-api-falsa"),
+     "usa a apiKey no header X-API-KEY");
+  ok(naPluggy.filter(x => x.url === "https://api.pluggy.ai/auth").length === 1, "uma autenticacao na Pluggy por sincronizacao");
 
   // ---------------------------------------------------------------- item com erro
   ENV.PLUGGY_ITEM_IDS = "it-xp;nao-existe";
