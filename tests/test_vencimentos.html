@@ -320,6 +320,74 @@ function fim(){
   ok(e2e.ok && e2e.aba === "Sua carteira" && e2e.cdbs.length === 1 && e2e.cdbs[0].vencimento === "2028-03-15" &&
      e2e.cdbs[0].taxa === 0.155 && e2e.cdbs[0].saldo_liquido === 1234.56, "ponta a ponta: .xlsx -> lerAbas -> CDB pronto");
 
+  // ------------------------------------------ Open Finance / Pluggy (integracao XP e BTG)
+  igual([V.diaBrasilia("2027-11-24T00:00:00.000Z"), V.diaBrasilia("2027-11-24T03:00:00.000Z"),
+         V.diaBrasilia("2030-07-19T18:27:41.802Z"), V.diaBrasilia("2027-11-25T01:30:00Z"),
+         V.diaBrasilia("2027-11-24"), V.diaBrasilia(null)],
+        ["2027-11-24", "2027-11-24", "2030-07-19", "2027-11-24", "2027-11-24", null],
+        "dia em Brasilia: data pura, meia-noite de Brasilia, horario qualquer, nulo");
+  const tp = V.taxaPluggy;
+  igual(tp({ rate: 16.76, rateType: null }), { indexador:"pre", taxa:0.1676, spread:null }, "pre: rate sem indexador (exemplo da doc)");
+  igual(tp({ rate: null, rateType: "PRE", fixedAnnualRate: 15.5 }), { indexador:"pre", taxa:0.155, spread:null }, "pre: taxa no fixedAnnualRate");
+  igual(tp({ rate: 120, rateType: "CDI" }), { indexador:"cdi", taxa:1.2, spread:null }, "120% do CDI");
+  igual(tp({ rate: 100, rateType: "CDI" }), { indexador:"cdi", taxa:1, spread:null }, "100% do CDI");
+  igual(tp({ rate: 100, rateType: "CDI", fixedAnnualRate: 2 }), { indexador:"cdi+", taxa:0.02, spread:null }, "100% CDI + 2% = CDI + 2%");
+  igual(tp({ rate: null, rateType: "CDI", fixedAnnualRate: 1.5 }), { indexador:"cdi+", taxa:0.015, spread:null }, "CDI + 1,5% sem rate");
+  igual(tp({ rate: 110, rateType: "CDI", fixedAnnualRate: 1 }), { indexador:"cdi", taxa:1.1, spread:0.01 }, "hibrido 110% CDI + 1%");
+  igual(tp({ rate: 1.2, rateType: "CDI" }), { indexador:"cdi", taxa:1.2, spread:null }, "rate em fracao (1,2) = 120%");
+  igual(tp({ rate: 102, rateType: "SELIC" }), { indexador:"cdi", taxa:1.02, spread:null }, "SELIC tratada como CDI");
+  ok(!!tp({ rate: 6, rateType: "IPCA" }).erro, "IPCA+ fica fora do calculo");
+  ok(!!tp({ rate: null, rateType: null }).erro, "sem taxa nenhuma: fora");
+
+  const INV = { id:"inv-1", name:"CDB  BANCO ALFA S.A.  - MAR/2028", type:"FIXED_INCOME", subtype:"CDB", issuer:"BANCO ALFA S.A.",
+                status:"ACTIVE", balance:1180.5, amount:1212.4, amountOriginal:1000, taxes:31.9, taxes2:0,
+                date:"2026-09-18T03:00:00.000Z", dueDate:"2028-03-15T03:00:00.000Z", issueDate:"2025-03-10T03:00:00.000Z",
+                rate:14.8, rateType:null, fixedAnnualRate:null, conector:"XP Investimentos" };
+  igual(V.dePluggy(INV, "XP Investimentos", d("2026-09-19")).cdb,
+        { nome:"CDB BANCO ALFA S.A. - MAR/2028", emissor:"BANCO ALFA S.A.", tipo:"CDB", indexador:"pre", taxa:0.148, spread:null,
+          vencimento:"2028-03-15", saldo_liquido:1180.5, valor_bruto:1212.4, valor_aplicado:1000, data_aplicacao:"2025-03-10",
+          data_posicao:"2026-09-18", juros_mensais:false, isento_ir:false, instituicao:"XP Investimentos", externo_id:"inv-1", origem:"pluggy" },
+        "Pluggy -> linha de fin_cdbs (nome limpo, datas em Brasilia, bruto, aplicado e emissao)");
+  const variante = extra => V.dePluggy(Object.assign({}, INV, extra), "BTG Pactual", d("2026-09-19"));
+  ok(variante({ subtype:"LCI" }).cdb.isento_ir === true && variante({ subtype:"LCA" }).cdb.isento_ir === true, "LCI e LCA: isentas de IR");
+  ok(/TREASURY/.test(variante({ subtype:"TREASURY" }).aviso.msg), "Tesouro fica fora, com aviso");
+  ok(/DEBENTURES/.test(variante({ subtype:"DEBENTURES" }).aviso.msg), "debenture fica fora, com aviso");
+  ok(/TOTAL_WITHDRAWAL/.test(variante({ status:"TOTAL_WITHDRAWAL" }).aviso.msg), "resgatado fica fora");
+  ok(/venceu/.test(variante({ dueDate:"2026-09-01T03:00:00.000Z" }).aviso.msg), "vencido fica fora");
+  ok(!!variante({ balance: 0 }).aviso, "sem saldo fica fora");
+  ok(variante({ name:"CDB GAMA - JURO MENSAL - AGO/2027" }).cdb.juros_mensais, "JURO MENSAL no nome liga os juros mensais");
+  igual(variante({ rate: 110, rateType:"CDI", fixedAnnualRate: 1 }).cdb.spread, 0.01, "hibrido guarda o spread");
+  ok(variante({ amountOriginal: null, amount: 0 }).cdb.valor_aplicado === null && variante({ amount: 0 }).cdb.valor_bruto === null,
+     "sem valor aplicado/bruto: null");
+  igual(variante({ issuer: null }).cdb.emissor, "BANCO ALFA S.A.", "sem issuer: emissor sai do nome");
+  igual(variante({ date: null }).cdb.data_posicao, "2026-09-19", "sem data de referencia: a posicao e hoje");
+  const RESP = { itens: [{ id:"it-xp", conector:"XP Investimentos", status:"UPDATED" }, { id:"it-btg", conector:"BTG Pactual", status:"UPDATED" }],
+    investimentos: [ Object.assign({}, INV),
+                     Object.assign({}, INV, { id:"inv-2", conector:"BTG Pactual", date:"2026-09-17T03:00:00.000Z", rate:120, rateType:"CDI" }),
+                     Object.assign({}, INV, { id:"inv-3", subtype:"TREASURY" }) ] };
+  const lp = V.lerPluggy(RESP, { hoje: d("2026-09-19") });
+  igual([lp.cdbs.length, lp.avisos.length, lp.posicao, lp.itens.length], [2, 1, "2026-09-18", 2],
+        "lerPluggy: 2 CDBs, 1 aviso, posicao = a data mais recente");
+  igual(lp.cdbs.map(c => c.instituicao + ":" + c.data_posicao), ["XP Investimentos:2026-09-18", "BTG Pactual:2026-09-17"],
+        "cada CDB guarda a propria data de posicao e a corretora");
+
+  // ------------------------------------------ motor: o que a Pluggy traz a mais
+  const ctxI = extra => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),
+    degraus: V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", d("2026-09-19")), irPresumido: 0.15 }, extra || {});
+  perto(V.projetar({ indexador:"cdi", taxa:1.1, spread:0.01, vencimento:"2027-09-21", saldo_liquido:1000 }, ctxI()).bruto,
+        1000 * Math.pow(1 + 1.1 * (Math.pow(1.1365, 1/252) - 1), 250) * Math.pow(1.01, 250/252), "hibrido: 110% do CDI + 1% ao ano");
+  const lci = V.projetar({ indexador:"pre", taxa:0.12, vencimento:"2027-09-21", saldo_liquido:1000, isento_ir:true }, ctxI());
+  ok(lci.ir === 0 && lci.aliquota === 0 && Math.abs(lci.liquido - 1000 * Math.pow(1.12, 250/252)) < 1e-6, "LCI isenta: sem IR nenhum");
+  const GB = 1000 * Math.pow(1.15, 386/252), NB = GB - 0.175 * (GB - 1000), GTB = 1000 * Math.pow(1.15, 636/252);
+  const comBruto = V.projetar({ indexador:"pre", taxa:0.15, vencimento:"2027-09-21", saldo_liquido:NB, valor_bruto:GB,
+                                data_aplicacao:"2025-03-10", valor_aplicado:1000 }, ctxI());
+  perto(comBruto.liquido, GTB - 0.15 * (GTB - 1000), "com saldo bruto da corretora: G0 = bruto informado");
+  const brutoOutro = V.projetar({ indexador:"pre", taxa:0.15, vencimento:"2027-09-21", saldo_liquido:NB, valor_bruto:1100,
+                                  data_aplicacao:"2025-03-10", valor_aplicado:1000 }, ctxI());
+  perto(brutoOutro.bruto, 1100 * Math.pow(1.15, 250/252), "o bruto informado manda (nao o derivado do liquido)");
+  const propria = V.projetar({ indexador:"pre", taxa:0.15, vencimento:"2027-09-21", saldo_liquido:1000, data_posicao:"2026-09-17" }, ctxI());
+  igual(propria.du, 252, "cada CDB projeta a partir da PROPRIA data de posicao (17/09, nao 21/09)");
+
   // ==MAIS_TESTES==
 
   fim();

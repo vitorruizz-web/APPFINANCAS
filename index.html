@@ -1056,12 +1056,14 @@ window.VENC = (function () {
     if (b <= a) return 1;
     const t = +cdb.taxa;
     if (cdb.indexador === "pre") return Math.pow(1 + t, du(a, b) / 252);
-    const sp = cdb.indexador === "cdi+" ? Math.pow(1 + t, 1 / 252) : 1;
+    // "cdi+" = CDI + spread; "cdi" com spread = hibrido (ex.: 110% do CDI + 1% a.a.)
+    const s = cdb.indexador === "cdi+" ? t : +cdb.spread || 0;
+    const sp = s ? Math.pow(1 + s, 1 / 252) : 1;
     let f = 1;
     for (let d = a; d < b; d++) {
       if (!ehUtil(d)) continue;
       const diario = Math.pow(1 + cdiEm(degraus, d), 1 / 252) - 1;
-      f *= cdb.indexador === "cdi" ? 1 + t * diario : (1 + diario) * sp;
+      f *= (cdb.indexador === "cdi" ? 1 + t * diario : 1 + diario) * sp;
     }
     return f;
   }
@@ -1074,13 +1076,17 @@ window.VENC = (function () {
   // `valorHoje` = o saldo da planilha corrigido pela taxa ate hoje (0 depois do credito);
   // `aReceber`  = o que ainda vai cair (eventos de hoje em diante).
   function projetar(cdb, ctx) {
-    const t = ctx.posicao, T = dn(cdb.vencimento), cred = proxUtil(T);
+    // cada CDB parte da PROPRIA data de posicao (na Pluggy, XP e BTG podem estar em dias diferentes)
+    const t = cdb.data_posicao ? dn(cdb.data_posicao) : ctx.posicao, T = dn(cdb.vencimento), cred = proxUtil(T);
     const h = Math.max(t, isFinite(ctx.hoje) ? ctx.hoje : t);
     const N0 = +cdb.saldo_liquido;
     const d0 = cdb.data_aplicacao ? dn(cdb.data_aplicacao) : null;
     let P = valor(cdb.valor_aplicado);
     if (P !== null && P <= 0) P = null;
-    const irEm = dia => d0 !== null ? aliquotaIR(dia - d0) : ctx.irPresumido;
+    const B = valor(cdb.valor_bruto);                                   // bruto de hoje, quando a corretora informa
+    const isento = !!cdb.isento_ir;                                     // LCI e LCA
+    const irPres = isento ? 0 : ctx.irPresumido;
+    const irEm = dia => isento ? 0 : d0 !== null ? aliquotaIR(dia - d0) : ctx.irPresumido;
     const qual = d0 !== null && P !== null ? "exato" : d0 !== null || P !== null ? "parcial" : "estimado";
     const semTaxa = cdb.indexador !== "pre" && !ctx.degraus;
     const degraus = ctx.degraus || [{ desde: -Infinity, cdi: 0 }];       // sem taxa: o CDI fica parado
@@ -1093,7 +1099,7 @@ window.VENC = (function () {
       let G0 = N0, Pb = null;
       if (P !== null || d0 !== null) {
         const a0 = irEm(t);
-        if (P !== null) { Pb = P; G0 = (N0 - a0 * P) / (1 - a0); }
+        if (P !== null) { Pb = P; G0 = B !== null && B > 0 ? B : (N0 - a0 * P) / (1 - a0); }
         else {
           // so a data: o principal sai da propria taxa (para o CDI do passado, o mais antigo conhecido)
           const g0 = d0 < t ? fator(cdb, d0, t, [degraus[0]]) : 1;
@@ -1103,7 +1109,7 @@ window.VENC = (function () {
       // sem data nem valor aplicado (Pb null): o rendimento DAQUI EM DIANTE paga o
       // IR presumido, sobre o saldo liquido. Conservador: a base bruta real e maior.
       const liq = (G, dia) => Pb !== null ? G - Math.max(0, G - Pb) * irEm(dia)
-                                          : G - Math.max(0, G - N0) * ctx.irPresumido;
+                                          : G - Math.max(0, G - N0) * irPres;
       const bruto = G0 * F, liquido = liq(bruto, cred);
       r = { fator: F, bruto, ir: bruto - liquido, liquido, valorHoje: liq(G0 * Fh, h),
             eventos: [{ dia: cred, tipo: "vencimento", bruto, ir: bruto - liquido, liquido }] };
@@ -1336,7 +1342,90 @@ window.VENC = (function () {
     return melhor || { ok: false, achadas: 0, faltando: OBRIG.map(k => ROTULO[k]) };
   }
 
+  // ---------------------------------------------------- Open Finance (Pluggy)
+  // A posicao vem da XP e do BTG pelo Open Finance, via Meu Pluggy. Entra a renda
+  // fixa BANCARIA (CDB, RDB, LC, LCI, LCA); Tesouro, debenture, CRI/CRA, LF e LIG
+  // tem regra propria (custodia, cupom, preco de mercado) e ficam fora, com aviso.
+  const BANCARIA = { CDB: 1, RDB: 1, LC: 1, LCI: 1, LCA: 1 };
+  // Dia em Brasilia de um instante ISO. Data pura ou meia-noite UTC = a propria data
+  // (e assim que data de vencimento costuma vir); com horario, converte para UTC-3
+  // (o Brasil nao tem horario de verao desde 2019).
+  function diaBrasilia(s) {
+    if (!s) return null;
+    const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}):(\d{2}):(\d{2}))?/.exec(String(s));
+    if (!m) return null;
+    if (!m[2] || (m[2] === "00" && m[3] === "00" && m[4] === "00")) return m[1];
+    const t = Date.parse(s);
+    return isFinite(t) ? new Date(t - 3 * 3600000).toISOString().slice(0, 10) : m[1];
+  }
+  // rate / rateType / fixedAnnualRate da Pluggy -> indexador, taxa e spread do motor:
+  //   pre 16,76%     -> rate 16.76, rateType null
+  //   120% do CDI    -> rate 120, rateType CDI
+  //   CDI + 2%       -> rate 100 (ou nulo), rateType CDI, fixedAnnualRate 2
+  //   110% CDI + 1%  -> rate 110, rateType CDI, fixedAnnualRate 1 (hibrido)
+  function taxaPluggy(inv) {
+    const tipo = String(inv.rateType || "").toUpperCase().trim();
+    let rate = +inv.rate;
+    const fixo = +inv.fixedAnnualRate, temFixo = isFinite(fixo) && fixo > 0;
+    if (!tipo || /^PR[EÉ]/.test(tipo)) {
+      let pct = temFixo ? fixo : isFinite(rate) && rate > 0 ? rate : null;
+      if (pct !== null && pct < 1) pct *= 100;                          // veio em fracao (0,155)
+      return pct !== null && pct <= 50 ? { indexador: "pre", taxa: fr(pct), spread: null }
+                                       : { erro: "taxa pré não informada" };
+    }
+    if (tipo === "CDI" || tipo === "DI" || tipo === "SELIC") {           // Selic: tratada como CDI
+      const temRate = isFinite(rate) && rate > 0;
+      if (temRate && rate <= 3) rate *= 100;                             // veio em fracao (1,2)
+      if (temRate && rate !== 100) return { indexador: "cdi", taxa: fr(rate), spread: temFixo ? fr(fixo) : null };
+      if (temFixo) return { indexador: "cdi+", taxa: fr(fixo), spread: null };
+      if (temRate) return { indexador: "cdi", taxa: 1, spread: null };
+      return { erro: "percentual do CDI não informado" };
+    }
+    return { erro: "indexador " + tipo + " ainda não entra no cálculo" };
+  }
+  // Um investimento da Pluggy -> { cdb } (linha de fin_cdbs) ou { aviso }.
+  function dePluggy(inv, conector, hojeDia) {
+    const nome = String(inv.name || inv.code || "").replace(/\s+/g, " ").trim() || "(sem nome)";
+    const fora = msg => ({ aviso: { nome, msg } });
+    if (inv.type && inv.type !== "FIXED_INCOME") return fora("não é renda fixa (" + inv.type + ")");
+    const sub = String(inv.subtype || "").toUpperCase();
+    if (!BANCARIA[sub]) return fora((sub || "sem tipo") + ": fora do calendário (só renda fixa bancária)");
+    if (inv.status && inv.status !== "ACTIVE") return fora("status " + inv.status);
+    const saldo = +inv.balance;
+    if (!(saldo > 0)) return fora("sem saldo");
+    const venc = diaBrasilia(inv.dueDate);
+    if (!venc) return fora("sem data de vencimento");
+    if (isFinite(hojeDia) && dn(venc) < hojeDia) return fora("venceu em " + dataBR(venc));
+    const tx = taxaPluggy(inv);
+    if (tx.erro) return fora(tx.erro);
+    const bruto = +inv.amount, orig = +inv.amountOriginal;
+    return { cdb: {
+      nome, emissor: inv.issuer ? String(inv.issuer).replace(/\s+/g, " ").trim() : emissor(nome), tipo: sub,
+      indexador: tx.indexador, taxa: tx.taxa, spread: tx.spread, vencimento: venc,
+      saldo_liquido: saldo, valor_bruto: bruto > 0 ? bruto : null, valor_aplicado: orig > 0 ? orig : null,
+      data_aplicacao: diaBrasilia(inv.issueDate),                        // no mercado primario, compra = emissao
+      data_posicao: diaBrasilia(inv.date) || (isFinite(hojeDia) ? iso(hojeDia) : null),
+      juros_mensais: /juros?\s*mensa/i.test(nome), isento_ir: sub === "LCI" || sub === "LCA",
+      instituicao: conector || inv.instituicao || null, externo_id: inv.id || null, origem: "pluggy",
+    } };
+  }
+  // Resposta da Edge Function pluggy-cdbs -> linhas para gravar, avisos e a posicao
+  // (a data de referencia mais recente; cada linha guarda a sua).
+  function lerPluggy(resp, opts) {
+    const hoje = opts && isFinite(opts.hoje) ? opts.hoje : undefined;
+    const cdbs = [], avisos = [];
+    let posicao = null;
+    for (const inv of (resp && resp.investimentos) || []) {
+      const r = dePluggy(inv, inv.conector, hoje);
+      if (r.aviso) { avisos.push(Object.assign({ instituicao: inv.conector || null }, r.aviso)); continue; }
+      cdbs.push(r.cdb);
+      if (r.cdb.data_posicao && (!posicao || r.cdb.data_posicao > posicao)) posicao = r.cdb.data_posicao;
+    }
+    return { cdbs, avisos, posicao, itens: (resp && resp.itens) || [] };
+  }
+
   return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
+           diaBrasilia, taxaPluggy, dePluggy, lerPluggy,
            dataReuniao, curvaCDI, cdiEm, fator, projetar, datasCupom, agenda,
            norm, numBR, parseData, parseTaxa, emissor, mapearColunas, ler, lerAbas };
 })();
