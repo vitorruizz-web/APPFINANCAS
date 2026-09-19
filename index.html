@@ -1887,8 +1887,10 @@ const MESES_L = ["janeiro","fevereiro","março","abril","maio","junho",
 // incoerente (grafico torto, soma que nao fecha); a escala mantem tudo
 // coerente, porque percentual e formato de grafico sao invariantes de escala.
 // ============================================================
+// "fullscreen" NAO entra: o manifest e standalone, e tela cheia e o F11 do navegador --
+// com ela o app abria disfarcado no computador e nao sincronizava (visto em 19/09/2026).
+// minimal-ui fica: e o degrau de reserva do standalone em quem nao o suporta.
 const ehApp = matchMedia("(display-mode: standalone)").matches
-           || matchMedia("(display-mode: fullscreen)").matches
            || matchMedia("(display-mode: minimal-ui)").matches
            || navigator.standalone === true;
 let disfarce = ehApp;
