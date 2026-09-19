@@ -549,6 +549,11 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
 .vr-sub em{font-style:normal;color:var(--sand)}
 .vr-sub b{font-weight:500}
 .row.prem{flex-wrap:wrap}
+.vvisao{margin:14px 0 0}
+.rrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.rrow.futuro .vr-nm,.rrow.futuro .vr-v{color:var(--ink-2)}
+.rrow.atual{background:var(--sand-g);box-shadow:inset 2px 0 0 var(--sand);padding-left:10px;padding-right:6px;border-radius:6px}
+@media (max-width:420px){ .rrow .cart{display:none} }
 .sel{background:var(--bg);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:13.5px}
 /* as regras da planilha: a propria tela diz quais colunas manter */
 .cols{margin:16px 0 0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:6px 14px 12px}
@@ -2049,9 +2054,9 @@ function ligarExcel(){
     else if (q === "mes")   exportarXLSX([abaMes], "Financas " + rotulo(mesAtual).replace("/","-"));
     else if (q === "patrimonio") exportarXLSX([abaPatrimonio, abaContasMes], "Financas patrimonio");
     else if (q === "plano") exportarXLSX([abaPlano], "Financas plano");
-    else if (q === "vencimentos") exportarXLSX([abaVencCalendario, abaVencMeses, abaVencCDBs], "Financas vencimentos");
+    else if (q === "vencimentos") exportarXLSX([abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencCDBs], "Financas vencimentos");
     else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos,
-                      abaVencCalendario, abaVencMeses, abaVencCDBs], "Financas completo");
+                      abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencCDBs], "Financas completo");
   });
 }
 const avisoTravado = () => dadosTravados
@@ -3409,7 +3414,7 @@ const isoDeBR = s => s.slice(6, 10) + "-" + s.slice(3, 5) + "-" + s.slice(0, 2);
 // so os pontos em que o valor muda, mais o ultimo dia (que diz ate onde a serie vai)
 const mudancas = (l, campo) => l.filter((x, i) => i === 0 || i === l.length - 1 || x[campo] !== l[i - 1][campo]);
 function buscarTaxas(forcar){
-  const inicio = VENC.dn(inicioPosicao()) - 10, hoje = VENC.dn(hojeISO());
+  const inicio = VENC.dn(inicioHistorico()) - 10, hoje = VENC.dn(hojeISO());
   const idade = taxas && taxas.buscado ? Date.now() - Date.parse(taxas.buscado) : Infinity;
   const cobre = !!(taxas && taxas.desde && VENC.dn(taxas.desde) <= inicio);
   if (!forcar && idade < TAXAS_VALIDADE && cobre) return Promise.resolve(taxas);
@@ -3419,21 +3424,40 @@ function buscarTaxas(forcar){
   if (buscandoTaxas) return buscandoTaxas;
   taxasTentouEm = Date.now();
   const br = d => VENC.dataBR(VENC.iso(d));
-  const sgs = (n, ate) => "https://api.bcb.gov.br/dados/serie/bcdata.sgs." + n +
-    "/dados?formato=json&dataInicial=" + br(inicio) + "&dataFinal=" + br(ate);
-  const j = u => fetch(u, { cache:"no-store" }).then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
-  buscandoTaxas = Promise.allSettled([
-    j(sgs(4389, hoje)), j(sgs(432, hoje + 200)),
+  // O BC fica lento e derruba intervalo longo (visto em 19/09/2026: 2 anos de CDI de uma
+  // vez caiu depois de 19 s). Cada pedido tem prazo de 25 s -- sem prazo, um pedido
+  // pendurado prendia a busca para sempre -- e a serie vem em pedacos de um ano: o que
+  // chegar vale, e o resto fica para a proxima tentativa.
+  const j = u => {
+    const c = new AbortController(), prazo = setTimeout(() => c.abort(), 25000);
+    return fetch(u, { cache:"no-store", signal: c.signal })
+      .then(r => { if (r.status === 404) return []; if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .finally(() => clearTimeout(prazo));
+  };
+  const serie = (n, de, ate) => {
+    const partes = [];
+    for (let a = de; a <= ate; a += 366)
+      partes.push(j("https://api.bcb.gov.br/dados/serie/bcdata.sgs." + n + "/dados?formato=json&dataInicial=" +
+                    br(a) + "&dataFinal=" + br(Math.min(ate, a + 365))));
+    return Promise.allSettled(partes).then(rs => {
+      const vistos = {}, dados = [];
+      for (const r of rs) if (r.status === "fulfilled" && Array.isArray(r.value))
+        for (const x of r.value) if (x && x.data && !vistos[x.data]){ vistos[x.data] = 1; dados.push(x); }
+      dados.sort((p, q) => isoDeBR(p.data) < isoDeBR(q.data) ? -1 : 1);
+      return { dados: dados, completo: rs.every(r => r.status === "fulfilled") };
+    });
+  };
+  buscandoTaxas = Promise.all([
+    serie(4389, inicio, hoje), serie(432, inicio, hoje + 200),
     j(OLINDA + "ExpectativasMercadoSelic?$top=60&$orderby=Data%20desc&$filter=baseCalculo%20eq%200" +
-      "&$select=Data,Reuniao,Mediana&$format=json"),
+      "&$select=Data,Reuniao,Mediana&$format=json").catch(() => null),
     j(OLINDA + "ExpectativasMercadoAnuais?$top=40&$orderby=Data%20desc&$filter=Indicador%20eq%20'Selic'%20and%20baseCalculo%20eq%200" +
-      "&$select=Data,DataReferencia,Mediana&$format=json"),
+      "&$select=Data,DataReferencia,Mediana&$format=json").catch(() => null),
   ]).then(([c, s, fr, fa]) => {
-    const lista = r => r.status === "fulfilled" && Array.isArray(r.value) && r.value.length ? r.value : null;
-    const odata = r => r.status === "fulfilled" && r.value && Array.isArray(r.value.value) && r.value.value.length ? r.value.value : null;
+    const odata = v => v && Array.isArray(v.value) && v.value.length ? v.value : null;
     const novo = Object.assign({}, taxas || {});
     let chegou = false;
-    const cv = lista(c), sv = lista(s), rv = odata(fr), av = odata(fa);
+    const cv = c.dados.length ? c.dados : null, sv = s.dados.length ? s.dados : null, rv = odata(fr), av = odata(fa);
     if (cv){
       novo.historico = mudancas(cv.map(x => ({ dia: isoDeBR(x.data), cdi: +x.valor })), "cdi");
       novo.cdi = +cv[cv.length - 1].valor; novo.cdiData = isoDeBR(cv[cv.length - 1].data); chegou = true;
@@ -3449,7 +3473,9 @@ function buscarTaxas(forcar){
       novo.focus = f; chegou = true;
     }
     if (!chegou) throw new Error("o Banco Central não respondeu");
-    if (cv && sv) novo.desde = VENC.iso(inicio);
+    // so da a janela por coberta se TODOS os pedacos chegaram; senao, tenta de novo depois
+    if (cv && sv && c.completo && s.completo) novo.desde = VENC.iso(inicio);
+    if (cv) novo.historicoDesde = isoDeBR(cv[0].data);
     novo.buscado = new Date().toISOString();
     taxas = novo;
     try { localStorage.setItem("fin_taxas_bcb", JSON.stringify(taxas)); } catch (e){}
@@ -3468,6 +3494,13 @@ function posicaoAtual(){
 }
 function inicioPosicao(){
   return estado.cdbs.length ? estado.cdbs.reduce((m, c) => !m || c.data_posicao < m ? c.data_posicao : m, "") : hojeISO();
+}
+// O CDI que valeu precisa voltar ate a aplicacao mais antiga (rendimento do passado);
+// sem data/valor aplicados (planilha), ate a posicao mais antiga.
+function inicioHistorico(){
+  let m = inicioPosicao();
+  for (const c of estado.cdbs) if (c.data_aplicacao && +c.valor_aplicado > 0 && c.data_aplicacao < m) m = c.data_aplicacao;
+  return m;
 }
 // A marcacao manual de "paga juros todo mes" (o Open Finance pode nao trazer isso no
 // nome do titulo) vale por cima da linha do banco, pelo id do investimento.
@@ -3636,14 +3669,17 @@ function renderVencimentos(){
     const prox = ag.eventos.find(e => e.dia >= hoje);
     vencMes = VENC.iso(prox ? prox.dia : hoje).slice(0, 7);
   }
-  el.innerHTML = avisoTravado() + linhaPosicao() + heroiVenc(ag, hoje) +
-    '<div class="hdr"><h2>Quanto cai por mês</h2>' +
-      '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' + segAnosVenc(ag) + '</div>' +
-    '<div class="grafwrap" id="graf-venc"></div>' +
-    navMesVenc() + calendarioVenc(ag, hoje) + resumoMesVenc(ag) +
-    '<div class="vlista">' + listaVenc(ag, hoje) + '</div>' +
+  const visao = prefVenc().visao === "rend" ? "rend" : "cal";
+  el.innerHTML = avisoTravado() + linhaPosicao() + segVisaoVenc(visao) +
+    (visao === "rend" ? blocoRendimento(hoje) :
+      heroiVenc(ag, hoje) +
+      '<div class="hdr"><h2>Quanto cai por mês</h2>' +
+        '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' + segAnosVenc(ag) + '</div>' +
+      '<div class="grafwrap" id="graf-venc"></div>' +
+      navMesVenc() + calendarioVenc(ag, hoje) + resumoMesVenc(ag) +
+      '<div class="vlista">' + listaVenc(ag, hoje) + '</div>') +
     premissasVenc() + conexoesVenc();
-  desenharBarrasVenc();
+  if (visao === "rend") desenharBarrasRend(); else desenharBarrasVenc();
   ligarAcoesVenc(el);
   talvezSincronizar();
   // taxa velha: busca em segundo plano e redesenha UMA vez quando chegar
@@ -3881,6 +3917,130 @@ function premissasVenc(){
     '<div class="row"><span class="nm">Taxas<br><span class="t11 d3">' + esc(fonte) + '</span></span>' +
       '<button class="btn mini plain" id="v-taxas">Atualizar</button></div>';
 }
+// ---------------------------------------------------------------- rendimento mes a mes
+// Quanto a carteira rendeu em cada mes. Com data e valor aplicados (Open Finance), o
+// passado e reconstruido desde a aplicacao pela taxa de cada titulo e pelo CDI que
+// valeu; o futuro e a mesma projecao do calendario. O calculo e o VENC.rendimentoMensal.
+let rendCache = null, rendAno = null;
+function rendimentoAtual(){
+  const ctx = ctxVenc();
+  const chave = JSON.stringify([estado.cdbs.length, estado.cdbs.length ? estado.cdbs[0].lote : "",
+    ctx.posicao, ctx.hoje, ctx.irPresumido, ctx.degraus, prefVenc().jurosMensais || {}]);
+  if (!rendCache || rendCache.chave !== chave) rendCache = { chave: chave, r: VENC.rendimentoMensal(cdbsComAjustes(), ctx) };
+  return rendCache.r;
+}
+function segVisaoVenc(visao){
+  return '<div class="vvisao"><span class="seg" id="seg-venc-visao">' +
+    [["cal", "Calendário"], ["rend", "Rendimento"]].map(k =>
+      '<button data-v="' + k[0] + '"' + (k[0] === visao ? ' class="on"' : '') + '>' + k[1] + '</button>').join("") + '</span></div>';
+}
+// o que o mes ja rendeu de fato: o mes inteiro no passado, ate hoje no mes em curso
+const rendCorrido = m => m.situacao === "futuro" ? 0 : m.situacao === "atual" ? m.ateHoje : m.bruto;
+function blocoRendimento(hoje){
+  const r = rendimentoAtual();
+  if (!r.meses.length) return '<div class="vazio">Nenhum título para calcular o rendimento.</div>';
+  const mesH = VENC.iso(hoje).slice(0, 7), anoH = mesH.slice(0, 4);
+  const atual = r.meses.find(m => m.mes === mesH);
+  const passados = r.meses.filter(m => m.situacao === "passado");
+  const ult = passados[passados.length - 1];
+  const de12 = somaMes(mesH + "-01", -11).slice(0, 7), ate12 = somaMes(mesH + "-01", 12).slice(0, 7);
+  const soma = f => r.meses.filter(f).reduce((s, m) => s + rendCorrido(m), 0);
+  const noAno = soma(m => m.mes.slice(0, 4) === anoH), ult12 = soma(m => m.mes >= de12);
+  const prox12 = r.meses.filter(m => m.situacao === "futuro" && m.mes <= ate12).reduce((s, m) => s + m.bruto, 0) +
+                 (atual ? atual.bruto - atual.ateHoje : 0);
+  const topo = ult
+    ? '<div class="hero"><div><div class="k-hero">rendeu em ' + MESES_L[+ult.mes.slice(5, 7) - 1] + ' de ' + ult.mes.slice(0, 4) + '</div>' +
+      '<div class="val"><span class="cur">R$</span>' + esc(fmtn(ult.bruto)) + '</div>' +
+      '<div class="cap">bruto · <b>' + esc(fmt(ult.liquido)) + '</b> depois do IR · ' + ult.titulos + ' título' +
+        (ult.titulos === 1 ? '' : 's') + '</div></div></div>'
+    : '<div class="hero"><div><div class="k-hero">rendimento de ' + MESES_L[+mesH.slice(5, 7) - 1] + ' (projeção)</div>' +
+      '<div class="val"><span class="cur">R$</span>' + esc(fmtn(atual ? atual.bruto : 0)) + '</div>' +
+      '<div class="cap">o passado aparece quando a posição traz a data e o valor aplicados (Open Finance)</div></div></div>';
+  const fatos = [
+    ["Este mês até hoje", esc(fmt(atual ? atual.ateHoje : 0)), atual ? '<small> de ' + esc(fmt(atual.bruto)) + ' no mês</small>' : ''],
+    ["Em " + anoH + " até hoje", esc(fmt(noAno)), ""],
+    ["Últimos 12 meses", esc(fmt(ult12)), ""],
+    ["Próximos 12 meses", esc(fmt(prox12)), "<small> projeção</small>"],
+  ];
+  const anos = [...new Set(r.meses.map(m => m.mes.slice(0, 4)))].sort();
+  if (!rendAno || !anos.includes(rendAno)) rendAno = anos.includes(anoH) ? anoH : anos[anos.length - 1];
+  const avisos = [];
+  if (r.semHistorico) avisos.push(r.semHistorico + (r.semHistorico === 1 ? " título não traz" : " títulos não trazem") +
+    " a data e o valor aplicados (planilha): o rendimento deles só conta a partir da data da posição.");
+  const precisaDesde = inicioHistorico();
+  if (estado.cdbs.some(c => c.indexador !== "pre") && (!taxas || !taxas.historicoDesde || taxas.historicoDesde > precisaDesde))
+    avisos.push("O Banco Central ainda não mandou o CDI desde " + VENC.dataBR(precisaDesde) +
+      (taxas && taxas.historicoDesde ? " (chegou a partir de " + VENC.dataBR(taxas.historicoDesde) + ")" : "") +
+      ": até lá, o passado dos pós-fixados usa o CDI mais antigo que chegou — aproximado. Toque em Atualizar, em Premissas.");
+  avisos.push("O passado é calculado pela taxa de cada título e pelo CDI que valeu em cada dia (Banco Central) — o valor " +
+    "\"na curva\". Títulos que já venceram não estão na posição e não entram. Líquido = bruto menos o IR na alíquota do mês.");
+  return topo + '<div class="fatos">' + fatos.map(f =>
+      '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
+    '<div class="hdr"><h2>Quanto rendeu por mês</h2>' +
+      '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' +
+      (anos.length > 1 ? '<span class="seg" id="seg-rend-ano">' + anos.map(a =>
+        '<button data-a="' + a + '"' + (a === rendAno ? ' class="on"' : '') + '>' + a + '</button>').join("") + '</span>' : '') +
+    '</div>' +
+    '<div class="grafwrap" id="graf-rend"></div>' +
+    listaRend(r, rendAno) +
+    '<div class="nota fria">' + avisos.map(esc).join("<br>") + '</div>';
+}
+function listaRend(r, ano){
+  const ms = r.meses.filter(m => m.mes.slice(0, 4) === ano);
+  const rotSit = { passado: "", atual: " · em curso", futuro: " · projeção" };
+  return '<div class="grupo gv"><span>' + ano + '</span><span class="soma">' +
+      esc(fmt(ms.reduce((s, m) => s + m.bruto, 0))) + '</span></div>' +
+    ms.map(m => '<div class="rrow ' + m.situacao + '"><span class="vr-nm">' + MESES_L[+m.mes.slice(5, 7) - 1] + rotSit[m.situacao] + '</span>' +
+      '<span class="vr-v">' + esc(fmt(m.bruto)) + '</span>' +
+      '<span class="vr-sub">' + m.titulos + ' título' + (m.titulos === 1 ? '' : 's') +
+        (m.carteira ? '<span class="cart"> · carteira ' + esc(fmt(m.carteira)) + '</span>' : '') + '</span>' +
+      '<span class="vr-sub r">' + (m.situacao === "atual" ? 'até hoje ' + esc(fmt(m.ateHoje))
+                                                          : 'líquido ' + esc(fmt(m.liquido))) + '</span></div>').join("");
+}
+// Barras = o que a carteira rendeu em cada mes do ano aberto: passado aceso, projecao
+// apagada; no mes em curso, a parte ja corrida acesa e o resto apagado.
+function desenharBarrasRend(){
+  const box = document.getElementById("graf-rend");
+  if (!box || !estado.cdbs.length || !rendAno) return;
+  const r = rendimentoAtual(), mesH = hojeISO().slice(0, 7);
+  const W = Math.max(280, Math.round(box.getBoundingClientRect().width) || 340);
+  const H = 176, PT = 20, PB = 24;
+  const ks = MESES.map((_, i) => rendAno + "-" + String(i + 1).padStart(2, "0"));
+  const porMes = {};
+  for (const m of r.meses) porMes[m.mes] = m;
+  const mx = Math.max.apply(null, ks.map(k => porMes[k] ? porMes[k].bruto : 0)) || 1;
+  const bw = W / 12, bar = Math.min(26, bw * 0.6);
+  const y = v => PT + (1 - v / mx) * (H - PT - PB);
+  let barras = "", rot = "", alvos = "";
+  ks.forEach((k, i) => {
+    const m = porMes[k], cx = bw * i + bw / 2;
+    if (m && m.bruto > 0){
+      const x0 = (cx - bar / 2).toFixed(1), yb = y(m.bruto);
+      if (m.situacao === "atual"){
+        const yh = y(m.ateHoje);
+        barras += '<rect x="' + x0 + '" y="' + yb.toFixed(1) + '" width="' + bar.toFixed(1) + '" height="' +
+                  Math.max(1, yh - yb).toFixed(1) + '" rx="3" fill="var(--tif)" opacity=".28"/>' +
+                  '<rect x="' + x0 + '" y="' + yh.toFixed(1) + '" width="' + bar.toFixed(1) + '" height="' +
+                  Math.max(1, H - PB - yh).toFixed(1) + '" rx="3" fill="var(--tif)" opacity=".62"/>';
+      } else {
+        barras += '<rect x="' + x0 + '" y="' + yb.toFixed(1) + '" width="' + bar.toFixed(1) + '" height="' +
+                  Math.max(2, H - PB - yb).toFixed(1) + '" rx="3" fill="var(--tif)" opacity="' + (m.situacao === "passado" ? ".62" : ".28") + '"/>';
+      }
+      if (bw >= 24) rot += '<text x="' + cx.toFixed(1) + '" y="' + (yb - 6).toFixed(1) +
+        '" text-anchor="middle" font-size="10" fill="var(--ink-3)">' + esc(fmtCurto(m.bruto)) + '</text>';
+    }
+    rot += '<text x="' + cx.toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="' +
+      (k === mesH ? "var(--sand)" : "var(--ink-3)") + '">' + MESES[i] + '</text>';
+    alvos += '<rect x="' + (bw * i).toFixed(1) + '" y="0" width="' + bw.toFixed(1) + '" height="' + H + '" fill="transparent"><title>' +
+      esc(rotuloL(k + "-01") + (m ? " — rendeu " + fmt(m.bruto) + (m.situacao === "futuro" ? " (projeção)" : "") +
+        " · líquido " + fmt(m.liquido) : " — sem títulos")) + '</title></rect>';
+  });
+  box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="' +
+      esc("Quanto a carteira rendeu por mês em " + rendAno) + '">' +
+    '<line x1="0" y1="' + (H - PB) + '" x2="' + W + '" y2="' + (H - PB) + '" stroke="var(--line)"/>' + barras + rot + alvos + '</svg>' +
+    '<div class="legenda"><span><i class="sw-bar"></i>rendeu</span><span><i class="sw-bar" style="opacity:.28"></i>projeção</span></div>';
+}
+
 // Conexoes do Open Finance: o que cada corretora respondeu na ultima sincronizacao e
 // ate quando vale o consentimento (renova-se no Meu Pluggy; aviso 30 dias antes).
 const STATUS_ITEM = { UPDATED: "atualizada", UPDATING: "atualizando", OUTDATED: "desatualizada",
@@ -3952,6 +4112,8 @@ function ligarAcoesVenc(el){
   });
   el.querySelectorAll(".vrow").forEach(b => b.onclick = () => folhaCDB(+b.dataset.i));
   el.querySelectorAll("#seg-curva button").forEach(b => b.onclick = () => gravarPrefVenc({ curva: b.dataset.c }));
+  el.querySelectorAll("#seg-venc-visao button").forEach(b => b.onclick = () => gravarPrefVenc({ visao: b.dataset.v }));
+  el.querySelectorAll("#seg-rend-ano button").forEach(b => b.onclick = () => { rendAno = b.dataset.a; render(); });
   if (q("v-ir")) q("v-ir").onchange = ev => gravarPrefVenc({ ir: +ev.target.value });
   if (q("v-selic")) q("v-selic").onchange = ev => {
     const v = parseNum(ev.target.value);
@@ -4099,6 +4261,15 @@ function abaVencCDBs(){
               T(c.tipo || tipoDoNome(c.nome)), T(c.nome), T(c.emissor || ""), T(descTaxa(c)), T(c.juros_mensais ? "sim" : ""),
               M(+c.saldo_liquido), T(VENC.dataBR(c.data_posicao || "")), M(p.valorHoje), M(p.bruto), M(p.ir), P(p.aliquota),
               M(p.liquido, true), M(p.rendimento), N(p.du), T(c.isento_ir ? "isento" : p.qual)]; }) };
+}
+function abaVencRendimento(){
+  if (!estado.cdbs.length) return null;
+  const r = rendimentoAtual();
+  return { nome: "Rendimento por mês",
+    colunas: [{t:"Mês",largura:12},{t:"Situação",largura:12},{t:"Rendimento bruto",largura:17},{t:"Até hoje",largura:15},
+              {t:"Rendimento líquido",largura:17},{t:"Carteira bruta no fim do mês",largura:24},{t:"Títulos",largura:9}],
+    linhas: r.meses.map(m => [T(rotulo(m.mes + "-01")), T({ passado: "passado", atual: "em curso", futuro: "projeção" }[m.situacao]),
+      M(m.bruto, true), M(m.ateHoje), M(m.liquido), M(m.carteira), N(m.titulos)]) };
 }
 function abaVencCalendario(){
   if (!estado.cdbs.length) return null;
@@ -4803,7 +4974,7 @@ window.addEventListener("resize", () => {
     if (!estado.categorias.length) return;
     if (aba === "resumo"){ desenharArco(); desenharCombo(anoSel); }
     if (aba === "patrimonio") desenharEvolucao();
-    if (aba === "vencimentos") desenharBarrasVenc();
+    if (aba === "vencimentos"){ desenharBarrasVenc(); desenharBarrasRend(); }
   }, 180);
 });
 

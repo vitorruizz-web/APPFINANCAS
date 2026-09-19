@@ -81,6 +81,13 @@ Configuração (uma vez):
 O consentimento do Open Finance vence (até 12 meses): a aba avisa 30 dias antes; renova-se no
 Meu Pluggy.
 
+**Rendimento mês a mês** (chave *Calendário | Rendimento* na aba): quanto a carteira rendeu em
+cada mês, bruto e líquido. Com a data e o valor aplicados (Open Finance), o **passado** é
+reconstruído desde a aplicação de cada título, pela taxa contratada e pelo CDI que valeu em cada
+dia (o app busca o histórico no BC em pedaços de um ano, com prazo de 25 s por pedido); o futuro
+é a mesma projeção do calendário. Sem data/valor aplicados (planilha), só a partir da posição.
+Títulos que já venceram não estão na posição e não entram. Cálculo em `VENC.rendimentoMensal`.
+
 O cálculo mora no bloco `/*<vencimentos>*/` do `index.html` (função pura: dias úteis
 ANBIMA, IR regressivo, curva do CDI, projeção, leitura da planilha) e o leitor de
 arquivo no bloco `/*<xlsx>*/` (ZIP + `DecompressionStream` + `DOMParser`, sem
