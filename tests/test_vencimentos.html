@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste dos vencimentos</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+// Testes dos blocos <vencimentos> e <xlsx> do index.html. So dados INVENTADOS:
+// o repo e publico. Valores de referencia (Pascoa, dias uteis, seriais, Copom)
+// vieram de uma implementacao independente em Python (dateutil), nao do app.
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if (!cond) falhas++; return cond; }
+function igual(a, b, msg){
+  const ja = JSON.stringify(a), jb = JSON.stringify(b);
+  ok(ja === jb, msg + (ja === jb ? "" : " (obtido " + ja + ", esperado " + jb + ")"));
+}
+function perto(a, b, msg, tol){
+  tol = tol === undefined ? 1e-6 : tol;
+  ok(typeof a === "number" && Math.abs(a - b) <= tol, msg + " (obtido " + a + ", esperado " + b + ")");
+}
+function fim(){
+  document.getElementById("out").textContent = log.join("\n") +
+    "\n\n=== " + (falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)") + " === (" + log.length + " asserções)";
+}
+
+(async () => {
+  // cache-buster: sem ele o navegador serve o index.html velho e o teste "passa"
+  const html = await (await fetch("../index.html?v=" + Date.now())).text();
+  for (const bloco of ["vencimentos", "xlsx"]){
+    const m = html.match(new RegExp("\\/\\*<" + bloco + ">\\*\\/([\\s\\S]*?)\\/\\*<\\/" + bloco + ">\\*\\/"));
+    if (!ok(!!m, "bloco <" + bloco + "> encontrado no index.html")) return fim();
+    (0, eval)(m[1]);
+  }
+  const V = window.VENC, X = window.XLSXLER, d = V.dn;
+
+  // ------------------------------------------------ datas e dias uteis (Task 1)
+  igual(V.iso(d("2026-09-19")), "2026-09-19", "dn/iso ida e volta");
+  igual(d("2026-09-19"), 20715, "2026-09-19 = dia 20715 desde 1970 (Python)");
+  igual(V.dow(d("2026-09-19")), 6, "19/09/2026 e sabado");
+  for (const [y, p] of [[2024,"2024-03-31"],[2025,"2025-04-20"],[2026,"2026-04-05"],[2027,"2027-03-28"],
+                        [2028,"2028-04-16"],[2029,"2029-04-01"],[2030,"2030-04-21"]])
+    igual(V.iso(V.pascoa(y)), p, "Pascoa de " + y + " (dateutil)");
+  for (const s of ["2026-02-16","2026-02-17","2026-04-03","2026-06-04","2026-09-07","2026-11-02","2026-11-20","2026-12-25"])
+    ok(!V.ehUtil(d(s)), s + " nao e dia util (feriado)");
+  ok(V.ehUtil(d("2023-11-20")), "20/11/2023 era dia util: feriado nacional so desde 2024");
+  ok(V.ehUtil(d("2026-09-21")) && !V.ehUtil(d("2026-09-19")), "segunda util, sabado nao");
+  for (const [a, b] of [["2026-09-19","2026-09-21"],["2026-11-20","2026-11-23"],["2026-12-25","2026-12-28"],
+                        ["2027-11-20","2027-11-22"],["2028-12-10","2028-12-11"],["2027-01-15","2027-01-15"]])
+    igual(V.iso(V.proxUtil(d(a))), b, "proximo dia util a partir de " + a);
+  for (const [a, b, n] of [["2025-01-01","2026-01-01",252],["2026-01-01","2027-01-01",249],
+                           ["2027-01-01","2028-01-01",251],["2026-09-21","2027-09-21",250],
+                           ["2026-09-19","2026-09-21",0],["2026-09-18","2026-09-21",1],
+                           ["2025-03-10","2026-09-21",386],["2026-09-21","2027-01-15",79]])
+    igual(V.du(d(a), d(b)), n, "dias uteis em [" + a + ", " + b + ")");
+
+  // ------------------------------------------------------------ IR (Task 1)
+  for (const [dias, a] of [[1,.225],[180,.225],[181,.20],[360,.20],[361,.175],[720,.175],[721,.15],[2000,.15]])
+    igual(V.aliquotaIR(dias), a, "IR com " + dias + " dias corridos");
+
+  // ------------------------------------------- taxa, data e valor (Task 1)
+  const tx = V.parseTaxa;
+  igual(tx("+15,50%"), { indexador:"pre", taxa:0.155 }, "'+15,50%' = pre 15,50% a.a.");
+  igual(tx("15,5% a.a."), { indexador:"pre", taxa:0.155 }, "'15,5% a.a.'");
+  igual(tx("Pré 15,50%"), { indexador:"pre", taxa:0.155 }, "'Pré 15,50%'");
+  igual(tx("PRÉ-FIXADO 15,5% A.A."), { indexador:"pre", taxa:0.155 }, "'PRÉ-FIXADO 15,5% A.A.'");
+  igual(tx("120,00% CDI"), { indexador:"cdi", taxa:1.2 }, "'120,00% CDI'");
+  igual(tx("116,97% do CDI"), { indexador:"cdi", taxa:1.1697 }, "'116,97% do CDI'");
+  igual(tx("CDI + 1,5%"), { indexador:"cdi+", taxa:0.015 }, "'CDI + 1,5%'");
+  igual(tx("95%", "CDI"), { indexador:"cdi", taxa:0.95 }, "coluna de indexador 'CDI' + taxa '95%'");
+  igual(tx("1,5%", "CDI"), { indexador:"cdi+", taxa:0.015 }, "indexador 'CDI' + '1,5%' = spread");
+  igual(tx(0.155, "PRÉ"), { indexador:"pre", taxa:0.155 }, "indexador 'PRÉ' + 0,155 numerico");
+  igual(tx(1.2, "CDI"), { indexador:"cdi", taxa:1.2 }, "indexador 'CDI' + 1,2 numerico (celula em %)");
+  igual(tx(15.5), { indexador:"pre", taxa:0.155 }, "numero 15,5 = pre");
+  igual(tx(0.155), { indexador:"pre", taxa:0.155 }, "numero 0,155 = pre");
+  ok(!!tx("IPCA + 6,50%").erro, "IPCA+ recusado com motivo");
+  ok(!!tx("6%", "IPCA").erro, "indexador IPCA recusado");
+  ok(!!tx("abc").erro && !!tx("").erro && !!tx(null).erro, "texto sem taxa recusado");
+  ok(!!tx("+85,00%").erro, "pre acima de 50% a.a. recusado (taxa lida errada)");
+
+  igual(V.numBR("R$ 3.210,45"), 3210.45, "'R$ 3.210,45'");
+  igual(V.numBR("3210.45"), 3210.45, "'3210.45'");
+  igual(V.numBR("3.210"), 3210, "'3.210' (milhar sem centavos)");
+  igual(V.numBR("(1.234,56)"), -1234.56, "'(1.234,56)' negativo");
+  igual(V.numBR(1234.5), 1234.5, "numero passa direto");
+  igual([V.numBR(""), V.numBR(null), V.numBR("abc")], [null, null, null], "vazio/lixo = null");
+
+  igual(V.parseData("24/11/2027"), "2027-11-24", "dd/mm/aaaa");
+  igual(V.parseData("2027-11-24"), "2027-11-24", "ISO");
+  igual(V.parseData("1/2/27"), "2027-02-01", "d/m/aa");
+  igual(V.parseData(46715), "2027-11-24", "serial do Excel 46715 (Python)");
+  igual(V.parseData(45726), "2025-03-10", "serial do Excel 45726 (Python)");
+  igual([V.parseData("31/02/2027"), V.parseData("abc"), V.parseData(12)], [null, null, null], "data invalida = null");
+
+  igual(V.emissor("CDB BANCO ALFA - NOV/2027"), "BANCO ALFA", "emissor tira 'CDB' e o MES/ANO");
+  igual(V.emissor("CDB GAMA - JURO MENSAL - DEZ/2027"), "GAMA", "emissor tira 'JURO MENSAL'");
+  igual(V.emissor("CDB BANCO DELTA - GRUPO EPSILON - SET/2027"), "BANCO DELTA - GRUPO EPSILON", "hifen do meio do nome fica");
+
+  // ==MAIS_TESTES==
+
+  fim();
+})().catch(e => { ok(false, "excecao: " + (e && e.stack || e)); fim(); });
+
+// ==ZIP_TESTE==
+</script>

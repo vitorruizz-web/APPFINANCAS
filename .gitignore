@@ -15,3 +15,6 @@ tests/fixtures.json
 docs/
 tests/preview_login.html
 tests/preview_app.html
+
+# conferencia local contra a planilha real (dado financeiro)
+tests/_real/

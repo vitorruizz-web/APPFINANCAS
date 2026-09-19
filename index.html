@@ -863,6 +863,435 @@ window.CONTAS = (function () {
 })();
 /*</contas>*/
 
+/*<vencimentos>*/
+// ============================================================
+// VENCIMENTOS -- funcoes puras: calendario de dias uteis, leitura da planilha
+// da corretora, curva do CDI, projecao de cada CDB e a agenda do que cai na
+// conta. Sem DOM, sem `estado`, sem rede: testado por tests/test_vencimentos.html.
+//
+// Datas circulam como NUMERO DE DIA (dias desde 01/01/1970, UTC): conta de dias
+// sem fuso nem horario de verao. ISO "AAAA-MM-DD" so na borda.
+// ============================================================
+window.VENC = (function () {
+  const MS = 86400000;
+  const dn = s => { const p = String(s).slice(0, 10).split("-").map(Number);
+                    return Math.round(Date.UTC(p[0], p[1] - 1, p[2]) / MS); };
+  const iso = d => new Date(d * MS).toISOString().slice(0, 10);
+  const dow = d => ((d % 7) + 11) % 7;             // 0 = domingo; 01/01/1970 foi quinta
+  const anoDe = d => new Date(d * MS).getUTCFullYear();
+  const dataBR = s => s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "";
+
+  // ---------------------------------------------------------------- dias uteis
+  // Calendario ANBIMA: feriados nacionais fixos + Carnaval (seg e ter), Sexta-feira
+  // Santa e Corpus Christi, que andam com a Pascoa. 20/11 e nacional desde 2024.
+  // Conferido contra os dias em que o BC publicou CDI em set/2026.
+  function pascoa(Y) {                               // Meeus/Jones/Butcher
+    const a = Y % 19, b = Math.floor(Y / 100), c = Y % 100, d = Math.floor(b / 4), e = b % 4,
+          f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3),
+          h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+          l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+          mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+    return Math.round(Date.UTC(Y, mes - 1, dia) / MS);
+  }
+  const FIXOS = ["01-01", "04-21", "05-01", "09-07", "10-12", "11-02", "11-15", "12-25"];
+  const _feriados = {};
+  function feriados(Y) {
+    if (_feriados[Y]) return _feriados[Y];
+    const s = new Set(FIXOS.map(md => dn(Y + "-" + md)));
+    if (Y >= 2024) s.add(dn(Y + "-11-20"));
+    const p = pascoa(Y);
+    [p - 48, p - 47, p - 2, p + 60].forEach(x => s.add(x));
+    return (_feriados[Y] = s);
+  }
+  const ehUtil = d => { const w = dow(d); return w !== 0 && w !== 6 && !feriados(anoDe(d)).has(d); };
+  function proxUtil(d) { while (!ehUtil(d)) d++; return d; }
+  function du(a, b) { let n = 0; for (let d = a; d < b; d++) if (ehUtil(d)) n++; return n; }
+
+  // ------------------------------------------------------------------------ IR
+  // Tabela regressiva da renda fixa, por dias CORRIDOS da aplicacao ao resgate.
+  const aliquotaIR = dias => dias <= 180 ? 0.225 : dias <= 360 ? 0.20 : dias <= 720 ? 0.175 : 0.15;
+
+  // -------------------------------------------------------------- curva do CDI
+  // Dia (aproximado) da decisao de cada reuniao do Copom, pelo indice. So serve
+  // para as reunioes DEPOIS da proxima -- a proxima tem data exata: e onde termina
+  // a serie da Selic meta. Errar alguns dias nao pesa: 0,25 p.p. deslocado 2
+  // semanas num CDB de R$ 1.500 da R$ 0,15.
+  const COPOM = ["01-28", "03-18", "05-06", "06-17", "07-29", "09-16", "11-04", "12-09"];
+  function dataReuniao(r) {
+    const m = /^R([1-8])\/(\d{4})$/.exec(String(r).trim());
+    return m ? dn(m[2] + "-" + COPOM[+m[1] - 1]) : null;
+  }
+  // taxas = { historico: [{dia, cdi}]   CDI publicado pelo BC (SGS 4389), % a.a., dia util
+  //           meta: [{dia, selic}]      Selic meta (SGS 432), preenchida ate o dia da proxima reuniao
+  //           selic, cdi                atuais, % a.a. (quando nao ha serie)
+  //           focus: { reunioes: [{r: "R7/2026", v}], anuais: [{ano, v}] } }
+  // modo: "focus" | "hoje" | "manual" (com selicManual).
+  // -> degraus [{desde: dia, cdi: fracao}] em ordem, o primeiro valendo desde
+  //    sempre; null quando nao ha taxa nenhuma. Tres camadas:
+  //    1) o que JA VALEU: o CDI publicado, dia util a dia util;
+  //    2) o que JA FOI DECIDIDO: a Selic meta ate a proxima reuniao;
+  //    3) o FUTURO: Focus (reunioes e fim de ano), Selic de hoje ou a digitada.
+  //    Uma mudanca de Selic entra no dia em que vigorou -- o passado nao muda.
+  function curvaCDI(taxas, modo, hoje, selicManual) {
+    taxas = taxas || {};
+    if (!isFinite(hoje)) hoje = -Infinity;
+    const serie = (l, campo) => (l || []).map(x => ({ d: dn(x.dia), v: +x[campo] }))
+      .filter(x => isFinite(x.d) && isFinite(x.v)).sort((a, b) => a.d - b.d);
+    const hist = serie(taxas.historico, "cdi"), meta = serie(taxas.meta, "selic");
+    const manual = modo === "manual" && +selicManual > 0 ? +selicManual : null;
+    const cdiAtual = hist.length ? hist[hist.length - 1].v : taxas.cdi != null ? +taxas.cdi : null;
+    const selicAtual = meta.length ? meta[meta.length - 1].v : taxas.selic != null ? +taxas.selic : null;
+    if (cdiAtual === null && selicAtual === null && manual === null) return null;
+    const L = hist.length ? hist[hist.length - 1].d : hoje;          // ultimo CDI publicado
+    let sL = null;                                                     // Selic meta vigente em L
+    for (const m of meta) { if (m.d <= L) sL = m.v; else break; }
+    if (sL === null) sL = selicAtual;
+    const spread = cdiAtual !== null && sL !== null ? cdiAtual - sL : -0.10;
+    const degraus = [];
+    const empurra = (desde, pct) => {
+      const u = degraus[degraus.length - 1];
+      if (!u || Math.abs(u.cdi - pct / 100) > 1e-12) degraus.push({ desde, cdi: pct / 100 });
+    };
+    if (hist.length) {                                                 // 1) o que ja valeu
+      degraus.push({ desde: -Infinity, cdi: hist[0].v / 100 });
+      for (const x of hist) empurra(x.d, x.v);
+    }
+    if (manual !== null) {                   // a Selic digitada vale do dia seguinte ao ultimo CDI em diante
+      if (hist.length) empurra(L + 1, manual + spread);
+      else degraus.push({ desde: -Infinity, cdi: (manual + spread) / 100 });
+      return degraus;
+    }
+    if (!hist.length) degraus.push({ desde: -Infinity, cdi: (cdiAtual !== null ? cdiAtual : selicAtual + spread) / 100 });
+    for (const m of meta) if (m.d > L) empurra(m.d, m.v + spread);    // 2) o que ja foi decidido
+    const fimMeta = meta.length ? meta[meta.length - 1].d : null;
+    if (modo !== "focus" || !taxas.focus) return degraus;
+    // 3) Focus: a PROXIMA reuniao vale no dia util seguinte ao fim da serie da
+    //    meta (data exata); as outras, pela tabela. Reuniao que ja aconteceu fica
+    //    de fora: a meta de hoje ja a reflete.
+    const base = Math.max(L, hoje, fimMeta !== null ? fimMeta : L);
+    let ultima = base, primeira = fimMeta !== null;
+    const reunioes = (taxas.focus.reunioes || []).map(x => ({ d: dataReuniao(x.r), v: +x.v }))
+      .filter(x => x.d !== null && isFinite(x.v)).sort((a, b) => a.d - b.d);
+    for (const x of reunioes) {
+      let desde;
+      if (primeira) {
+        if (x.d < fimMeta - 20) continue;
+        desde = proxUtil(fimMeta + 1); primeira = false;
+      } else {
+        desde = proxUtil(x.d + 1);
+        if (desde <= base) continue;
+      }
+      empurra(desde, x.v + spread);
+      ultima = Math.max(ultima, x.d);
+    }
+    // depois da ultima reuniao do Focus, a Selic esperada para o FIM de cada ano
+    for (const x of (taxas.focus.anuais || []).filter(a => isFinite(+a.v)).sort((a, b) => a.ano - b.ano)) {
+      const d = dn(x.ano + "-12-09");
+      if (d > ultima) empurra(proxUtil(d + 1), +x.v + spread);
+    }
+    return degraus;
+  }
+  function cdiEm(degraus, d) {
+    for (let i = degraus.length - 1; i > 0; i--) if (degraus[i].desde <= d) return degraus[i].cdi;
+    return degraus[0].cdi;
+  }
+
+  // ------------------------------------------------------------------ projecao
+  // Fator bruto de a (inclusive) ate b (exclusive), dia util a dia util.
+  function fator(cdb, a, b, degraus) {
+    if (b <= a) return 1;
+    const t = +cdb.taxa;
+    if (cdb.indexador === "pre") return Math.pow(1 + t, du(a, b) / 252);
+    const sp = cdb.indexador === "cdi+" ? Math.pow(1 + t, 1 / 252) : 1;
+    let f = 1;
+    for (let d = a; d < b; d++) {
+      if (!ehUtil(d)) continue;
+      const diario = Math.pow(1 + cdiEm(degraus, d), 1 / 252) - 1;
+      f *= cdb.indexador === "cdi" ? 1 + t * diario : (1 + diario) * sp;
+    }
+    return f;
+  }
+  const valor = v => v === null || v === undefined || v === "" || isNaN(+v) ? null : +v;
+
+  // cdb: linha de fin_cdbs. ctx: { posicao: dia do saldo, hoje, degraus, irPresumido }
+  // -> { credito, du, qual, semTaxa, pago, aliquota, fator, bruto, ir, liquido,
+  //      valorHoje, aReceber, rendimento, eventos: [{dia, tipo, bruto, ir, liquido}] }
+  // `liquido`   = tudo o que o CDB poe na conta desde a posicao (juros + principal);
+  // `valorHoje` = o saldo da planilha corrigido pela taxa ate hoje (0 depois do credito);
+  // `aReceber`  = o que ainda vai cair (eventos de hoje em diante).
+  function projetar(cdb, ctx) {
+    const t = ctx.posicao, T = dn(cdb.vencimento), cred = proxUtil(T);
+    const h = Math.max(t, isFinite(ctx.hoje) ? ctx.hoje : t);
+    const N0 = +cdb.saldo_liquido;
+    const d0 = cdb.data_aplicacao ? dn(cdb.data_aplicacao) : null;
+    let P = valor(cdb.valor_aplicado);
+    if (P !== null && P <= 0) P = null;
+    const irEm = dia => d0 !== null ? aliquotaIR(dia - d0) : ctx.irPresumido;
+    const qual = d0 !== null && P !== null ? "exato" : d0 !== null || P !== null ? "parcial" : "estimado";
+    const semTaxa = cdb.indexador !== "pre" && !ctx.degraus;
+    const degraus = ctx.degraus || [{ desde: -Infinity, cdi: 0 }];       // sem taxa: o CDI fica parado
+    const pago = h > cred;
+    const base = { credito: cred, du: du(t, T), qual, semTaxa, pago, aliquota: irEm(cred) };
+    let r;
+    if (cdb.juros_mensais) r = cupons(cdb, t, h, T, N0, P, irEm, degraus);
+    else {
+      const F = fator(cdb, t, T, degraus), Fh = fator(cdb, t, Math.min(h, T), degraus);
+      let G0 = N0, Pb = null;
+      if (P !== null || d0 !== null) {
+        const a0 = irEm(t);
+        if (P !== null) { Pb = P; G0 = (N0 - a0 * P) / (1 - a0); }
+        else {
+          // so a data: o principal sai da propria taxa (para o CDI do passado, o mais antigo conhecido)
+          const g0 = d0 < t ? fator(cdb, d0, t, [degraus[0]]) : 1;
+          G0 = N0 / (1 - a0 * (1 - 1 / g0)); Pb = G0 / g0;
+        }
+      }
+      // sem data nem valor aplicado (Pb null): o rendimento DAQUI EM DIANTE paga o
+      // IR presumido, sobre o saldo liquido. Conservador: a base bruta real e maior.
+      const liq = (G, dia) => Pb !== null ? G - Math.max(0, G - Pb) * irEm(dia)
+                                          : G - Math.max(0, G - N0) * ctx.irPresumido;
+      const bruto = G0 * F, liquido = liq(bruto, cred);
+      r = { fator: F, bruto, ir: bruto - liquido, liquido, valorHoje: liq(G0 * Fh, h),
+            eventos: [{ dia: cred, tipo: "vencimento", bruto, ir: bruto - liquido, liquido }] };
+    }
+    if (pago) r.valorHoje = 0;
+    r.aReceber = r.eventos.filter(e => e.dia >= h).reduce((s, e) => s + e.liquido, 0);
+    r.rendimento = r.aReceber - r.valorHoje;
+    return Object.assign(base, r);
+  }
+
+  // Juros mensais: cupom no dia do vencimento de cada mes (ultimo dia do mes se
+  // ele nao existir; proximo dia util se cair em feriado/fim de semana). O primeiro
+  // periodo comeca no ultimo cupom ja pago -- o juro acumulado desde entao esta
+  // dentro do saldo e sai no proximo cupom.
+  function datasCupom(T, t) {
+    const v = new Date(T * MS), dia = v.getUTCDate();
+    let y = v.getUTCFullYear(), m = v.getUTCMonth();
+    const lista = [];
+    for (let guarda = 0; guarda < 1200; guarda++) {
+      const ult = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      const d = Math.round(Date.UTC(y, m, Math.min(dia, ult)) / MS);
+      lista.unshift(d);
+      if (d <= t) break;
+      if (--m < 0) { m = 11; y--; }
+    }
+    return lista;
+  }
+  function cupons(cdb, t, h, T, N0, P, irEm, degraus) {
+    const datas = datasCupom(T, t);
+    if (P === null) {                     // saldo = P + juro liquido acumulado desde o ultimo cupom
+      const g = fator(cdb, datas[0], t, degraus);
+      P = N0 / (1 + (1 - irEm(t)) * (g - 1));
+    }
+    const eventos = [];
+    let bruto = 0, ir = 0, liquido = 0;
+    for (let i = 1; i < datas.length; i++) {
+      const pag = proxUtil(datas[i]), fim = i === datas.length - 1;
+      const jb = P * (fator(cdb, datas[i - 1], datas[i], degraus) - 1), ji = jb * irEm(pag);
+      const e = { dia: pag, tipo: fim ? "vencimento" : "juros",
+                  bruto: jb + (fim ? P : 0), ir: ji, liquido: jb - ji + (fim ? P : 0) };
+      eventos.push(e); bruto += e.bruto; ir += e.ir; liquido += e.liquido;
+    }
+    // hoje: principal + juro liquido acumulado desde o ultimo cupom JA PAGO
+    let k = 0;
+    while (k + 2 < datas.length && proxUtil(datas[k + 1]) < h) k++;
+    const valorHoje = P * (1 + (fator(cdb, datas[k], Math.max(h, datas[k]), degraus) - 1) * (1 - irEm(h)));
+    return { fator: null, principal: P, bruto, ir, liquido, valorHoje, eventos };
+  }
+
+  // Cada CDB vira eventos; a agenda soma por dia e por mes.
+  function agenda(cdbs, ctx) {
+    const h = isFinite(ctx.hoje) ? ctx.hoje : ctx.posicao;
+    const itens = (cdbs || []).map(c => ({ cdb: c, p: projetar(c, ctx) }));
+    const eventos = [];
+    itens.forEach((it, i) => it.p.eventos.forEach(e => eventos.push(Object.assign({ i }, e))));
+    eventos.sort((a, b) => a.dia - b.dia || b.liquido - a.liquido);
+    const porDia = {}, porMes = {};
+    let total = 0, aReceber = 0, hoje = 0, posicao = 0;
+    for (const e of eventos) {
+      const d = porDia[e.dia] || (porDia[e.dia] = { total: 0, eventos: [] });
+      d.total += e.liquido; d.eventos.push(e);
+      const k = iso(e.dia).slice(0, 7);
+      const m = porMes[k] || (porMes[k] = { total: 0, vencimentos: 0, juros: 0 });
+      m.total += e.liquido;
+      if (e.tipo === "vencimento") m.vencimentos++; else m.juros++;
+      total += e.liquido;
+      if (e.dia >= h) aReceber += e.liquido;
+    }
+    for (const it of itens) { posicao += +it.cdb.saldo_liquido; hoje += it.p.valorHoje; }
+    return { itens, eventos, porDia, porMes, total, aReceber, hoje, posicao };
+  }
+
+  // --------------------------------------------------------- leitura da planilha
+  const norm = s => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]/g, "");
+  function numBR(v) {
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    if (v === null || v === undefined) return null;
+    let s = String(v).replace(/[R$\s ]/g, "").replace(/^\+/, "");
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+    if (!/^-?\d*\.?\d+$/.test(s)) return null;
+    return (neg ? -1 : 1) * parseFloat(s);
+  }
+  function valida(a, m, d) {
+    if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
+    const s = iso(Math.round(Date.UTC(a, m - 1, d) / MS));
+    return s === a + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0") ? s : null;
+  }
+  function parseData(v) {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "number") return v > 20000 && v < 80000 ? iso(Math.floor(v) - 25569) : null;  // serial do Excel
+    const s = String(v).trim();
+    let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return valida(+m[1], +m[2], +m[3]);
+    m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})$/.exec(s);
+    if (m) return valida(m[3].length === 2 ? 2000 + +m[3] : +m[3], +m[2], +m[1]);
+    return null;
+  }
+  const fr = pct => Math.round(pct * 1e6) / 1e8;       // 15,5 (%) -> 0,155, sem ruido de ponto flutuante
+  // Aceita a taxa junta ("+15,50%", "120,00% CDI", "CDI + 1,5%", "Pre 15,5% a.a.")
+  // ou separada numa coluna de indexador ("CDI" + "120%"). Numero puro de uma
+  // celula em % (0,155 ou 1,2) tambem vale.
+  function parseTaxa(v, indexador) {
+    const ind = indexador == null ? "" : String(indexador).toUpperCase().trim();
+    if (/IPCA|IGP|INPC/.test(ind)) return { erro: "indexador não suportado (" + ind + ")" };
+    if (typeof v === "number") {
+      const pct = v <= 3 ? v * 100 : v;
+      if (/C?DI\b/.test(ind)) return { indexador: pct >= 30 ? "cdi" : "cdi+", taxa: fr(pct) };
+      return pct > 0 && pct <= 50 ? { indexador: "pre", taxa: fr(pct) } : { erro: "taxa pré fora do normal (" + v + ")" };
+    }
+    let s = String(v == null ? "" : v).trim();
+    if (!s) return { erro: "sem taxa" };
+    if (ind) s = ind + " " + s;
+    s = s.toUpperCase().replace(/\s+/g, " ");
+    if (/IPCA|IGP|INPC/.test(s)) return { erro: "indexador não suportado (" + s + ")" };
+    let m;
+    if ((m = /\bC?DI\s*\+\s*([\d.,]+)\s*%?/.exec(s))) return { indexador: "cdi+", taxa: fr(numBR(m[1])) };
+    if ((m = /([\d.,]+)\s*%?\s*(?:DO\s+)?C?DI\b/.exec(s))) return { indexador: "cdi", taxa: fr(numBR(m[1])) };
+    if ((m = /^C?DI\s+([\d.,]+)\s*%?$/.exec(s))) {
+      const n = numBR(m[1]);
+      return { indexador: n >= 30 ? "cdi" : "cdi+", taxa: fr(n) };
+    }
+    m = /^(?:PR[EÉ][\s-]*(?:FIXAD[OA])?\s*:?\s*)?\+?\s*([\d.,]+)\s*%\s*(?:A\.?\s*A\.?|AO ANO)?$/.exec(s);
+    if (m) {
+      const n = numBR(m[1]);
+      return n > 0 && n <= 50 ? { indexador: "pre", taxa: fr(n) } : { erro: "taxa pré fora do normal (" + s + ")" };
+    }
+    return { erro: "taxa não reconhecida (" + s + ")" };
+  }
+  const emissor = nome => String(nome)
+    .replace(/^\s*(CDB|RDB|LCI|LCA|LC|LF)\s+/i, "")
+    .replace(/\s*-\s*JUROS?\s+MENSA\w*\s*/i, " ")
+    .replace(/\s*-\s*[A-ZÇ]{3}\/\d{4}\s*$/i, "")
+    .replace(/\s+/g, " ").trim();
+
+  // Titulo de coluna -> campo, por sinonimo (sem acento, caixa ou pontuacao). A
+  // nota desempata: "Taxa de aplicacao" vence "Taxa a mercado". Os campos sao
+  // resolvidos NESTA ordem, e cada coluna serve a um so.
+  const CAMPOS = {
+    aplicacao:     h => /^(data|dt)(de|da|do)?(aplicacao|aplic|compra|aquisicao)/.test(h) ? 2 : 0,
+    vencimento:    h => /venc/.test(h) ? 2 : 0,
+    valorAplicado: h => !/^(data|dt)/.test(h) &&
+                        /^(valor|vlr|vl|total)?(aplicado|investido|inicial|daaplicacao|aplicacao|dacompra)/.test(h) ? 2 : 0,
+    saldo:         h => /^(saldo|valor|vlr|posicao)?liq/.test(h) || (/saldo/.test(h) && /quido/.test(h)) ? 3
+                        : /^(saldo|saldoatual|valoratual)$/.test(h) ? 1 : 0,
+    indexador:     h => /^(indexador|index|referencia)$/.test(h) ? 2 : 0,
+    taxa:          h => /(rentab|taxa|remunera|indexador)/.test(h)
+                        ? (/(aplic|contrat|compra|emiss)/.test(h) ? 3 : /mercado/.test(h) ? 1 : 2) : 0,
+    nome:          h => /^(cdb|ativo|nome|titulo|produto|papel|descricao|investimento|emissor)/.test(h) ? 2 : 0,
+    juros:         h => /(juros|cupom)/.test(h) && !/venc/.test(h) ? 1 : 0,
+  };
+  const ORDEM = ["aplicacao", "vencimento", "valorAplicado", "saldo", "indexador", "taxa", "nome", "juros"];
+  const OBRIG = ["nome", "taxa", "vencimento", "saldo"];
+  const ROTULO = { nome: "CDB", taxa: "Rentabilidade", vencimento: "Data vencimento", saldo: "Saldo líquido" };
+  function mapearColunas(linha) {
+    const hs = (linha || []).map(c => typeof c === "string" ? norm(c) : "");
+    const cols = {}, usadas = new Set();
+    for (const campo of ORDEM) {
+      let melhor = -1, nota = 0;
+      hs.forEach((h, i) => {
+        if (!h || usadas.has(i)) return;
+        const n = CAMPOS[campo](h);
+        if (n > nota) { nota = n; melhor = i; }
+      });
+      if (melhor >= 0) { cols[campo] = melhor; usadas.add(melhor); }
+    }
+    // uma coluna "Indexador" sozinha e a propria taxa ("120% CDI")
+    if (cols.taxa === undefined && cols.indexador !== undefined) { cols.taxa = cols.indexador; delete cols.indexador; }
+    return cols;
+  }
+  function acharCabecalho(linhas) {
+    let melhor = { linha: -1, cols: {}, n: 0 };
+    for (let r = 0; r < Math.min(linhas.length, 30); r++) {
+      const cols = mapearColunas(linhas[r]);
+      const n = OBRIG.filter(k => cols[k] !== undefined).length;
+      if (n === OBRIG.length) return { linha: r, cols, n };
+      if (n > melhor.n) melhor = { linha: r, cols, n };
+    }
+    return Object.assign({ incompleto: true }, melhor);
+  }
+
+  // linhas: matriz de celulas de UMA aba (texto, numero ou data ISO).
+  // opts.posicao: data do saldo -- o que venceu antes dela fica de fora.
+  // -> { ok, linha, cols, cdbs, avisos: [{linha, nome, msg}] } ou { ok: false, achadas, linha, faltando }
+  function ler(linhas, opts) {
+    linhas = linhas || [];
+    const pos = opts && opts.posicao ? dn(opts.posicao) : null;
+    const cab = acharCabecalho(linhas);
+    if (cab.incompleto) return { ok: false, achadas: cab.n, linha: cab.linha,
+      faltando: OBRIG.filter(k => cab.cols[k] === undefined).map(k => ROTULO[k]) };
+    const k = cab.cols, cdbs = [], avisos = [];
+    for (let r = cab.linha + 1; r < linhas.length; r++) {
+      const l = linhas[r] || [];
+      const cel = campo => k[campo] === undefined || l[k[campo]] === undefined ? null : l[k[campo]];
+      if (l.every(x => x === null || x === undefined || String(x).trim() === "")) continue;
+      const nome = String(cel("nome") == null ? "" : cel("nome")).replace(/\s+/g, " ").trim();
+      const aviso = msg => avisos.push({ linha: r + 1, nome, msg });
+      if (!nome) { aviso("sem nome do título"); continue; }
+      if (/^(sub)?total\b/i.test(nome)) continue;
+      const tx = parseTaxa(cel("taxa"), cel("indexador"));
+      if (tx.erro) { aviso(tx.erro); continue; }
+      const venc = parseData(cel("vencimento"));
+      if (!venc) { aviso("data de vencimento inválida"); continue; }
+      const saldo = numBR(cel("saldo"));
+      if (saldo === null || saldo <= 0) { aviso("saldo líquido inválido"); continue; }
+      if (pos !== null && dn(venc) < pos) { aviso("venceu em " + dataBR(venc)); continue; }
+      const va = numBR(cel("valorAplicado")), juros = cel("juros");
+      cdbs.push({
+        nome, emissor: emissor(nome), indexador: tx.indexador, taxa: tx.taxa, vencimento: venc,
+        saldo_liquido: saldo,
+        data_aplicacao: parseData(cel("aplicacao")),
+        valor_aplicado: va !== null && va > 0 ? va : null,
+        juros_mensais: /juros?\s*mensa/i.test(nome) || (juros !== null && /mensa/i.test(String(juros))),
+      });
+    }
+    return { ok: true, linha: cab.linha, cols: k, cdbs, avisos };
+  }
+  // Varias abas (xlsx): fica com a primeira que tiver cabecalho E algum CDB.
+  function lerAbas(abas, opts) {
+    let melhor = null;
+    const peso = r => r.ok ? 10 + r.cdbs.length : r.achadas || 0;
+    for (const a of abas || []) {
+      const r = Object.assign({ aba: a.nome }, ler(a.linhas, opts));
+      if (r.ok && r.cdbs.length) return r;
+      if (!melhor || peso(r) > peso(melhor)) melhor = r;
+    }
+    return melhor || { ok: false, achadas: 0, faltando: OBRIG.map(k => ROTULO[k]) };
+  }
+
+  return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
+           dataReuniao, curvaCDI, cdiEm, fator, projetar, datasCupom, agenda,
+           norm, numBR, parseData, parseTaxa, emissor, mapearColunas, ler, lerAbas };
+})();
+/*</vencimentos>*/
+
+/*<xlsx>*/
+window.XLSXLER = {};
+/*</xlsx>*/
+
 
 // ============================================================
 // CONFIGURACAO
