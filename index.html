@@ -3645,10 +3645,10 @@ function ligarAcoesVenc(el){
 function regrasColunas(){
   return '<div class="cols">' +
     '<div class="cols-t">Colunas que precisam existir</div>' +
-    '<div class="col-r"><b>CDB</b><span>nome do título — ex.: CDB BANCO X - NOV/2027. Com “JURO MENSAL” no nome, entra o juro de todo mês.</span></div>' +
+    '<div class="col-r"><b>CDB</b><span>nome do título — ex.: CDB BANCO X - MAR/2028. Com “JURO MENSAL” no nome, entra o juro de todo mês.</span></div>' +
     '<div class="col-r"><b>Rentabilidade</b><span>+15,50% (pré, ao ano) · 120,00% CDI · CDI + 1,5%</span></div>' +
-    '<div class="col-r"><b>Data vencimento</b><span>24/11/2027</span></div>' +
-    '<div class="col-r"><b>Saldo líquido</b><span>R$ 3.702,38 — o valor já sem IR e IOF</span></div>' +
+    '<div class="col-r"><b>Data vencimento</b><span>15/03/2028</span></div>' +
+    '<div class="col-r"><b>Saldo líquido</b><span>R$ 2.480,15 — o valor já sem IR e IOF</span></div>' +
     '<div class="cols-t">Opcionais — deixam o IR exato</div>' +
     '<div class="col-r"><b>Data aplicação</b><span>15/03/2025</span></div>' +
     '<div class="col-r"><b>Valor aplicado</b><span>R$ 3.000,00</span></div>' +
@@ -3752,9 +3752,9 @@ function baixarModelo(){
     colunas: [{t:"CDB",largura:44},{t:"Rentabilidade",largura:16},{t:"Data vencimento",largura:16},
               {t:"Saldo líquido",largura:16},{t:"Data aplicação",largura:16},{t:"Valor aplicado",largura:16}],
     linhas: [
-      [T("CDB BANCO EXEMPLO - NOV/2027"), T("+15,50%"), T("24/11/2027"), M(1234.56), T("24/11/2025"), M(1000)],
+      [T("CDB BANCO EXEMPLO - MAR/2028"), T("+14,80%"), T("15/03/2028"), M(1234.56), T("15/03/2026"), M(1000)],
       [T("CDB FINANCEIRA EXEMPLO - MAI/2027"), T("120,00% CDI"), T("14/05/2027"), M(2345.67), null, null],
-      [T("CDB BANCO EXEMPLO - JURO MENSAL - DEZ/2027"), T("+16,10%"), T("27/12/2027"), M(1007.37), null, null],
+      [T("CDB BANCO EXEMPLO - JURO MENSAL - AGO/2027"), T("+13,90%"), T("10/08/2027"), M(1003.25), null, null],
     ] }]), "Modelo posicao CDBs.xlsx");
   toast("Modelo baixado");
 }

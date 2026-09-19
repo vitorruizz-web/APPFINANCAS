@@ -235,9 +235,9 @@ function fim(){
     ["Posição detalhada", null, null, null],
     [],
     ["CDB", "Rentabilidade a mercado", "Data vencimento", "Saldo l�quido"],
-    ["CDB BANCO ALFA - NOV/2027", "+15,50%", "24/11/2027", "R$ 3.210,45"],
-    ["CDB GAMA - JURO MENSAL - DEZ/2027", "+16,10%", "27/12/2027", "R$ 1.004,20"],
-    ["CDB FINANCEIRA BETA - JAN/2027", "120,00% CDI", "14/01/2027", "R$ 2.100,00"],
+    ["CDB BANCO ALFA - MAR/2028", "+14,80%", "15/03/2028", "R$ 3.210,45"],
+    ["CDB GAMA - JURO MENSAL - AGO/2027", "+13,90%", "10/08/2027", "R$ 1.004,20"],
+    ["CDB FINANCEIRA BETA - FEV/2027", "118,00% CDI", "05/02/2027", "R$ 2.100,00"],
     ["CDB IPCA TESTE - JAN/2030", "IPCA + 6,50%", "15/01/2030", "R$ 1.000,00"],
     ["CDB VELHO - AGO/2026", "+14,00%", "20/08/2026", "R$ 1.100,00"],
     [null, null, null, null],
@@ -247,11 +247,11 @@ function fim(){
   ok(r.ok, "acha o cabecalho mesmo com mojibake no 'Saldo liquido'");
   igual(r.linha, 2, "cabecalho na 3a linha");
   igual(r.cdbs.length, 3, "3 CDBs validos");
-  igual(r.cdbs[0], { nome:"CDB BANCO ALFA - NOV/2027", emissor:"BANCO ALFA", indexador:"pre", taxa:0.155,
-                     vencimento:"2027-11-24", saldo_liquido:3210.45, data_aplicacao:null, valor_aplicado:null,
+  igual(r.cdbs[0], { nome:"CDB BANCO ALFA - MAR/2028", emissor:"BANCO ALFA", indexador:"pre", taxa:0.148,
+                     vencimento:"2028-03-15", saldo_liquido:3210.45, data_aplicacao:null, valor_aplicado:null,
                      juros_mensais:false }, "linha pre completa");
   ok(r.cdbs[1].juros_mensais && r.cdbs[1].emissor === "GAMA", "'JURO MENSAL' no nome liga os juros mensais");
-  igual([r.cdbs[2].indexador, r.cdbs[2].taxa], ["cdi", 1.2], "120,00% CDI");
+  igual([r.cdbs[2].indexador, r.cdbs[2].taxa], ["cdi", 1.18], "118,00% CDI");
   igual(r.avisos.map(a => a.linha), [7, 8], "avisos com o numero da linha da planilha (IPCA e vencido)");
   ok(/IPCA/.test(r.avisos[0].msg) && /venceu em 20\/08\/2026/.test(r.avisos[1].msg), "motivo de cada aviso");
 
@@ -292,8 +292,8 @@ function fim(){
     { nome: "xl/worksheets/sheet2.xml", txt: '<?xml version="1.0"?><worksheet ' + NS + '><sheetData>' +
       '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>Rentabilidade</t></is></c>' +
       '<c r="C1" t="inlineStr"><is><t>Data vencimento</t></is></c><c r="D1" t="s"><v>1</v></c></row>' +
-      '<row r="3"><c r="A3" t="str"><v>CDB X - NOV/2027</v></c><c r="B3" t="s"><v>2</v></c>' +
-      '<c r="C3" s="1"><v>46715</v></c><c r="D3" s="2"><v>1234.56</v></c><c r="F3" t="b"><v>1</v></c>' +
+      '<row r="3"><c r="A3" t="str"><v>CDB X - MAR/2028</v></c><c r="B3" t="s"><v>2</v></c>' +
+      '<c r="C3" s="1"><v>46827</v></c><c r="D3" s="2"><v>1234.56</v></c><c r="F3" t="b"><v>1</v></c>' +
       '<c r="G3" t="e"><v>#N/A</v></c></row></sheetData></worksheet>' },
   ];
   for (const deflate of [false, true]){
@@ -302,13 +302,13 @@ function fim(){
     igual(abas.map(a => a.nome), ["Resumo", "Sua carteira"], "abas na ordem do workbook" + rot);
     igual(abas[1].linhas[0], ["CDB", "Rentabilidade", "Data vencimento", "Saldo líquido"], "cabecalho: shared + inline" + rot);
     igual(abas[1].linhas[1], [], "linha ausente vira vazia (numero da linha preservado)" + rot);
-    igual(abas[1].linhas[2], ["CDB X - NOV/2027", "+15,50%", "2027-11-24", 1234.56, null, true, null],
+    igual(abas[1].linhas[2], ["CDB X - MAR/2028", "+15,50%", "2028-03-15", 1234.56, null, true, null],
           "texto rico sem <rPh>, data pelo estilo, numero, lacuna, booleano, erro" + rot);
   }
   igual(X.colIdx("A1"), 0, "coluna A"); igual(X.colIdx("AB12"), 27, "coluna AB");
   const CSV = new TextEncoder().encode('CDB;Rentabilidade;Data vencimento;Saldo líquido\r\n' +
-    '"CDB X; SERIE 2 - NOV/2027";+15,50%;24/11/2027;"R$ 1.234,56"\r\n;;;\r\n');
-  igual(X.lerCSV(CSV.buffer)[0].linhas[1], ["CDB X; SERIE 2 - NOV/2027", "+15,50%", "24/11/2027", "R$ 1.234,56"], "csv com ; e aspas");
+    '"CDB X; SERIE 2 - MAR/2028";+15,50%;15/03/2028;"R$ 1.234,56"\r\n;;;\r\n');
+  igual(X.lerCSV(CSV.buffer)[0].linhas[1], ["CDB X; SERIE 2 - MAR/2028", "+15,50%", "15/03/2028", "R$ 1.234,56"], "csv com ; e aspas");
   const ANSI = new Uint8Array([0x53,0x61,0x6c,0x64,0x6f,0x20,0x6c,0xed,0x71,0x75,0x69,0x64,0x6f,0x3b,0x78,0x0d,0x0a]);
   igual(X.lerCSV(ANSI.buffer)[0].linhas[0], ["Saldo líquido", "x"], "csv em Windows-1252 (Excel brasileiro)");
   const fx = await X.lerArquivo(new File([await zipTeste(ARQS, true)], "p.xlsx"));
@@ -317,7 +317,7 @@ function fim(){
   let erroXls = ""; try { await X.lerArquivo(new File([new Uint8Array([0xd0,0xcf,0x11,0xe0])], "a.xls")); } catch (e){ erroXls = e.message; }
   ok(/xlsx/.test(erroXls), ".xls antigo: pede para salvar como .xlsx");
   const e2e = V.lerAbas(fx, { posicao: "2026-09-19" });
-  ok(e2e.ok && e2e.aba === "Sua carteira" && e2e.cdbs.length === 1 && e2e.cdbs[0].vencimento === "2027-11-24" &&
+  ok(e2e.ok && e2e.aba === "Sua carteira" && e2e.cdbs.length === 1 && e2e.cdbs[0].vencimento === "2028-03-15" &&
      e2e.cdbs[0].taxa === 0.155 && e2e.cdbs[0].saldo_liquido === 1234.56, "ponta a ponta: .xlsx -> lerAbas -> CDB pronto");
 
   // ==MAIS_TESTES==

@@ -39,10 +39,10 @@ ignora colunas a mais):
 
 | Coluna | Obrigatória | Exemplo |
 |---|---|---|
-| CDB (ou Ativo, Nome…) | sim | `CDB BANCO X - NOV/2027` — "JURO MENSAL" no nome liga os juros mensais |
+| CDB (ou Ativo, Nome…) | sim | `CDB BANCO X - MAR/2028` — "JURO MENSAL" no nome liga os juros mensais |
 | Rentabilidade (ou Taxa…) | sim | `+15,50%` (pré a.a.) · `120,00% CDI` · `CDI + 1,5%` |
-| Data vencimento | sim | `24/11/2027` |
-| Saldo líquido (ou Valor líquido) | sim | `R$ 3.702,38` |
+| Data vencimento | sim | `15/03/2028` |
+| Saldo líquido (ou Valor líquido) | sim | `R$ 2.480,15` |
 | Data aplicação | não | deixa o IR exato |
 | Valor aplicado | não | deixa o IR exato |
 
