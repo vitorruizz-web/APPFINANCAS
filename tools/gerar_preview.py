@@ -87,6 +87,13 @@ MOCK = r"""
       return json(j >= 0 ? [DADOS[tabela][j]] : []);
     }
     if (metodo === "DELETE"){
+      // importacao de CDBs: apaga todos os lotes menos o novo
+      const neq = (url.match(/lote=neq\.([^&]+)/) || [])[1];
+      if (neq !== undefined){
+        const fica = decodeURIComponent(neq);
+        DADOS[tabela] = DADOS[tabela].filter(x => String(x.lote) === fica);
+        return new Response(null, { status: 204 });
+      }
       const id = (url.match(/id=eq\.([^&]+)/) || [])[1];
       DADOS[tabela] = DADOS[tabela].filter(x => String(x.id) !== id);
       return new Response(null, { status: 204 });

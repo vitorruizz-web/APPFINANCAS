@@ -1457,8 +1457,8 @@ const SB_KEY = "sb_publishable_FWIZqq1F_J-guCTrJY93iQ_k2kpd0wY";
 
 const TABELAS = ["fin_categories","fin_accounts","fin_rules","fin_plan",
                  "fin_entries","fin_balances","fin_months","fin_settings",
-                 "fin_installments"];
-const MESES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+                 "fin_installments","fin_cdbs"];
+const MESES =["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const MESES_L = ["janeiro","fevereiro","março","abril","maio","junho",
                  "julho","agosto","setembro","outubro","novembro","dezembro"];
 
@@ -1626,7 +1626,7 @@ async function sbFetch(caminho, opts, jaTentou){
 // ============================================================
 const estado = {
   uid:null, email:null,
-  categorias:[], contas:[], regras:[], parcelas:[],
+  categorias:[], contas:[], regras:[], parcelas:[], cdbs:[],
   plano:{}, meses:{}, balances:{}, entries:{}, settings:{},
   competencias:[],
 };
@@ -1636,7 +1636,7 @@ let mesAtual = compHoje();
 let anoSel = compHoje().slice(0,4);
 const chaveCache = () => "fin_cache_" + (estado.uid || "anon");
 
-function indexar(cats, conts, regras, plan, ents, bals, mss, sets, parc){
+function indexar(cats, conts, regras, plan, ents, bals, mss, sets, parc, cdbs){
   for (const c of cats){ c.nome = repara(c.nome); c.grupo = repara(c.grupo); }
   for (const a of conts){ a.nome = repara(a.nome); a.instituicao = repara(a.instituicao); }
   for (const p of plan) p.obs = repara(p.obs);
@@ -1651,6 +1651,13 @@ function indexar(cats, conts, regras, plan, ents, bals, mss, sets, parc){
   for (const b of bals) (estado.balances[b.competencia] = estado.balances[b.competencia] || {})[b.account_id] = b;
   for (const m of mss) estado.meses[m.competencia] = m;
   estado.settings = (sets && sets[0] && sets[0].data) || {};
+  // so o lote MAIS RECENTE: se a limpeza de uma importacao falhou, dois lotes
+  // convivem no banco e somar os dois dobraria a carteira
+  const lotes = (cdbs || []).map(c => c.lote).sort();
+  const ultLote = lotes[lotes.length - 1];
+  estado.cdbs = ordenarCdbs((cdbs || []).filter(c => c.lote === ultLote)
+    .map(c => Object.assign(c, { nome: repara(c.nome), emissor: repara(c.emissor) })));
+  agendaCache = null;
   horizonte();
 }
 function horizonte(){
@@ -1701,8 +1708,14 @@ function realizadoCat(comp){
 
 async function carregarTudo(){
   try {
-    const res = await Promise.all(TABELAS.map(t =>
-      sbFetch(t + "?select=*" + (t==="fin_plan"||t==="fin_entries" ? "&limit=20000" : ""))));
+    const res = await Promise.all(TABELAS.map(t => {
+      const q = sbFetch(t + "?select=*" + (t==="fin_plan"||t==="fin_entries"||t==="fin_cdbs" ? "&limit=20000" : ""));
+      if (t !== "fin_cdbs") return q;
+      // a aba Vencimentos nao pode derrubar o app: sem a migracao 006 a tabela
+      // nao existe (HTTP 404) e o resto tem de abrir normalmente
+      return q.then(x => { cdbsIndisponivel = false; return x; },
+                    e => { if (!/HTTP 404/.test(e.message)) throw e; cdbsIndisponivel = true; return []; });
+    }));
     indexar.apply(null, res);
     dadosTravados = false;
     try { localStorage.setItem(chaveCache(), JSON.stringify(res)); } catch(e){}
@@ -3145,6 +3158,38 @@ function folhaConta(conta){
 }
 
 // ============================================================
+// VENCIMENTOS
+// Quanto cai na conta, dia a dia, com os CDBs da planilha da corretora. O
+// calculo mora no bloco <vencimentos>; aqui so busca taxa, desenha e grava.
+// ============================================================
+let cdbsIndisponivel = false;   // tabela fin_cdbs ausente (migracao 006 nao aplicada)
+let agendaCache = null;
+const ordenarCdbs = l => l.slice().sort((a, b) =>
+  a.vencimento.localeCompare(b.vencimento) || String(a.nome).localeCompare(String(b.nome), "pt-BR"));
+
+// A planilha e a carteira INTEIRA: grava o lote novo e so entao apaga os
+// anteriores. Se o DELETE falhar, indexar() fica so com o lote mais recente.
+async function gravarPosicao(cdbs, pos){
+  const lote = new Date().toISOString();
+  const linhas = cdbs.map(c => ({ lote: lote, data_posicao: pos, nome: c.nome, emissor: c.emissor,
+    indexador: c.indexador, taxa: c.taxa, vencimento: c.vencimento, saldo_liquido: c.saldo_liquido,
+    data_aplicacao: c.data_aplicacao, valor_aplicado: c.valor_aplicado, juros_mensais: !!c.juros_mensais }));
+  let r;
+  try { r = await salvar("fin_cdbs", linhas); } catch (e){ return false; }
+  if (!r || !r.length) return false;
+  try { await sbFetch("fin_cdbs?lote=neq." + encodeURIComponent(r[0].lote), { method:"DELETE" }); }
+  catch (e){ console.warn("lotes antigos ficaram no banco:", e.message); }
+  estado.cdbs = ordenarCdbs(r);
+  cdbsIndisponivel = false; agendaCache = null;
+  // o cache offline tambem passa a ter a posicao nova (posicao 9 = fin_cdbs)
+  try {
+    const c = JSON.parse(localStorage.getItem(chaveCache()) || "null");
+    if (c && c.length){ c[9] = r; localStorage.setItem(chaveCache(), JSON.stringify(c)); }
+  } catch (e){}
+  return true;
+}
+
+// ============================================================
 // PLANO
 // ============================================================
 function colunasPlano(modo){
@@ -3443,7 +3488,7 @@ function exportar(){
   if (disfarce){ toast("Saia do modo discreto para exportar — o arquivo sairia com os valores da tela"); return; }
   const dados = { exportado:new Date().toISOString(), categorias:estado.categorias,
     contas:estado.contas, regras:estado.regras, parcelas:estado.parcelas, plano:estado.plano,
-    meses:estado.meses, balances:estado.balances, entries:estado.entries };
+    meses:estado.meses, balances:estado.balances, entries:estado.entries, cdbs:estado.cdbs };
   const b = new Blob([JSON.stringify(dados,null,1)], { type:"application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(b); a.download = "financas-" + hojeISO() + ".json"; a.click();
