@@ -229,6 +229,50 @@ function fim(){
   perto(ag2.aReceber, p0.liquido + pj3.aReceber, "a receber (a partir de hoje) ignora o cupom ja pago");
   ok(ag2.hoje > 2000, "carteira de hoje cresceu depois de um mes");
 
+  // ------------------------------------------ leitura da planilha (Task 3)
+  // cabecalho com o mojibake que a corretora de verdade exporta ("l�quido")
+  const LIN = [
+    ["Posição detalhada", null, null, null],
+    [],
+    ["CDB", "Rentabilidade a mercado", "Data vencimento", "Saldo l�quido"],
+    ["CDB BANCO ALFA - NOV/2027", "+15,50%", "24/11/2027", "R$ 3.210,45"],
+    ["CDB GAMA - JURO MENSAL - DEZ/2027", "+16,10%", "27/12/2027", "R$ 1.004,20"],
+    ["CDB FINANCEIRA BETA - JAN/2027", "120,00% CDI", "14/01/2027", "R$ 2.100,00"],
+    ["CDB IPCA TESTE - JAN/2030", "IPCA + 6,50%", "15/01/2030", "R$ 1.000,00"],
+    ["CDB VELHO - AGO/2026", "+14,00%", "20/08/2026", "R$ 1.100,00"],
+    [null, null, null, null],
+    ["Total", null, null, "R$ 8.414,65"],
+  ];
+  const r = V.ler(LIN, { posicao: "2026-09-19" });
+  ok(r.ok, "acha o cabecalho mesmo com mojibake no 'Saldo liquido'");
+  igual(r.linha, 2, "cabecalho na 3a linha");
+  igual(r.cdbs.length, 3, "3 CDBs validos");
+  igual(r.cdbs[0], { nome:"CDB BANCO ALFA - NOV/2027", emissor:"BANCO ALFA", indexador:"pre", taxa:0.155,
+                     vencimento:"2027-11-24", saldo_liquido:3210.45, data_aplicacao:null, valor_aplicado:null,
+                     juros_mensais:false }, "linha pre completa");
+  ok(r.cdbs[1].juros_mensais && r.cdbs[1].emissor === "GAMA", "'JURO MENSAL' no nome liga os juros mensais");
+  igual([r.cdbs[2].indexador, r.cdbs[2].taxa], ["cdi", 1.2], "120,00% CDI");
+  igual(r.avisos.map(a => a.linha), [7, 8], "avisos com o numero da linha da planilha (IPCA e vencido)");
+  ok(/IPCA/.test(r.avisos[0].msg) && /venceu em 20\/08\/2026/.test(r.avisos[1].msg), "motivo de cada aviso");
+
+  const r2 = V.ler([["Ativo", "Indexador", "Taxa", "Vencimento", "Valor Líquido (R$)", "Data de Aplicação", "Valor Aplicado"],
+                    ["LCI ZETA", "CDI", "95%", "2027-03-01", 1500.5, "2025-03-01", 1400],
+                    ["CDB ETA", "PRÉ", 0.155, 46715, "1.234,56", 45726, "1.000,00"]], { posicao: "2026-09-19" });
+  ok(r2.ok, "sinonimos: Ativo / Indexador+Taxa / Vencimento / Valor Liquido / Data de Aplicacao / Valor Aplicado");
+  igual([r2.cols.aplicacao, r2.cols.valorAplicado, r2.cols.indexador, r2.cols.taxa, r2.cols.saldo], [5, 6, 1, 2, 4], "mapa das colunas");
+  igual([r2.cdbs[0].indexador, r2.cdbs[0].taxa, r2.cdbs[0].data_aplicacao, r2.cdbs[0].valor_aplicado], ["cdi", 0.95, "2025-03-01", 1400], "CDI + 95%");
+  igual([r2.cdbs[1].indexador, r2.cdbs[1].taxa, r2.cdbs[1].vencimento, r2.cdbs[1].data_aplicacao], ["pre", 0.155, "2027-11-24", "2025-03-10"],
+        "PRÉ + 0,155 e datas seriais do Excel");
+  const r3 = V.ler([["CDB", "Taxa", "Vencimento"], ["CDB Z", "+15%", "01/01/2028"]], {});
+  ok(!r3.ok, "sem a coluna de saldo nao importa");
+  igual(r3.faltando, ["Saldo líquido"], "e diz qual coluna falta");
+  igual(V.mapearColunas(["Taxa a mercado", "Taxa de aplicação", "CDB", "Vencimento", "Saldo"]).taxa, 1,
+        "'Taxa de aplicacao' vence 'Taxa a mercado'");
+  const ra = V.lerAbas([{ nome:"Resumo", linhas:[["Carteira"], ["Total", 10]] }, { nome:"Sua carteira", linhas: LIN }], { posicao:"2026-09-19" });
+  ok(ra.ok && ra.aba === "Sua carteira" && ra.cdbs.length === 3, "lerAbas pula a aba sem cabecalho");
+  const rv = V.lerAbas([{ nome:"x", linhas:[["Nada aqui"]] }], {});
+  ok(!rv.ok && rv.faltando.length === 4, "lerAbas sem nenhuma aba valida devolve o que falta");
+
   // ==MAIS_TESTES==
 
   fim();
