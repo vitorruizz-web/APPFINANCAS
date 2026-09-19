@@ -69,14 +69,16 @@ IR); Tesouro, debêntures e CRI/CRA ficam fora, com aviso. A planilha continua c
 
 **A taxa que o Open Finance manda é a da EMISSÃO do título**, não a de quem comprou depois
 no mercado secundário, que é a taxa em que o saldo realmente cresce. Por isso a função também
-traz as movimentações de cada título, e o app calcula a taxa da **compra** pelo próprio saldo:
-com uma compra só, `(bruto de hoje / valor aplicado)^(252 / dias úteis desde a compra) − 1`
-(`VENC.dePluggy`). Conferido com a planilha da XP em 19/09/2026: dos 105 prefixados com a
-compra registrada, 102 batem em 0,01 ponto, e os 3 restantes vencem no dia útil seguinte.
-Prefixado que quase não cresceu desde a compra paga **juros todo mês** (o cupom sai do saldo)
-e é marcado sozinho. Sem a compra na janela do Open Finance (título comprado há mais tempo),
-fica a taxa da emissão e a data de aplicação em branco — a Conexões mostra quantos são. O CDI
-vem certo da Pluggy.
+traz as movimentações de cada título, e o app calcula a taxa da **compra** pelo próprio saldo
+(`VENC.dePluggy`): no prefixado, com uma compra só, `(bruto de hoje / valor aplicado)^(252 /
+dias úteis desde a compra) − 1`; no CDI, o percentual que leva o aplicado ao bruto de hoje pelo
+CDI que valeu em cada dia útil (histórico do BC — se ele ainda não cobre a compra, fica a taxa
+da emissão até a próxima sincronização). Conferido com a planilha da XP em 19/09/2026: dos 105
+prefixados com a compra registrada, 102 batem em 0,01 ponto (os 3 restantes vencem no dia útil
+seguinte), e os 49 do CDI com compra batem em 0,05 ponto. Título que quase não cresceu desde a
+compra paga **juros todo mês** (o cupom sai do saldo) e é marcado sozinho. Sem a compra na
+janela do Open Finance (título comprado há mais tempo), fica a taxa da emissão e a data de
+aplicação em branco — a Conexões mostra quantos são.
 
 Configuração (uma vez):
 

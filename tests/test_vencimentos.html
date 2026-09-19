@@ -382,9 +382,18 @@ function fim(){
   igual([parc.taxaDe, parc.cdb.taxa, parc.cdb.data_aplicacao], ["emissao", 0.148, "2026-03-10"], "com resgate no meio, o saldo nao diz a taxa");
   const duas = V.dePluggy(Object.assign({}, INV, { movimentos: [COMPRA("2026-01-05", 500), COMPRA("2026-02-05", 500)] }), "XP", d("2026-09-19"));
   igual([duas.taxaDe, duas.cdb.data_aplicacao], ["emissao", null], "duas compras: taxa da emissao e sem data unica de aplicacao");
-  const cdiC = V.dePluggy(Object.assign({}, INV, { rate:120, rateType:"CDI", movimentos: [COMPRA("2026-01-05", 1000)] }), "XP", d("2026-09-19"));
-  igual([cdiC.taxaDe, cdiC.cdb.taxa, cdiC.cdb.data_aplicacao], ["contrato", 1.2, "2026-01-05"],
-        "CDI: o percentual vem certo da Pluggy; a aplicacao passa a ser a data da compra");
+  // CDI: o percentual de quem comprou no secundario sai do CDI que valeu desde a compra
+  const degC = V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", d("2026-09-19"));
+  const brutoCdi = 1000 * V.fator({ indexador:"cdi", taxa:1.18 }, d("2026-01-05"), d("2026-09-18"), degC);
+  const INVC = Object.assign({}, INV, { rate:110, rateType:"CDI", amount: brutoCdi, movimentos: [COMPRA("2026-01-05", 1000)] });
+  const cdiC = V.dePluggy(INVC, "XP", d("2026-09-19"), { degraus: degC, desde: "2025-10-06" });
+  igual([cdiC.taxaDe, cdiC.cdb.taxa, cdiC.cdb.data_aplicacao], ["compra", 1.18, "2026-01-05"],
+        "CDI comprado no secundario: 118% do CDI pelo saldo (a emissao dizia 110%), aplicacao na data da compra");
+  const cdiA = V.dePluggy(INVC, "XP", d("2026-09-19"), { degraus: degC, desde: "2026-02-01" });
+  igual([cdiA.taxaDe, cdiA.cdb.taxa], ["aguardando", 1.1], "historico do CDI que nao cobre a compra: fica a emissao, esperando");
+  igual(V.dePluggy(INVC, "XP", d("2026-09-19")).taxaDe, "aguardando", "sem historico do CDI nenhum: idem");
+  const cdiJ = V.dePluggy(Object.assign({}, INVC, { amount: 1003.1 }), "XP", d("2026-09-19"), { degraus: degC, desde: "2025-10-06" });
+  igual([cdiJ.taxaDe, cdiJ.cdb.juros_mensais, cdiJ.cdb.taxa], ["juros", true, 1.1], "CDI que quase nao cresceu: juros todo mes");
   igual(V.dePluggy(Object.assign({}, INV, { movimentos: null }), "XP", d("2026-09-19")).cdb.data_aplicacao, "2025-03-10",
         "movimentacao que nao veio (null): fica a emissao, como antes");
   const RESP = { itens: [{ id:"it-xp", conector:"XP Investimentos", status:"UPDATED" }, { id:"it-btg", conector:"BTG Pactual", status:"UPDATED" }],
@@ -396,7 +405,7 @@ function fim(){
         "lerPluggy: 2 CDBs, 1 aviso, posicao = a data mais recente");
   igual(lp.cdbs.map(c => c.instituicao + ":" + c.data_posicao), ["XP Investimentos:2026-09-18", "BTG Pactual:2026-09-17"],
         "cada CDB guarda a propria data de posicao e a corretora");
-  igual(lp.taxas, { compra: 0, emissao: 1, juros: 0, contrato: 1 }, "lerPluggy conta de onde veio a taxa de cada titulo");
+  igual(lp.taxas, { compra: 0, emissao: 2, juros: 0, aguardando: 0 }, "lerPluggy conta de onde veio a taxa de cada titulo");
 
   // ------------------------------------------ motor: o que a Pluggy traz a mais
   const ctxI = extra => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),

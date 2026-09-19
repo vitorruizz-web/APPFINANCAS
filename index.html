@@ -1459,11 +1459,13 @@ window.VENC = (function () {
   // Um investimento da Pluggy -> { cdb, taxaDe } (linha de fin_cdbs) ou { aviso }.
   // A taxa que a Pluggy manda e a da EMISSAO do titulo; quem comprou depois, no mercado
   // secundario, rende a da COMPRA -- e ela sai do proprio saldo: com uma compra so,
-  // (bruto de hoje / aplicado)^(252 / dias uteis) - 1. Conferido com a planilha da XP em
-  // 19/09/2026: 102 prefixados batem em 0,01 ponto (3 vencendo no dia util seguinte, em
-  // 0,15). Sem a compra, fica a taxa da emissao. Prefixado que quase nao cresceu desde a
-  // compra paga juros todo mes (o cupom sai do saldo). O CDI vem certo da Pluggy.
-  function dePluggy(inv, conector, hojeDia) {
+  // (bruto de hoje / aplicado)^(252 / dias uteis) - 1; no CDI, o percentual que leva o
+  // aplicado ao bruto pelo CDI que valeu em cada dia (cdi = { degraus, desde }, o historico
+  // do BC -- sem ele cobrindo a compra, fica a da emissao ate a proxima sincronizacao).
+  // Conferido com a planilha da XP em 19/09/2026: 102 prefixados em 0,01 ponto (3 vencendo
+  // no dia util seguinte, em 0,15) e 49 de 49 no CDI em 0,05 ponto. Sem a compra, fica a
+  // taxa da emissao. Titulo que quase nao cresceu desde a compra paga juros todo mes.
+  function dePluggy(inv, conector, hojeDia, cdi) {
     const nome = String(inv.name || inv.code || "").replace(/\s+/g, " ").trim() || "(sem nome)";
     const fora = msg => ({ aviso: { nome, msg } });
     if (inv.type && inv.type !== "FIXED_INCOME") return fora("não é renda fixa (" + inv.type + ")");
@@ -1481,16 +1483,32 @@ window.VENC = (function () {
     const posicao = diaBrasilia(inv.date) || (isFinite(hojeDia) ? iso(hojeDia) : null);
     const compra = compraPluggy(inv);
     const aplicado = orig > 0 ? orig : compra && compra.valor ? compra.valor : null;
-    let taxa = tx.taxa, taxaDe = tx.indexador === "pre" ? "emissao" : "contrato";
+    let taxa = tx.taxa, taxaDe = "emissao";
     let jm = /juros?\s*mensa/i.test(nome);
     // sem movimentacoes (funcao antiga): a emissao, como antes; com elas, so a compra --
     // sem compra na janela, a data fica em branco (a emissao inventaria um passado)
     let aplicacao = compra ? compra.dia : diaBrasilia(inv.issueDate);
-    if (compra && compra.dia && compra.limpa && tx.indexador === "pre" && aplicado && bruto > 0 && posicao) {
+    const podeCalcular = compra && compra.dia && compra.limpa && aplicado && bruto > 0 && posicao;
+    if (podeCalcular && tx.indexador === "pre") {
       const d = du(dn(compra.dia), dn(posicao));
       const impl = d >= 1 ? Math.pow(bruto / aplicado, 252 / d) - 1 : NaN;
       if (impl < tx.taxa / 2) { jm = true; taxaDe = "juros"; }
       else if (impl > 0 && impl <= 0.5) { taxa = Math.round(impl * 1e6) / 1e6; taxaDe = "compra"; }
+    } else if (podeCalcular && tx.indexador === "cdi" && !(cdi && cdi.degraus && cdi.desde && compra.dia >= cdi.desde)) {
+      taxaDe = "aguardando";                   // o historico do CDI ainda nao cobre a compra
+    } else if (podeCalcular && tx.indexador === "cdi") {
+      // o fator do CDI dia util a dia util, uma vez so; depois e so achar o percentual
+      const a = dn(compra.dia), b = dn(posicao), alvo = bruto / aplicado;
+      const sp = tx.spread ? Math.pow(1 + tx.spread, 1 / 252) : 1, xs = [];
+      for (let d = a; d < b; d++) if (ehUtil(d)) xs.push(Math.pow(1 + cdiEm(cdi.degraus, d), 1 / 252) - 1);
+      const f = t => xs.reduce((p, x) => p * (1 + t * x) * sp, 1);
+      let lo = 0, hi = 4;
+      if (xs.length >= 1 && f(lo) <= alvo && f(hi) >= alvo) {
+        for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (f(m) < alvo) lo = m; else hi = m; }
+        const t = (lo + hi) / 2;
+        if (t < tx.taxa / 2) { jm = true; taxaDe = "juros"; }
+        else { taxa = Math.round(t * 1e4) / 1e4; taxaDe = "compra"; }
+      }
     }
     return { taxaDe, cdb: {
       nome, emissor: inv.issuer ? String(inv.issuer).replace(/\s+/g, " ").trim() : emissor(nome), tipo: sub,
@@ -1505,10 +1523,10 @@ window.VENC = (function () {
   // (a data de referencia mais recente; cada linha guarda a sua).
   function lerPluggy(resp, opts) {
     const hoje = opts && isFinite(opts.hoje) ? opts.hoje : undefined;
-    const cdbs = [], avisos = [], taxas = { compra: 0, emissao: 0, juros: 0, contrato: 0 };
+    const cdbs = [], avisos = [], taxas = { compra: 0, emissao: 0, juros: 0, aguardando: 0 };
     let posicao = null;
     for (const inv of (resp && resp.investimentos) || []) {
-      const r = dePluggy(inv, inv.conector, hoje);
+      const r = dePluggy(inv, inv.conector, hoje, opts && opts.cdi);
       if (r.aviso) { avisos.push(Object.assign({ instituicao: inv.conector || null }, r.aviso)); continue; }
       cdbs.push(r.cdb);
       taxas[r.taxaDe]++;
@@ -3639,7 +3657,10 @@ function sincronizarPluggy(manual){
   sincronizando = (async () => {
     try {
       const resp = await chamarFuncaoPluggy();
-      const lido = VENC.lerPluggy(resp, { hoje: VENC.dn(hojeISO()) });
+      // o CDI que valeu desde a compra da o percentual de quem comprou no secundario
+      const deg = ctxVenc().degraus;
+      const lido = VENC.lerPluggy(resp, { hoje: VENC.dn(hojeISO()),
+        cdi: deg && taxas && taxas.historicoDesde ? { degraus: deg, desde: taxas.historicoDesde } : null });
       const mantidos = manterQuemFalhou(lido);
       sincInfo = { em: new Date().toISOString(), itens: lido.itens, avisos: lido.avisos, taxas: lido.taxas, n: lido.cdbs.length,
                    mantidos: [...new Set(mantidos.map(c => c.instituicao))], erro: null };
@@ -4104,12 +4125,13 @@ function conexoesVenc(){
   }
   // a Pluggy manda a taxa da EMISSAO; a da compra sai do saldo (VENC.dePluggy)
   const tx = sincInfo && sincInfo.taxas;
-  if (tx && (tx.compra || tx.emissao || tx.juros)){
+  if (tx && (tx.compra || tx.emissao || tx.juros || tx.aguardando)){
     const partes = [];
     if (tx.compra) partes.push(tx.compra + ' pela taxa da compra (calculada do saldo)');
     if (tx.emissao) partes.push(tx.emissao + ' pela taxa da emissão (a compra não veio no Open Finance)');
     if (tx.juros) partes.push(tx.juros + ' com juros todo mês');
-    h += '<div class="conc">Prefixados: ' + partes.join(' · ') + '.</div>';
+    if (tx.aguardando) partes.push(tx.aguardando + ' esperando o histórico do CDI (acertam na próxima sincronização)');
+    h += '<div class="conc">Taxas: ' + partes.join(' · ') + '.</div>';
   }
   if (pluggy) h += '<div class="row"><span class="nm">Planilha da corretora<br><span class="t11 d3">plano B, se o Open Finance ' +
     'ficar fora do ar — substitui a posição inteira</span></span><button class="btn mini plain" id="v-importar">Atualizar por planilha</button></div>';
