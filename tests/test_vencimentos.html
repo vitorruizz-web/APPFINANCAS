@@ -361,6 +361,32 @@ function fim(){
      "sem valor aplicado/bruto: null");
   igual(variante({ issuer: null }).cdb.emissor, "BANCO ALFA S.A.", "sem issuer: emissor sai do nome");
   igual(variante({ date: null }).cdb.data_posicao, "2026-09-19", "sem data de referencia: a posicao e hoje");
+  // a taxa da Pluggy e a da EMISSAO; quem comprou no secundario rende a da COMPRA
+  const COMPRA = (dia, valor) => ({ tipo:"BUY", data: dia + "T00:00:00.000Z", liquidacao: dia + "T00:00:00.000Z", qtd:1, pu: valor,
+                                    valor: valor, liquido: valor, taxa: null });
+  const du1 = V.du(d("2026-03-10"), d("2026-09-18")), brutoC = 1000 * Math.pow(1.155, du1 / 252);
+  const comp = V.dePluggy(Object.assign({}, INV, { amount: brutoC, movimentos: [COMPRA("2026-03-10", 1000)] }), "XP", d("2026-09-19"));
+  perto(comp.cdb.taxa, 0.155, "compra no secundario: a taxa sai do saldo bruto (15,5%), nao da emissao (14,8%)");
+  igual([comp.taxaDe, comp.cdb.data_aplicacao, comp.cdb.valor_aplicado], ["compra", "2026-03-10", 1000],
+        "... e a aplicacao passa a ser a data e o valor da compra");
+  perto(comp.cdb.valor_aplicado * V.fator(comp.cdb, d(comp.cdb.data_aplicacao), d(comp.cdb.data_posicao)), brutoC,
+        "o passado pela taxa da compra chega exatamente no bruto de hoje", 1e-6);
+  const semC = V.dePluggy(Object.assign({}, INV, { movimentos: [] }), "XP", d("2026-09-19"));
+  igual([semC.taxaDe, semC.cdb.taxa, semC.cdb.data_aplicacao, semC.cdb.valor_aplicado], ["emissao", 0.148, null, 1000],
+        "sem compra na janela do Open Finance: taxa da emissao e SEM data de aplicacao (a emissao inventaria um passado)");
+  const jmP = V.dePluggy(Object.assign({}, INV, { amount: 1004.2, movimentos: [COMPRA("2026-03-10", 1000)] }), "XP", d("2026-09-19"));
+  igual([jmP.taxaDe, jmP.cdb.juros_mensais, jmP.cdb.taxa], ["juros", true, 0.148],
+        "prefixado que quase nao cresceu desde a compra paga juros todo mes (fica a taxa da emissao)");
+  const parc = V.dePluggy(Object.assign({}, INV, { amount: brutoC, movimentos: [COMPRA("2026-03-10", 1000),
+                                                   { tipo:"SELL", data:"2026-06-10T00:00:00.000Z", valor: 300 }] }), "XP", d("2026-09-19"));
+  igual([parc.taxaDe, parc.cdb.taxa, parc.cdb.data_aplicacao], ["emissao", 0.148, "2026-03-10"], "com resgate no meio, o saldo nao diz a taxa");
+  const duas = V.dePluggy(Object.assign({}, INV, { movimentos: [COMPRA("2026-01-05", 500), COMPRA("2026-02-05", 500)] }), "XP", d("2026-09-19"));
+  igual([duas.taxaDe, duas.cdb.data_aplicacao], ["emissao", null], "duas compras: taxa da emissao e sem data unica de aplicacao");
+  const cdiC = V.dePluggy(Object.assign({}, INV, { rate:120, rateType:"CDI", movimentos: [COMPRA("2026-01-05", 1000)] }), "XP", d("2026-09-19"));
+  igual([cdiC.taxaDe, cdiC.cdb.taxa, cdiC.cdb.data_aplicacao], ["contrato", 1.2, "2026-01-05"],
+        "CDI: o percentual vem certo da Pluggy; a aplicacao passa a ser a data da compra");
+  igual(V.dePluggy(Object.assign({}, INV, { movimentos: null }), "XP", d("2026-09-19")).cdb.data_aplicacao, "2025-03-10",
+        "movimentacao que nao veio (null): fica a emissao, como antes");
   const RESP = { itens: [{ id:"it-xp", conector:"XP Investimentos", status:"UPDATED" }, { id:"it-btg", conector:"BTG Pactual", status:"UPDATED" }],
     investimentos: [ Object.assign({}, INV),
                      Object.assign({}, INV, { id:"inv-2", conector:"BTG Pactual", date:"2026-09-17T03:00:00.000Z", rate:120, rateType:"CDI" }),
@@ -370,6 +396,7 @@ function fim(){
         "lerPluggy: 2 CDBs, 1 aviso, posicao = a data mais recente");
   igual(lp.cdbs.map(c => c.instituicao + ":" + c.data_posicao), ["XP Investimentos:2026-09-18", "BTG Pactual:2026-09-17"],
         "cada CDB guarda a propria data de posicao e a corretora");
+  igual(lp.taxas, { compra: 0, emissao: 1, juros: 0, contrato: 1 }, "lerPluggy conta de onde veio a taxa de cada titulo");
 
   // ------------------------------------------ motor: o que a Pluggy traz a mais
   const ctxI = extra => Object.assign({ posicao: d("2026-09-21"), hoje: d("2026-09-21"),

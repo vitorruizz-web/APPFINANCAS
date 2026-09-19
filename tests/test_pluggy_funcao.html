@@ -49,7 +49,15 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
     date: "2026-09-18T03:00:00.000Z", dueDate: "2027-05-10T03:00:00.000Z", issueDate: "2025-05-10T03:00:00.000Z",
     rate: 120, rateType: "CDI", fixedAnnualRate: null, owner: "NOME DO TITULAR", number: "123", transactions: [{ x: 1 }],
     institution: { name: "XP" } }, extra || {});
-  const PAGINAS = { "it-xp": [[inv("a"), inv("b")], [inv("c")]], "it-btg": [[inv("d", { institution: { name: "BTG" } })]] };
+  const PAGINAS = { "it-xp": [[inv("a"), inv("b")], [inv("c")]], "it-btg": [[inv("d", { institution: { name: "BTG" } })]],
+                    "it-mp1": [[inv("e"), inv("t", { subtype: "TREASURY" }), inv("v", { status: "TOTAL_WITHDRAWAL", balance: 0 })]],
+                    "it-mp2": [[inv("f")]] };
+  ITEMS["it-mp1"] = { id: "it-mp1", connector: { name: "MeuPluggy" }, status: "UPDATED", lastUpdatedAt: "2026-09-19T09:00:00.000Z", error: null };
+  ITEMS["it-mp2"] = { id: "it-mp2", connector: { name: "MeuPluggy" }, status: "UPDATED", lastUpdatedAt: "2026-09-19T09:00:00.000Z", error: null };
+  // movimentacoes: "a" comprou uma vez; "b" a Pluggy nao responde; os outros nao tem nada
+  const MOVS = { a: [{ id: "m1", type: "BUY", movementType: "CREDIT", date: "2025-06-02T03:00:00.000Z", tradeDate: "2025-06-02T03:00:00.000Z",
+                       quantity: 1, value: 950, amount: 950, netAmount: 950, agreedRate: null, description: "COMPRA", brokerageNumber: "N1",
+                       expenses: { brokerageFee: 0 } }] };
   const realFetch = window.fetch.bind(window);
   const USUARIOS = { [TOKEN("u1")]: { id: "u1" }, [TOKEN("outro")]: { id: "outro" }, [TOKEN("qualquer")]: { id: "qualquer" } };
   window.fetch = async (url, opts) => {
@@ -69,6 +77,13 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
     if ((opts.headers || {})["X-API-KEY"] !== "chave-api-falsa") return j({ message: "sem chave" }, 403);
     const m = u.pathname.match(/^\/items\/(.+)$/);
     if (m) return ITEMS[decodeURIComponent(m[1])] ? j(ITEMS[decodeURIComponent(m[1])]) : j({ message: "not found" }, 404);
+    const mt = u.pathname.match(/^\/investments\/([^/]+)\/transactions$/);
+    if (mt) {
+      const idInv = decodeURIComponent(mt[1]);
+      if (idInv === "b") return j({ message: "erro" }, 500);
+      const lst = MOVS[idInv] || [];
+      return j({ total: lst.length, totalPages: 1, page: 1, results: lst });
+    }
     if (u.pathname === "/investments") {
       const pags = PAGINAS[u.searchParams.get("itemId")] || [];
       const p = +u.searchParams.get("page") || 1;
@@ -145,11 +160,18 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
         "junta as duas paginas da XP e a do BTG, com a corretora de cada um");
   igual(Object.keys(c.investimentos[0]).sort(),
         ["conector", "id", "name", "code", "type", "subtype", "issuer", "status", "balance", "amount", "amountOriginal", "taxes",
-         "taxes2", "date", "dueDate", "issueDate", "rate", "rateType", "fixedAnnualRate", "instituicao"].sort(),
-        "so os campos que o app usa: sem nome do titular, numero de conta ou transacoes");
-  const pedidos = chamadas.filter(x => x.url.indexOf("/investments") >= 0);
+         "taxes2", "date", "dueDate", "issueDate", "rate", "rateType", "fixedAnnualRate", "instituicao", "movimentos"].sort(),
+        "so os campos que o app usa: sem nome do titular nem numero de conta");
+  const pedidos = chamadas.filter(x => x.url.indexOf("/investments?") >= 0);
   ok(pedidos.length === 3 && pedidos.every(x => /type=FIXED_INCOME/.test(x.url) && /pageSize=500/.test(x.url)),
      "pede so renda fixa, 500 por pagina, e para no fim das paginas");
+  // movimentacoes: a compra traz a data e o valor -- a taxa da emissao nao e a de quem comprou depois
+  const invA = c.investimentos.find(i => i.id === "a"), invB = c.investimentos.find(i => i.id === "b");
+  igual(invA.movimentos, [{ tipo: "BUY", data: "2025-06-02T03:00:00.000Z", liquidacao: "2025-06-02T03:00:00.000Z", qtd: 1, pu: 950,
+                            valor: 950, liquido: 950, taxa: null }],
+        "movimentacoes enxutas: tipo, datas, quantidade, PU, valores e taxa (sem nota de corretagem nem despesas)");
+  ok(invB.movimentos === null && c.investimentos.length === 4, "movimentacao que falhou vira null e a sincronizacao segue");
+  igual(c.investimentos.find(i => i.id === "c").movimentos, [], "titulo sem movimentacao: lista vazia");
   const naPluggy = chamadas.filter(x => x.url.indexOf("https://api.pluggy.ai") === 0);
   ok(naPluggy.filter(x => x.url !== "https://api.pluggy.ai/auth").every(x => x.headers["X-API-KEY"] === "chave-api-falsa"),
      "usa a apiKey no header X-API-KEY");
@@ -161,6 +183,22 @@ const corpo = async r => { try { return await r.json(); } catch (e) { return nul
   c = await corpo(r);
   ok(r.status === 200 && c.itens[1].erro === "item HTTP 404" && c.investimentos.length === 3,
      "item inexistente: aparece o erro dele e o outro segue");
+
+  // ---------------------------------------------------------------- Meu Pluggy: rotulo da corretora
+  // Pelo Meu Pluggy todo item se chama "MeuPluggy": o rotulo no segredo da o nome da corretora.
+  chamadas.length = 0;
+  ENV.PLUGGY_ITEM_IDS = "XP:it-mp1, BTG=it-mp2";
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  c = await corpo(r);
+  igual(c.itens.map(i => i.id + ":" + i.conector), ["it-mp1:XP", "it-mp2:BTG"], "rotulo XP:<id> / BTG=<id> vira o nome da corretora");
+  igual(c.investimentos.map(i => i.id + ":" + i.conector), ["e:XP", "t:XP", "v:XP", "f:BTG"], "cada investimento leva o rotulo do seu item");
+  const movPedidos = chamadas.filter(x => /\/transactions/.test(x.url)).map(x => decodeURIComponent(x.url.match(/investments\/([^/]+)\//)[1])).sort();
+  igual(movPedidos, ["e", "f"], "movimentacoes so da renda fixa bancaria ativa com saldo (Tesouro e resgatado ficam fora)");
+  igual(c.investimentos.filter(i => i.id === "t" || i.id === "v").map(i => i.movimentos), [null, null], "quem fica fora nao tem movimentacoes");
+  ENV.PLUGGY_ITEM_IDS = "it-mp1,it-mp2";
+  r = await HANDLER(req("POST", undefined, TOKEN("u1")));
+  c = await corpo(r);
+  igual(c.itens.map(i => i.conector), ["MeuPluggy", "MeuPluggy 2"], "sem rotulo: dois itens do Meu Pluggy ganham numero (nunca o mesmo nome)");
 
   // ---------------------------------------------------------------- sem DONO_UID
   delete ENV.DONO_UID; ENV.PLUGGY_ITEM_IDS = "it-xp";

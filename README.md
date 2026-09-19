@@ -67,16 +67,34 @@ sincroniza sozinha se a posição tiver mais de 6 h; uma corretora que falhar ma
 anterior (e a tela avisa). Entra a renda fixa bancária (CDB, RDB, LC, LCI, LCA — LCI/LCA sem
 IR); Tesouro, debêntures e CRI/CRA ficam fora, com aviso. A planilha continua como plano B.
 
+**A taxa que o Open Finance manda é a da EMISSÃO do título**, não a de quem comprou depois
+no mercado secundário, que é a taxa em que o saldo realmente cresce. Por isso a função também
+traz as movimentações de cada título, e o app calcula a taxa da **compra** pelo próprio saldo:
+com uma compra só, `(bruto de hoje / valor aplicado)^(252 / dias úteis desde a compra) − 1`
+(`VENC.dePluggy`). Conferido com a planilha da XP em 19/09/2026: dos 105 prefixados com a
+compra registrada, 102 batem em 0,01 ponto, e os 3 restantes vencem no dia útil seguinte.
+Prefixado que quase não cresceu desde a compra paga **juros todo mês** (o cupom sai do saldo)
+e é marcado sozinho. Sem a compra na janela do Open Finance (título comprado há mais tempo),
+fica a taxa da emissão e a data de aplicação em branco — a Conexões mostra quantos são. O CDI
+vem certo da Pluggy.
+
 Configuração (uma vez):
 
 1. `dashboard.pluggy.ai`: criar conta e time (teste de 15 dias); em *Customize*, pôr o conector
    **MeuPluggy** na lista; criar uma *Application* → **Client ID** e **Client Secret**.
 2. `meu.pluggy.ai`: criar conta e conectar a **XP** e o **BTG** (consentimento no app de cada um).
-3. Na Application: **Ir para Demo** → conectar pelo MeuPluggy, **uma vez por banco** → menu ⋮ →
-   **Copiar Item ID**. ⚠ Os passos 2 e 3 só funcionam durante o teste de 15 dias.
-4. Supabase → Edge Functions: publicar `pluggy-cdbs` (JWT obrigatório) e, em *Secrets*,
-   `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_ITEM_IDS` (ids separados por vírgula) e,
-   opcional, `DONO_UID` (uid do usuário do app).
+3. Na Application (*Pluggy Demo App*): **Demo** → **Conectar Conta** → **MeuPluggy** → autorizar
+   a conexão do banco (a janela do Meu Pluggy abre à parte), **uma vez por banco**. O Item ID
+   aparece em *Itens Conectados* (menu ⋮ → **Copiar Item ID**). ⚠ Os passos 2 e 3 só funcionam
+   durante o teste de 15 dias.
+4. Supabase → Edge Functions: publicar `pluggy-cdbs` e, em *Secrets*, `PLUGGY_CLIENT_ID`,
+   `PLUGGY_CLIENT_SECRET` (em *Credenciais* da Application) e `PLUGGY_ITEM_IDS` **com o nome da
+   corretora na frente de cada id**: `XP:<id>,BTG:<id>`. Pelo Meu Pluggy todo item se chama
+   "MeuPluggy"; sem o nome, a corretora que falhar não tem como manter a posição dela.
+   Opcional: `DONO_UID` (uid do usuário do app).
+
+Para somar outra corretora depois: passo 2 (conectar no Meu Pluggy), passo 3 (autorizar no Demo e
+copiar o Item ID) e trocar o valor de `PLUGGY_ITEM_IDS` por `XP:<id>,BTG:<id-novo>`.
 
 O consentimento do Open Finance vence (até 12 meses): a aba avisa 30 dias antes; renova-se no
 Meu Pluggy.

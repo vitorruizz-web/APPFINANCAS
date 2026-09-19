@@ -9,7 +9,10 @@
 // Secrets (painel do Supabase > Edge Functions > Secrets):
 //   PLUGGY_CLIENT_ID      Client ID da Application no dashboard.pluggy.ai
 //   PLUGGY_CLIENT_SECRET  Client Secret da mesma Application
-//   PLUGGY_ITEM_IDS       Item IDs das conexoes (XP, BTG), separados por virgula
+//   PLUGGY_ITEM_IDS       Item IDs das conexoes, separados por virgula, cada um com o
+//                         nome da corretora na frente: "XP:<id>,BTG:<id>". Pelo Meu
+//                         Pluggy todo item se chama "MeuPluggy" -- sem o nome, a
+//                         corretora que falhar nao tem como manter a posicao dela.
 //   DONO_UID (opcional)   uid do usuario do app: qualquer outro token e barrado
 //
 // JavaScript puro (que tambem e TypeScript valido) e sem import: o mesmo arquivo roda
@@ -17,7 +20,8 @@
 
 const API = "https://api.pluggy.ai";
 const ORIGENS = ["https://vitorruizz-web.github.io", "http://localhost:8765", "http://127.0.0.1:8765"];
-// o que o app usa de cada investimento -- nome do titular, conta e transacoes ficam aqui
+// o que o app usa de cada investimento -- nome do titular e conta ficam aqui; das
+// transacoes vai so o enxuto de cada movimentacao (movimentosDe)
 const CAMPOS = ["id", "name", "code", "type", "subtype", "issuer", "status", "balance", "amount",
                 "amountOriginal", "taxes", "taxes2", "date", "dueDate", "issueDate", "rate", "rateType",
                 "fixedAnnualRate"];
@@ -55,7 +59,43 @@ function enxuto(x, conector) {
   const o = { conector: conector || null };
   for (const k of CAMPOS) o[k] = x[k] === undefined ? null : x[k];
   o.instituicao = (x.institution && x.institution.name) || null;
+  o.movimentos = null;
   return o;
+}
+
+// "XP:<id>" -> { rotulo: "XP", id }; "<id>" -> { rotulo: null, id }
+function lerItens(s) {
+  return String(s || "").split(/[\s,;]+/).filter(Boolean).map((t) => {
+    const m = /^([^:=]+)[:=](.+)$/.exec(t);
+    return m ? { rotulo: m[1].trim(), id: m[2].trim() } : { rotulo: null, id: t };
+  });
+}
+
+// Renda fixa BANCARIA: e o que o calendario usa, e o que precisa das compras.
+const BANCARIA = { CDB: 1, RDB: 1, LC: 1, LCI: 1, LCA: 1 };
+// A taxa que a Pluggy manda e a da EMISSAO do titulo. Quem comprou no mercado
+// secundario rende a taxa da COMPRA -- e so a data e o valor da compra permitem
+// chegar nela. Vem das movimentacoes de cada investimento (1 pedido por titulo;
+// o limite da Pluggy e 360/min por rota).
+async function movimentosDe(x, h) {
+  try {
+    const r = await fetch(API + "/investments/" + encodeURIComponent(x.id) + "/transactions?pageSize=500", { headers: h });
+    if (!r.ok) return null;
+    const p = await r.json();
+    return (p.results || []).map((t) => ({
+      tipo: t.type || null, data: t.date || null, liquidacao: t.tradeDate || null, qtd: t.quantity ?? null,
+      pu: t.value ?? null, valor: t.amount ?? null, liquido: t.netAmount ?? null, taxa: t.agreedRate ?? null,
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+async function comMovimentos(lista, h) {
+  const alvo = lista.filter((x) => BANCARIA[String(x.subtype || "").toUpperCase()] &&
+                                   x.status !== "TOTAL_WITHDRAWAL" && +x.balance > 0);
+  let i = 0;
+  const trabalhador = async () => { while (i < alvo.length) { const x = alvo[i++]; x.movimentos = await movimentosDe(x, h); } };
+  await Promise.all([1, 2, 3, 4, 5, 6].map(trabalhador));
 }
 
 async function tratar(req) {
@@ -90,26 +130,33 @@ async function tratar(req) {
   // Uma conexao com problema (consentimento vencido, instabilidade) nao derruba as
   // outras: o erro vai no item e o app decide o que fazer com a posicao dela.
   const saida = { geradoEm: new Date().toISOString(), itens: [], investimentos: [] };
-  for (const id of env("PLUGGY_ITEM_IDS").split(/[\s,;]+/).filter(Boolean)) {
-    const item = { id: id, conector: null, status: null, atualizadoEm: null, consentimentoAte: null, erro: null };
+  const nomes = {};
+  for (const { rotulo, id } of lerItens(env("PLUGGY_ITEM_IDS"))) {
+    const item = { id: id, conector: rotulo, status: null, atualizadoEm: null, consentimentoAte: null, erro: null };
     try {
       const ri = await fetch(API + "/items/" + encodeURIComponent(id), { headers: h });
       if (!ri.ok) item.erro = "item HTTP " + ri.status;
       else {
         const it = await ri.json();
-        item.conector = (it.connector && it.connector.name) || null;
+        let nome = rotulo || (it.connector && it.connector.name) || null;
+        // dois itens sem rotulo com o mesmo conector (todo item do Meu Pluggy) ganham numero
+        if (nome && !rotulo) { nomes[nome] = (nomes[nome] || 0) + 1; if (nomes[nome] > 1) nome += " " + nomes[nome]; }
+        item.conector = nome;
         item.status = it.status || null;
         item.atualizadoEm = it.lastUpdatedAt || it.updatedAt || null;
         item.consentimentoAte = it.consentExpiresAt || null;
         item.erro = (it.error && it.error.message) || null;
+        const doItem = [];
         for (let pagina = 1; pagina <= 20; pagina++) {
           const rv = await fetch(API + "/investments?itemId=" + encodeURIComponent(id) +
                                  "&type=FIXED_INCOME&pageSize=500&page=" + pagina, { headers: h });
           if (!rv.ok) { item.erro = "investimentos HTTP " + rv.status; break; }
           const p = await rv.json();
-          for (const x of p.results || []) saida.investimentos.push(enxuto(x, item.conector));
+          for (const x of p.results || []) doItem.push(enxuto(x, item.conector));
           if (pagina >= (p.totalPages || 1)) break;
         }
+        await comMovimentos(doItem, h);
+        saida.investimentos.push(...doItem);
       }
     } catch (e) {
       item.erro = "sem resposta da Pluggy";
