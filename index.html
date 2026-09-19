@@ -1289,7 +1289,163 @@ window.VENC = (function () {
 /*</vencimentos>*/
 
 /*<xlsx>*/
-window.XLSXLER = {};
+// ============================================================
+// LEITOR DE PLANILHA (.xlsx / .csv) -- sem biblioteca, pelo mesmo motivo do
+// gerador de Excel: dependencia de CDN quebraria o PWA offline.
+// .xlsx e um ZIP de XMLs: o diretorio central diz onde esta cada arquivo,
+// DecompressionStream("deflate-raw") descomprime (Chrome/Edge, Safari 16.4+,
+// Firefox 113+) e o DOMParser le o XML.
+// Devolve [{ nome, linhas }]; celula = texto | numero | booleano | data ISO
+// "AAAA-MM-DD" (quando o ESTILO da celula e de data) | null.
+// ============================================================
+window.XLSXLER = (function () {
+  const u16 = (b, o) => b[o] | (b[o + 1] << 8);
+  const u32 = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+  const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+  function entradas(b) {
+    let fim = -1;                                      // registro final do diretorio central
+    for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) {
+      if (u32(b, i) === 0x06054b50) { fim = i; break; }
+    }
+    if (fim < 0) throw new Error("o arquivo não é um .xlsx válido");
+    const n = u16(b, fim + 10), dec = new TextDecoder(), out = {};
+    let p = u32(b, fim + 16);
+    for (let k = 0; k < n; k++) {
+      if (u32(b, p) !== 0x02014b50) throw new Error("o .xlsx está corrompido");
+      const ln = u16(b, p + 28), lx = u16(b, p + 30), lc = u16(b, p + 32);
+      out[dec.decode(b.subarray(p + 46, p + 46 + ln))] =
+        { metodo: u16(b, p + 10), tam: u32(b, p + 20), local: u32(b, p + 42) };
+      p += 46 + ln + lx + lc;
+    }
+    return out;
+  }
+  async function extrair(b, e) {
+    const ini = e.local + 30 + u16(b, e.local + 26) + u16(b, e.local + 28);
+    const dados = b.subarray(ini, ini + e.tam);
+    if (e.metodo === 0) return dados;
+    if (e.metodo !== 8) throw new Error("compressão do .xlsx não suportada");
+    if (typeof DecompressionStream === "undefined")
+      throw new Error("este navegador não abre .xlsx — salve a planilha como .csv");
+    const s = new Blob([dados]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(s).arrayBuffer());
+  }
+  const xml = bytes => new DOMParser().parseFromString(new TextDecoder().decode(bytes), "application/xml");
+  const tags = (no, nome) => Array.from(no.getElementsByTagNameNS("*", nome));
+  const filhos = (no, nome) => Array.from(no.children).filter(e => e.localName === nome);
+  // texto de uma celula de string (pode vir em varios <r> de texto rico); o <rPh>
+  // e a pronuncia (japones) e fica de fora
+  const textoSi = si => tags(si, "t").filter(t => !(t.parentNode && t.parentNode.localName === "rPh"))
+    .map(t => t.textContent).join("");
+  function colIdx(ref) {
+    let n = 0;
+    for (const ch of ref) { const c = ch.charCodeAt(0); if (c < 65 || c > 90) break; n = n * 26 + c - 64; }
+    return n - 1;
+  }
+  const DATAS_NATIVAS = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+                                 45, 46, 47, 50, 51, 52, 53, 54, 55, 56, 57, 58]);
+  function estilosData(st) {
+    if (!st) return () => false;
+    const custom = {};
+    for (const f of tags(st, "numFmt"))
+      custom[f.getAttribute("numFmtId")] = (f.getAttribute("formatCode") || "").replace(/"[^"]*"|\\.|\[[^\]]*\]/g, "");
+    const pai = tags(st, "cellXfs")[0];
+    const flags = (pai ? filhos(pai, "xf") : []).map(x => {
+      const id = +x.getAttribute("numFmtId");
+      return DATAS_NATIVAS.has(id) || (!!custom[id] && /[dy]/i.test(custom[id]));
+    });
+    return s => !!flags[s];
+  }
+  function valorCelula(c, strings, ehData) {
+    const t = c.getAttribute("t") || "n";
+    const vEl = filhos(c, "v")[0], v = vEl ? vEl.textContent : null;
+    if (t === "s") return v === null || strings[+v] === undefined ? null : strings[+v];
+    if (t === "inlineStr") { const is = filhos(c, "is")[0]; return is ? textoSi(is) : null; }
+    if (t === "str") return v;
+    if (t === "b") return v === "1";
+    if (t === "e") return null;
+    if (t === "d") return v ? v.slice(0, 10) : null;
+    if (v === null || v === "") return null;
+    const n = +v;
+    if (!isFinite(n)) return v;
+    if (ehData(+(c.getAttribute("s") || 0)))
+      return new Date((Math.floor(n) - 25569) * 86400000).toISOString().slice(0, 10);
+    return n;
+  }
+  function linhasDaAba(doc, strings, ehData) {
+    const linhas = [];
+    let ultima = 0;
+    for (const row of tags(doc, "row")) {
+      const r = +row.getAttribute("r") || ultima + 1;
+      ultima = r;
+      const cels = [];
+      let prox = 0;
+      for (const c of filhos(row, "c")) {
+        const ref = c.getAttribute("r"), ci = ref ? colIdx(ref) : prox;
+        prox = ci + 1;
+        cels[ci] = valorCelula(c, strings, ehData);
+      }
+      for (let i = 0; i < cels.length; i++) if (cels[i] === undefined) cels[i] = null;
+      linhas[r - 1] = cels;
+    }
+    for (let i = 0; i < linhas.length; i++) if (!linhas[i]) linhas[i] = [];
+    return linhas;
+  }
+  async function lerXLSX(buf) {
+    const b = new Uint8Array(buf), ent = entradas(b);
+    const abrir = async nome => ent[nome] ? xml(await extrair(b, ent[nome])) : null;
+    const wb = await abrir("xl/workbook.xml");
+    if (!wb) throw new Error("o arquivo não é uma planilha do Excel");
+    const rels = await abrir("xl/_rels/workbook.xml.rels"), alvo = {};
+    if (rels) for (const r of tags(rels, "Relationship")) {
+      const t = r.getAttribute("Target") || "";
+      alvo[r.getAttribute("Id")] = t.charAt(0) === "/" ? t.slice(1) : "xl/" + t.replace(/^\.\//, "");
+    }
+    const sst = await abrir("xl/sharedStrings.xml");
+    const strings = sst ? tags(sst, "si").map(textoSi) : [];
+    const ehData = estilosData(await abrir("xl/styles.xml"));
+    const abas = [];
+    for (const s of tags(wb, "sheet")) {
+      const rid = s.getAttributeNS(NS_R, "id") || s.getAttribute("r:id");
+      const doc = alvo[rid] ? await abrir(alvo[rid]) : null;
+      if (doc) abas.push({ nome: s.getAttribute("name") || "", linhas: linhasDaAba(doc, strings, ehData) });
+    }
+    return abas;
+  }
+  // CSV do Excel brasileiro: ";" e Windows-1252; aceita "," e tab, e UTF-8 (com BOM).
+  function lerCSV(buf) {
+    const b = new Uint8Array(buf);
+    let txt;
+    try { txt = new TextDecoder("utf-8", { fatal: true }).decode(b); }
+    catch (e) { txt = new TextDecoder("windows-1252").decode(b); }
+    txt = txt.replace(/^﻿/, "");
+    const primeira = txt.split(/\r?\n/).find(l => l.trim()) || "";
+    const sep = [";", "\t", ","].map(s => [s, primeira.split(s).length]).sort((a, b) => b[1] - a[1])[0][0];
+    const linhas = [];
+    let linha = [], cel = "", aspas = false;
+    for (let i = 0; i < txt.length; i++) {
+      const ch = txt[i];
+      if (aspas) {
+        if (ch === '"') { if (txt[i + 1] === '"') { cel += '"'; i++; } else aspas = false; }
+        else cel += ch;
+      } else if (ch === '"') aspas = true;
+      else if (ch === sep) { linha.push(cel); cel = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && txt[i + 1] === "\n") i++;
+        linha.push(cel); linhas.push(linha); linha = []; cel = "";
+      } else cel += ch;
+    }
+    if (cel !== "" || linha.length) { linha.push(cel); linhas.push(linha); }
+    return [{ nome: "csv", linhas: linhas.map(l => l.map(x => x.trim() === "" ? null : x.trim())) }];
+  }
+  async function lerArquivo(arquivo) {
+    const buf = await arquivo.arrayBuffer(), b = new Uint8Array(buf);
+    if (b[0] === 0x50 && b[1] === 0x4b) return lerXLSX(buf);                     // "PK": zip
+    if (b[0] === 0xd0 && b[1] === 0xcf) throw new Error("é um .xls antigo — no Excel, salve como .xlsx ou .csv");
+    return lerCSV(buf);
+  }
+  return { lerXLSX, lerCSV, lerArquivo, colIdx };
+})();
 /*</xlsx>*/
 
 

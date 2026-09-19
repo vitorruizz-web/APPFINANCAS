@@ -273,10 +273,84 @@ function fim(){
   const rv = V.lerAbas([{ nome:"x", linhas:[["Nada aqui"]] }], {});
   ok(!rv.ok && rv.faltando.length === 4, "lerAbas sem nenhuma aba valida devolve o que falta");
 
+  // ------------------------------------------ leitor .xlsx / .csv (Task 4)
+  const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"';
+  const ARQS = [
+    { nome: "[Content_Types].xml", txt: '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>' },
+    { nome: "xl/workbook.xml", txt: '<?xml version="1.0"?><workbook ' + NS +
+      ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+      '<sheet name="Resumo" sheetId="1" r:id="rId1"/><sheet name="Sua carteira" sheetId="2" r:id="rId2"/></sheets></workbook>' },
+    { nome: "xl/_rels/workbook.xml.rels", txt: '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="/xl/worksheets/sheet2.xml"/></Relationships>' },
+    { nome: "xl/sharedStrings.xml", txt: '<?xml version="1.0"?><sst ' + NS + '><si><t>CDB</t></si><si><t>Saldo líquido</t></si>' +
+      '<si><r><t>+15,</t></r><r><t>50%</t></r><rPh><t>x</t></rPh></si></sst>' },
+    { nome: "xl/styles.xml", txt: '<?xml version="1.0"?><styleSheet ' + NS + '><numFmts count="1">' +
+      '<numFmt numFmtId="164" formatCode="dd/mm/yyyy;@"/></numFmts>' +
+      '<cellXfs count="3"><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="4"/></cellXfs></styleSheet>' },
+    { nome: "xl/worksheets/sheet1.xml", txt: '<?xml version="1.0"?><worksheet ' + NS + '><sheetData>' +
+      '<row r="1"><c r="A1" t="inlineStr"><is><t>Resumo</t></is></c></row></sheetData></worksheet>' },
+    { nome: "xl/worksheets/sheet2.xml", txt: '<?xml version="1.0"?><worksheet ' + NS + '><sheetData>' +
+      '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>Rentabilidade</t></is></c>' +
+      '<c r="C1" t="inlineStr"><is><t>Data vencimento</t></is></c><c r="D1" t="s"><v>1</v></c></row>' +
+      '<row r="3"><c r="A3" t="str"><v>CDB X - NOV/2027</v></c><c r="B3" t="s"><v>2</v></c>' +
+      '<c r="C3" s="1"><v>46715</v></c><c r="D3" s="2"><v>1234.56</v></c><c r="F3" t="b"><v>1</v></c>' +
+      '<c r="G3" t="e"><v>#N/A</v></c></row></sheetData></worksheet>' },
+  ];
+  for (const deflate of [false, true]){
+    const abas = await X.lerXLSX(await zipTeste(ARQS, deflate));
+    const rot = deflate ? " (DEFLATE)" : " (STORE)";
+    igual(abas.map(a => a.nome), ["Resumo", "Sua carteira"], "abas na ordem do workbook" + rot);
+    igual(abas[1].linhas[0], ["CDB", "Rentabilidade", "Data vencimento", "Saldo líquido"], "cabecalho: shared + inline" + rot);
+    igual(abas[1].linhas[1], [], "linha ausente vira vazia (numero da linha preservado)" + rot);
+    igual(abas[1].linhas[2], ["CDB X - NOV/2027", "+15,50%", "2027-11-24", 1234.56, null, true, null],
+          "texto rico sem <rPh>, data pelo estilo, numero, lacuna, booleano, erro" + rot);
+  }
+  igual(X.colIdx("A1"), 0, "coluna A"); igual(X.colIdx("AB12"), 27, "coluna AB");
+  const CSV = new TextEncoder().encode('CDB;Rentabilidade;Data vencimento;Saldo líquido\r\n' +
+    '"CDB X; SERIE 2 - NOV/2027";+15,50%;24/11/2027;"R$ 1.234,56"\r\n;;;\r\n');
+  igual(X.lerCSV(CSV.buffer)[0].linhas[1], ["CDB X; SERIE 2 - NOV/2027", "+15,50%", "24/11/2027", "R$ 1.234,56"], "csv com ; e aspas");
+  const ANSI = new Uint8Array([0x53,0x61,0x6c,0x64,0x6f,0x20,0x6c,0xed,0x71,0x75,0x69,0x64,0x6f,0x3b,0x78,0x0d,0x0a]);
+  igual(X.lerCSV(ANSI.buffer)[0].linhas[0], ["Saldo líquido", "x"], "csv em Windows-1252 (Excel brasileiro)");
+  const fx = await X.lerArquivo(new File([await zipTeste(ARQS, true)], "p.xlsx"));
+  igual(fx.length, 2, "lerArquivo reconhece o .xlsx pelo conteudo (PK)");
+  igual((await X.lerArquivo(new File([CSV], "p.csv")))[0].linhas[0][0], "CDB", "lerArquivo cai no CSV quando nao e ZIP");
+  let erroXls = ""; try { await X.lerArquivo(new File([new Uint8Array([0xd0,0xcf,0x11,0xe0])], "a.xls")); } catch (e){ erroXls = e.message; }
+  ok(/xlsx/.test(erroXls), ".xls antigo: pede para salvar como .xlsx");
+  const e2e = V.lerAbas(fx, { posicao: "2026-09-19" });
+  ok(e2e.ok && e2e.aba === "Sua carteira" && e2e.cdbs.length === 1 && e2e.cdbs[0].vencimento === "2027-11-24" &&
+     e2e.cdbs[0].taxa === 0.155 && e2e.cdbs[0].saldo_liquido === 1234.56, "ponta a ponta: .xlsx -> lerAbas -> CDB pronto");
+
   // ==MAIS_TESTES==
 
   fim();
 })().catch(e => { ok(false, "excecao: " + (e && e.stack || e)); fim(); });
 
-// ==ZIP_TESTE==
+// Monta um .xlsx de verdade (ZIP + XML) em memoria, com STORE ou DEFLATE --
+// DEFLATE e o que o Excel grava, e e o caminho que usa o DecompressionStream.
+// O CRC vai zerado: o leitor do app nao confere CRC.
+async function zipTeste(arqs, deflate){
+  const enc = new TextEncoder(), partes = [], central = [];
+  const u16 = n => [n & 255, (n >>> 8) & 255];
+  const u32 = n => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+  let off = 0;
+  for (const a of arqs){
+    const nome = enc.encode(a.nome), cru = enc.encode(a.txt);
+    let dados = cru, met = 0;
+    if (deflate){
+      const s = new Blob([cru]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+      dados = new Uint8Array(await new Response(s).arrayBuffer()); met = 8;
+    }
+    const loc = new Uint8Array([].concat([80,75,3,4], u16(20), u16(0), u16(met), u16(0), u16(0), u32(0),
+                                         u32(dados.length), u32(cru.length), u16(nome.length), u16(0)));
+    partes.push(loc, nome, dados);
+    central.push(new Uint8Array([].concat([80,75,1,2], u16(20), u16(20), u16(0), u16(met), u16(0), u16(0), u32(0),
+                                          u32(dados.length), u32(cru.length), u16(nome.length), u16(0), u16(0),
+                                          u16(0), u16(0), u32(0), u32(off))), nome);
+    off += loc.length + nome.length + dados.length;
+  }
+  let tam = 0; for (const c of central) tam += c.length;
+  partes.push(...central, new Uint8Array([].concat([80,75,5,6], u16(0), u16(0), u16(arqs.length), u16(arqs.length),
+                                                   u32(tam), u32(off), u16(0))));
+  return new Blob(partes).arrayBuffer();
+}
 </script>
