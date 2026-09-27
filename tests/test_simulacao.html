@@ -1,0 +1,463 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste das simulacoes</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+// Testes do bloco <simulacao> (e do <motor>, de que ele depende), extraidos do
+// index.html. SO DADO INVENTADO: o repositorio e publico.
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if (!cond) falhas++; return cond; }
+function perto(a, b, msg, tol){
+  tol = tol === undefined ? 1e-6 : tol;
+  ok(a !== null && a !== undefined && Math.abs(a - b) <= tol, `${msg} (obtido ${a}, esperado ${b})`);
+}
+function fim(){
+  document.getElementById("out").textContent =
+    log.join("\n") + `\n\n=== ${falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)"} === (${log.length} asserções)`;
+}
+const clonar = x => JSON.parse(JSON.stringify(x));
+const mes = (p, c) => p.find(m => m.competencia === c);
+
+// ---------------------------------------------------------------- dados
+// 36 meses (2026-01 a 2028-12). Rendimentos e Dividendos tem valor no plano
+// ate 08/2026 e regra dai em diante -- o mesmo desenho do app real.
+function base(){
+  const C = [];
+  for (let a = 2026; a <= 2028; a++) for (let m = 1; m <= 12; m++)
+    C.push(a + "-" + String(m).padStart(2, "0") + "-01");
+  const plano = {};
+  for (const c of C){
+    plano[c] = { sal: 10000, mor: 3200, via: 500 };
+    if (c <= "2026-08-01"){ plano[c].ren = 700; plano[c].div = 100; }
+  }
+  return {
+    categorias: [
+      { id: "sal", nome: "Salário",     tipo: "receita", calculo: "manual" },
+      { id: "ren", nome: "Rendimentos", tipo: "receita", calculo: "pct_saldo" },
+      { id: "div", nome: "Dividendos",  tipo: "receita", calculo: "crescimento" },
+      { id: "mor", nome: "Moradia",     tipo: "despesa", calculo: "manual" },
+      { id: "via", nome: "Viagens",     tipo: "despesa", calculo: "manual" },
+    ],
+    regras: [
+      { id: "r1", category_id: "ren", tipo: "pct_saldo", valor: null, percentual: 0.009,
+        inicio: "2026-09-01", fim: "2026-12-01", ativo: true },
+      { id: "r2", category_id: "ren", tipo: "pct_saldo", valor: null, percentual: 0.0075,
+        inicio: "2027-01-01", fim: null, ativo: true },
+      { id: "r3", category_id: "div", tipo: "crescimento", valor: 100, percentual: 0.012,
+        inicio: "2026-09-01", fim: null, ativo: true },
+    ],
+    plano: plano,
+    parcelas: [{ id: "p1", category_id: "mor", descricao: "Sofá", obs: "Sofá", valor: 250,
+                 inicio: "2026-10-01", parcelas: 4, ativo: true }],
+    meses: { "2026-01-01": { saldo_inicial_override: 100000 } },
+    balances: {},
+    competencias: C,
+  };
+}
+
+// ---------------------------------------------------------------- estado
+// O estado "de linhas", como o app tem em memoria (estado.plano etc.), e as
+// gravacoes aplicadas a ele como o banco faria -- sem banco.
+function estadoDe(d){
+  const plano = {};
+  for (const c in d.plano){
+    plano[c] = {};
+    for (const k in d.plano[c])
+      plano[c][k] = { id: "pl-" + c + "-" + k, valor: d.plano[c][k], obs: null, origem: "planilha" };
+  }
+  return { plano: plano, regras: clonar(d.regras), parcelas: clonar(d.parcelas) };
+}
+function paraMotor(est, d){
+  const plano = {};
+  for (const c in est.plano){
+    plano[c] = {};
+    for (const k in est.plano[c]) plano[c][k] = +est.plano[c][k].valor;
+  }
+  return Object.assign({}, d, { plano: plano, regras: est.regras, parcelas: est.parcelas });
+}
+function aplicarOficial(est, of){
+  const e = clonar(est);
+  for (const l of of.plano){
+    const cur = e.plano[l.competencia] && e.plano[l.competencia][l.category_id];
+    (e.plano[l.competencia] = e.plano[l.competencia] || {})[l.category_id] =
+      Object.assign({ id: cur ? cur.id : "novo-" + l.competencia + "-" + l.category_id }, l);
+  }
+  for (const p of of.parcelas) e.parcelas.push(clonar(p));
+  for (const r of of.regrasNovas) e.regras.push(clonar(r));
+  for (const x of of.regrasAlteradas) Object.assign(e.regras.find(r => r.id === x.id), x.campos);
+  return e;
+}
+function aplicarDesfazer(est, u){
+  const e = clonar(est);
+  for (const x of u.planoApagar) delete e.plano[x.comp][x.cat];
+  for (const l of u.planoRestaurar)
+    Object.assign(e.plano[l.competencia][l.category_id], { valor: l.valor, obs: l.obs, origem: l.origem });
+  e.parcelas = e.parcelas.filter(p => u.parcelasApagar.indexOf(p.id) < 0);
+  e.regras = e.regras.filter(r => u.regrasApagar.indexOf(r.id) < 0);
+  for (const x of u.regrasRestaurar) Object.assign(e.regras.find(r => r.id === x.id), x.campos);
+  return e;
+}
+// so os campos que importam, em ordem estavel -- para comparar dois estados
+function normal(est){
+  const plano = {};
+  for (const c of Object.keys(est.plano).sort()){
+    const ks = Object.keys(est.plano[c]).sort();
+    if (!ks.length) continue;
+    plano[c] = {};
+    for (const k of ks){
+      const l = est.plano[c][k];
+      plano[c][k] = [+l.valor, l.obs === undefined ? null : l.obs, l.origem];
+    }
+  }
+  const regras = est.regras.map(r => [r.id, r.inicio, r.fim || null, r.ativo !== false, +r.percentual || null]).sort();
+  const parcelas = est.parcelas.map(p => [p.id, p.inicio, +p.parcelas, +p.valor]).sort();
+  return JSON.stringify({ plano: plano, regras: regras, parcelas: parcelas });
+}
+function mesmaProjecao(pa, pb, msg){
+  let pior = 0, onde = "";
+  for (let i = 0; i < pa.length; i++){
+    for (const f of ["saldoInicial", "receitas", "saidas", "previsao"]){
+      const d = Math.abs(pa[i][f] - pb[i][f]);
+      if (d > pior){ pior = d; onde = pa[i].competencia + " " + f; }
+    }
+    for (const k in pa[i].previsto){
+      const d = Math.abs(pa[i].previsto[k] - pb[i].previsto[k]);
+      if (d > pior){ pior = d; onde = pa[i].competencia + " " + k; }
+    }
+  }
+  ok(pa.length === pb.length && pior <= 1e-9, `${msg} (maior diferença ${pior}${onde ? " em " + onde : ""})`);
+}
+
+// ---------------------------------------------------------------- casos
+function casos(){
+  const P = MOTOR.projetar, S = SIM;
+  const d0 = base(), pb = P(d0);
+
+  // --- 1: sem alteracoes, a projecao e a oficial
+  mesmaProjecao(P(S.aplicar(d0, []).dados), pb, "1. sem alterações = projeção oficial, mês a mês");
+  const antes = JSON.stringify(d0);
+  S.aplicar(d0, [{ id: "z1", tipo: "valor", cat: "via", comp: "2027-06-01", valor: 1 },
+                 { id: "z2", tipo: "taxa", cat: "ren", de: "2027-01-01", percentual: 0.0065 },
+                 { id: "z3", tipo: "parcelado", cat: "mor", inicio: "2027-01-01", parcelas: 3, valor: 10, descricao: "x" }]);
+  ok(JSON.stringify(d0) === antes, "1. aplicar não muda a entrada (plano, regras, parcelas)");
+
+  // --- 2: valor de um mes, e a cadeia
+  {
+    const r = S.aplicar(d0, [{ id: "a1", tipo: "valor", cat: "via", comp: "2027-06-01", valor: 30000 }]);
+    const ps = P(r.dados);
+    perto(mes(ps, "2027-06-01").previsto.via, 30000, "2. Viagens jun/27 = 30.000");
+    perto(mes(ps, "2027-05-01").previsto.via, 500, "2. mai/27 intacto");
+    perto(mes(ps, "2027-07-01").previsto.via, 500, "2. jul/27 intacto");
+    perto(mes(ps, "2027-06-01").previsao, mes(pb, "2027-06-01").previsao - 29500, "2. previsão de jun/27 cai 29.500");
+    perto(mes(ps, "2027-07-01").saldoInicial, mes(pb, "2027-07-01").saldoInicial - 29500,
+          "2. a cadeia leva a diferença ao saldo inicial de jul/27");
+    perto(mes(ps, "2027-07-01").previsto.ren, mes(pb, "2027-07-01").previsto.ren - 29500 * 0.0075,
+          "2. Rendimentos de jul/27 acompanham o saldo (−221,25)");
+    ok(Object.keys(r.tocadas).length === 1 && r.tocadas["2027-06-01|via"], "2. uma célula tocada");
+  }
+
+  // --- 3: serie de valor, com e sem fim
+  {
+    const r = S.aplicar(d0, [{ id: "a2", tipo: "serie", cat: "sal", de: "2027-03-01", ate: "2027-12-01", modo: "valor", valor: 12000 }]);
+    const ps = P(r.dados);
+    perto(mes(ps, "2027-02-01").previsto.sal, 10000, "3. fev/27, antes da série");
+    perto(mes(ps, "2027-03-01").previsto.sal, 12000, "3. mar/27 = 12.000");
+    perto(mes(ps, "2027-12-01").previsto.sal, 12000, "3. dez/27 = 12.000");
+    perto(mes(ps, "2028-01-01").previsto.sal, 10000, "3. jan/28, depois do fim");
+    ok(Object.keys(r.tocadas).length === 10, "3. dez meses tocados");
+    const r2 = S.aplicar(d0, [{ id: "a3", tipo: "serie", cat: "sal", de: "2027-03-01", ate: null, modo: "valor", valor: 12000 }]);
+    ok(Object.keys(r2.tocadas).length === 22, "3. sem fim: até o fim do horizonte (22 meses)");
+    perto(mes(P(r2.dados), "2028-12-01").previsto.sal, 12000, "3. sem fim: dez/28 = 12.000");
+  }
+
+  // --- 4: serie de %; a parcela oficial continua somando por cima
+  {
+    const ps = P(S.aplicar(d0, [{ id: "a4", tipo: "serie", cat: "mor", de: "2027-01-01", ate: null, modo: "pct", pct: 0.10 }]).dados);
+    perto(mes(ps, "2027-01-01").previsto.mor, 3520 + 250, "4. jan/27 = 3.200 × 1,1 + parcela do sofá");
+    perto(mes(ps, "2027-02-01").previsto.mor, 3520, "4. fev/27 = 3.520");
+    perto(mes(ps, "2026-12-01").previsto.mor, 3200 + 250, "4. dez/26 intacto");
+  }
+
+  // --- 5: precedencia
+  {
+    let ps = P(S.aplicar(d0, [
+      { id: "b1", tipo: "valor", cat: "via", comp: "2027-06-01", valor: 1000 },
+      { id: "b2", tipo: "serie", cat: "via", de: "2027-01-01", ate: null, modo: "valor", valor: 800 },
+    ]).dados);
+    perto(mes(ps, "2027-06-01").previsto.via, 1000, "5. valor de um mês vence a série, mesmo antes dela na lista");
+    perto(mes(ps, "2027-05-01").previsto.via, 800, "5. o resto da série vale");
+    ps = P(S.aplicar(d0, [
+      { id: "b3", tipo: "serie", cat: "sal", de: "2027-01-01", ate: null, modo: "valor", valor: 12000 },
+      { id: "b4", tipo: "serie", cat: "sal", de: "2028-01-01", ate: null, modo: "pct", pct: 0.05 },
+    ]).dados);
+    perto(mes(ps, "2027-06-01").previsto.sal, 12000, "5. série de valor");
+    perto(mes(ps, "2028-03-01").previsto.sal, 12600, "5. % acumula sobre a série de valor (12.000 × 1,05)");
+    ps = P(S.aplicar(d0, [
+      { id: "b5", tipo: "serie", cat: "sal", de: "2027-01-01", ate: null, modo: "pct", pct: 0.10 },
+      { id: "b6", tipo: "serie", cat: "sal", de: "2028-01-01", ate: null, modo: "pct", pct: 0.05 },
+    ]).dados);
+    perto(mes(ps, "2028-01-01").previsto.sal, 11550, "5. % + % acumulam (10.000 × 1,10 × 1,05)");
+    ps = P(S.aplicar(d0, [
+      { id: "b7", tipo: "serie", cat: "via", de: "2027-01-01", ate: "2027-12-01", modo: "valor", valor: 800 },
+      { id: "b8", tipo: "serie", cat: "via", de: "2027-06-01", ate: null, modo: "valor", valor: 900 },
+    ]).dados);
+    perto(mes(ps, "2027-05-01").previsto.via, 800, "5. séries sobrepostas: antes da segunda vale a primeira");
+    perto(mes(ps, "2027-06-01").previsto.via, 900, "5. séries sobrepostas: a última da lista vence");
+    perto(mes(ps, "2028-01-01").previsto.via, 900, "5. a segunda continua depois do fim da primeira");
+    ps = P(S.aplicar(d0, [{ id: "b9", tipo: "serie", cat: "mor", de: "2027-02-01", ate: null, modo: "pct", pct: -0.05 }]).dados);
+    perto(mes(ps, "2027-02-01").previsto.mor, 3040, "5. % negativo (3.200 × 0,95)");
+  }
+
+  // --- 6: Rendimentos
+  {
+    const r = S.aplicar(d0, [{ id: "c1", tipo: "serie", cat: "ren", de: "2026-07-01", ate: null, modo: "pct", pct: 0.10 }]);
+    const ps = P(r.dados);
+    perto(mes(ps, "2026-07-01").previsto.ren, 770, "6. % vale no mês com valor no plano (700 × 1,1)");
+    perto(mes(ps, "2026-08-01").previsto.ren, 770, "6. idem ago/26");
+    perto(mes(ps, "2027-03-01").previsto.ren, mes(ps, "2027-03-01").saldoInicial * 0.0075,
+          "6. mês por regra pct_saldo: fica a regra");
+    ok(!r.tocadas["2027-03-01|ren"], "6. mês por regra não é tocado");
+    ok((r.avisos.c1 || []).indexOf("Rendimentos acompanha o saldo: use a taxa de rendimento") >= 0,
+       "6. aviso para usar a taxa");
+    const ps2 = P(S.aplicar(d0, [{ id: "c2", tipo: "serie", cat: "ren", de: "2027-01-01", ate: "2027-03-01", modo: "valor", valor: 5000 }]).dados);
+    perto(mes(ps2, "2027-02-01").previsto.ren, 5000, "6. série de valor congela Rendimentos");
+    perto(mes(ps2, "2027-04-01").previsto.ren, mes(ps2, "2027-04-01").saldoInicial * 0.0075,
+          "6. depois do fim, volta a regra");
+  }
+
+  // --- 7: taxa de rendimento
+  {
+    let rs = S.regrasComTaxas(d0.regras, [{ id: "t1", cat: "ren", de: "2027-01-01", percentual: 0.0065 }]);
+    const r1 = rs.find(r => r.id === "r1"), r2 = rs.find(r => r.id === "r2"), nova = rs.find(r => r.id === "sim:t1");
+    ok(r1.fim === "2026-12-01" && r1.ativo !== false, "7. regra que já acabava antes fica igual");
+    ok(r2.ativo === false, "7. regra que começa no mesmo mês é desligada");
+    ok(nova && nova.inicio === "2027-01-01" && nova.fim === null && nova.percentual === 0.0065, "7. regra nova, sem fim");
+    ok(rs.find(r => r.id === "r3").ativo !== false, "7. regra de outra categoria intacta");
+    let ps = P(S.aplicar(d0, [{ id: "t1", tipo: "taxa", cat: "ren", de: "2027-01-01", percentual: 0.0065 }]).dados);
+    perto(mes(ps, "2027-01-01").previsto.ren, mes(pb, "2027-01-01").saldoInicial * 0.0065, "7. jan/27 rende 0,65% do saldo");
+    perto(mes(ps, "2026-12-01").previsto.ren, mes(pb, "2026-12-01").previsto.ren, "7. dez/26 intacto");
+
+    rs = S.regrasComTaxas(d0.regras, [{ id: "t2", cat: "ren", de: "2026-11-01", percentual: 0.0095 }]);
+    ok(rs.find(r => r.id === "r1").fim === "2026-10-01", "7. regra que ainda vale termina no mês anterior");
+    ok(rs.find(r => r.id === "r2").ativo === false, "7. regra que começa depois é desligada");
+    ps = P(S.aplicar(d0, [{ id: "t2", tipo: "taxa", cat: "ren", de: "2026-11-01", percentual: 0.0095 }]).dados);
+    perto(mes(ps, "2026-10-01").previsto.ren, mes(ps, "2026-10-01").saldoInicial * 0.009, "7. out/26 ainda na taxa antiga");
+    perto(mes(ps, "2027-05-01").previsto.ren, mes(ps, "2027-05-01").saldoInicial * 0.0095, "7. mai/27 na taxa nova");
+
+    const duas = [{ id: "t4", tipo: "taxa", cat: "ren", de: "2028-01-01", percentual: 0.0055 },
+                  { id: "t3", tipo: "taxa", cat: "ren", de: "2027-01-01", percentual: 0.0065 }];
+    rs = S.regrasComTaxas(d0.regras, duas);
+    ok(rs.find(r => r.id === "sim:t3").fim === "2027-12-01",
+       "7. duas taxas: a de 2028 encerra a de 2027 (ordem de início, não da lista)");
+    ps = P(S.aplicar(d0, duas).dados);
+    perto(mes(ps, "2027-06-01").previsto.ren, mes(ps, "2027-06-01").saldoInicial * 0.0065, "7. 2027 a 0,65%");
+    perto(mes(ps, "2028-06-01").previsto.ren, mes(ps, "2028-06-01").saldoInicial * 0.0055, "7. 2028 a 0,55%");
+
+    rs = S.regrasComTaxas(d0.regras, [{ id: "t5", cat: "ren", de: "2027-01-01", percentual: 0.0065 },
+                                      { id: "t6", cat: "ren", de: "2027-01-01", percentual: 0.0062 }]);
+    ok(!rs.find(r => r.id === "sim:t5") && rs.find(r => r.id === "sim:t6"), "7. mesmo início: vale a última da lista");
+
+    const d1 = base(); d1.plano["2027-05-01"].ren = 1234;
+    ps = P(S.aplicar(d1, [{ id: "t7", tipo: "taxa", cat: "ren", de: "2027-01-01", percentual: 0.0065 }]).dados);
+    perto(mes(ps, "2027-05-01").previsto.ren, 1234, "7. mês digitado à mão não muda");
+    const pv = S.previaTaxa(d1, { id: "t7", tipo: "taxa", cat: "ren", de: "2027-01-01", percentual: 0.0065 });
+    ok(pv.antes === 0.0075 && pv.digitados.length === 1 && pv.digitados[0] === "2027-05-01",
+       "7. prévia: taxa de hoje 0,75% e 1 mês digitado");
+  }
+
+  // --- 8: pontual e parcelado
+  {
+    const r = S.aplicar(d0, [
+      { id: "e1", tipo: "pontual", cat: "via", comp: "2027-06-01", valor: 80000, descricao: "Carro novo" },
+      { id: "e2", tipo: "pontual", cat: "sal", comp: "2027-03-01", valor: 5000, descricao: "Bônus" },
+      { id: "e3", tipo: "parcelado", cat: "mor", inicio: "2028-10-01", parcelas: 6, valor: 2500.555, descricao: "Reforma" },
+    ]);
+    const ps = P(r.dados);
+    perto(mes(ps, "2027-06-01").previsto.via, 80500, "8. pontual soma por cima (500 + 80.000)");
+    ok(mes(ps, "2027-06-01").parcelas.via.some(x => x.id === "sim:e1"), "8. aparece como parcela simulada");
+    perto(mes(ps, "2027-03-01").receitas, mes(pb, "2027-03-01").receitas + 5000, "8. pontual em receita soma às receitas");
+    perto(mes(ps, "2028-12-01").previsto.mor, 3200 + 2500.56, "8. parcelado arredondado a centavos (2.500,555 → 2.500,56)");
+    ok((r.avisos.e3 || []).indexOf("parte fica fora do horizonte do plano") >= 0, "8. parcelado que passa do horizonte avisa");
+  }
+
+  // --- 9: avisos
+  {
+    const r = S.aplicar(d0, [
+      { id: "x1", tipo: "valor", cat: "nao-existe", comp: "2027-01-01", valor: 1 },
+      { id: "x2", tipo: "valor", cat: "via", comp: "2030-01-01", valor: 1 },
+      { id: "x3", tipo: "serie", cat: "via", de: "2025-06-01", ate: "2026-03-01", modo: "valor", valor: 1 },
+    ]);
+    ok((r.avisos.x1 || [])[0] === "a categoria não existe mais", "9. categoria apagada avisa");
+    ok((r.avisos.x2 || [])[0] === "fora do horizonte do plano", "9. mês fora do horizonte avisa");
+    ok((r.avisos.x3 || [])[0] === "parte fica fora do horizonte do plano", "9. série em parte fora avisa");
+    ok(Object.keys(r.tocadas).length === 3, "9. só os 3 meses de dentro contam");
+  }
+
+  // --- 10: arredondamentos (a precisao das colunas do banco)
+  {
+    ok(S.arred(2500.555, 2) === 2500.56 && S.arred(1.005, 2) === 1.01, "10. arred: metade para cima, como o numeric");
+    ok(S.arred(-2.5, 0) === -3, "10. arred: metade para longe do zero");
+    const r = S.aplicar(d0, [{ id: "f1", tipo: "serie", cat: "mor", de: "2027-01-01", ate: "2027-01-01", modo: "pct", pct: 0.1234567891 }]);
+    ok(r.dados.plano["2027-01-01"].mor === 3595.061725, "10. célula a 6 casas (3.595,061725)");
+    const rs = S.regrasComTaxas(d0.regras, [{ id: "f2", cat: "ren", de: "2027-01-01", percentual: 0.00712345678 }]);
+    ok(rs.find(x => x.id === "sim:f2").percentual === 0.00712346, "10. taxa a 8 casas");
+  }
+
+  // --- 11: comparar e marcas
+  {
+    const alts = [{ id: "g1", tipo: "valor", cat: "via", comp: "2027-06-01", valor: 30000 }];
+    const r = S.aplicar(d0, alts), ps = P(r.dados);
+    const cmp = S.comparar(pb, ps);
+    ok(cmp.meses.length === 36 && cmp.anos.length === 3, "11. 36 meses e 3 fins de ano");
+    ok(cmp.anos[0].ano === "2026" && Math.abs(cmp.anos[0].dif) < 1e-9, "11. 2026 não muda");
+    ok(cmp.anos[1].competencia === "2027-12-01" && cmp.anos[1].dif < -29500,
+       "11. 2027 fecha abaixo, e a cadeia aumenta a diferença");
+    const mk = S.marcas(pb, ps, r);
+    ok(mk["2027-06-01|via"] === "direta", "11. célula alterada = direta");
+    ok(mk["2027-07-01|ren"] === "cadeia", "11. Rendimentos do mês seguinte = cadeia");
+    ok(!mk["2027-05-01|ren"] && !mk["2027-06-01|sal"], "11. o resto sem marca");
+    const alt2 = [{ id: "g2", tipo: "pontual", cat: "via", comp: "2027-02-01", valor: 10, descricao: "x" }];
+    const r2 = S.aplicar(d0, alt2);
+    ok(S.marcas(pb, P(r2.dados), r2)["2027-02-01|via"] === "direta", "11. parcela simulada = direta");
+  }
+
+  // --- 12: previa do formulario
+  {
+    let p = S.previa(d0, pb, { id: "h1", tipo: "serie", cat: "sal", de: "2027-03-01", ate: "2027-12-01", modo: "valor", valor: 12000 });
+    ok(p.meses === 10 && p.primeiro.comp === "2027-03-01", "12. prévia: 10 meses a partir de mar/27");
+    perto(p.primeiro.antes, 10000, "12. prévia: antes 10.000");
+    perto(p.primeiro.depois, 12000, "12. prévia: depois 12.000");
+    perto(p.dif, 20000, "12. prévia: +20.000 no total");
+    p = S.previa(d0, pb, { id: "h2", tipo: "serie", cat: "mor", de: "2027-01-01", ate: null, modo: "pct", pct: 0.1 });
+    perto(p.primeiro.antes, 3200, "12. prévia: a base não inclui a parcela do sofá");
+    perto(p.dif, 24 * 320, "12. prévia: 24 meses × 320");
+  }
+
+  // --- 13: tornar oficial = a mesma projecao (a invariante)
+  const ALTS = [
+    { id: "i1",  tipo: "valor", cat: "via", comp: "2027-06-01", valor: 30000 },
+    { id: "i2",  tipo: "serie", cat: "sal", de: "2027-03-01", ate: null, modo: "valor", valor: 12000 },
+    { id: "i3",  tipo: "serie", cat: "mor", de: "2027-01-01", ate: null, modo: "pct", pct: 0.1 },
+    { id: "i4",  tipo: "pontual", cat: "via", comp: "2027-06-01", valor: 80000, descricao: "Carro novo" },
+    { id: "i5",  tipo: "parcelado", cat: "mor", inicio: "2028-10-01", parcelas: 6, valor: 2500.555, descricao: "Reforma" },
+    { id: "i6",  tipo: "taxa", cat: "ren", de: "2027-01-01", percentual: 0.0065 },
+    { id: "i7",  tipo: "taxa", cat: "ren", de: "2028-01-01", percentual: 0.0055 },
+    { id: "i8",  tipo: "valor", cat: "ren", comp: "2027-02-01", valor: 999 },
+    { id: "i9",  tipo: "serie", cat: "div", de: "2027-01-01", ate: "2027-12-01", modo: "pct", pct: 0.05 },
+    { id: "i10", tipo: "valor", cat: "via", comp: "2026-05-01", valor: 500 },
+  ];
+  const est0 = estadoDe(d0);
+  let k = 0;
+  const of = S.oficializar(d0, ALTS, est0, { nome: "Teste", novoId: () => "uuid-" + (++k), agora: "2026-09-26T00:00:00Z" });
+  const est1 = aplicarOficial(est0, of);
+  mesmaProjecao(P(paraMotor(est1, d0)), P(S.aplicar(d0, ALTS).dados),
+                "13. depois de tornar oficial, o plano dá EXATAMENTE a projeção simulada");
+  ok(!of.plano.some(l => l.competencia === "2026-05-01"), "13. célula que já tem o valor não é regravada");
+  ok(of.parcelas.length === 2 && of.parcelas.every(p => p.obs === "simulação: Teste"), "13. duas parcelas, com o nome da simulação");
+  ok(of.regrasNovas.length === 2 && of.regrasNovas[0].fim === "2027-12-01", "13. duas regras novas; a de 2027 termina em dez");
+  ok(of.regrasAlteradas.length === 1 && of.regrasAlteradas[0].id === "r2" && of.regrasAlteradas[0].campos.ativo === false,
+     "13. uma regra antiga desligada (r2)");
+  const velha = of.plano.find(l => l.competencia === "2027-03-01" && l.category_id === "sal");
+  ok(velha && velha.origem === "manual" && velha.obs === null, "13. célula que já existia mantém a obs dela");
+  const nova = of.plano.find(l => l.competencia === "2027-01-01" && l.category_id === "div");
+  ok(nova && nova.obs === "simulação: Teste", "13. célula nova leva a obs da simulação");
+  ok(of.desfazer.completo === false && of.desfazer.parcelas.length === 2 && of.desfazer.regrasNovas.length === 2,
+     "13. o registro nasce com os id novos e completo = false");
+
+  // --- 14: desfazer devolve o plano de antes
+  {
+    const u = S.desfazer(est1, of.desfazer);
+    const est2 = aplicarDesfazer(est1, u);
+    ok(normal(est2) === normal(est0), "14. desfazer devolve plano, parcelas e regras de antes");
+    mesmaProjecao(P(paraMotor(est2, d0)), pb, "14. e a projeção de antes");
+    ok(u.mudados === 0, "14. nada foi mudado depois");
+  }
+  // --- 15: desfazer nao desfaz o que foi mudado depois
+  {
+    const est1b = clonar(est1);
+    est1b.plano["2027-06-01"].via.valor = 31000;          // mexido depois de tornar oficial
+    const u = S.desfazer(est1b, of.desfazer);
+    const est2 = aplicarDesfazer(est1b, u);
+    ok(u.mudados === 1, "15. uma célula mudada depois");
+    ok(est2.plano["2027-06-01"].via.valor === 31000, "15. ela fica como está");
+    ok(est2.plano["2027-03-01"].sal.valor === 10000, "15. as outras voltam");
+  }
+  // --- 16: desfazer depois de oficializacao incompleta (so o plano gravou)
+  {
+    const soPlano = aplicarOficial(est0, Object.assign({}, of, { parcelas: [], regrasNovas: [], regrasAlteradas: [] }));
+    const u = S.desfazer(soPlano, of.desfazer);
+    ok(u.parcelasApagar.length === 0 && u.regrasApagar.length === 0 && u.regrasRestaurar.length === 0 && u.mudados === 0,
+       "16. o que não chegou a gravar é ignorado");
+    ok(normal(aplicarDesfazer(soPlano, u)) === normal(est0), "16. e o plano volta ao de antes");
+    const nada = S.desfazer(est0, of.desfazer);
+    ok(!nada.planoApagar.length && !nada.planoRestaurar.length && nada.mudados === 0, "16. nada gravado: nada a desfazer");
+  }
+  // --- 17: desfazer uma regra ENCERRADA (fim mudado, nao so desligada); desfazer de novo nao faz nada
+  {
+    const alts = [{ id: "k1", tipo: "taxa", cat: "ren", de: "2027-06-01", percentual: 0.0065 }];
+    const e0 = estadoDe(d0);
+    let n = 0;
+    const of2 = S.oficializar(d0, alts, e0, { nome: "T", novoId: () => "u" + (++n), agora: "2026-09-26T00:00:00Z" });
+    const alt = of2.regrasAlteradas.find(x => x.id === "r2");
+    ok(alt && alt.campos.fim === "2027-05-01" && alt.campos.ativo === true, "17. a regra de 2027 passa a terminar em mai/27");
+    const e1 = aplicarOficial(e0, of2);
+    mesmaProjecao(P(paraMotor(e1, d0)), P(S.aplicar(d0, alts).dados), "17. oficial = simulação, com a regra encerrada");
+    const u = S.desfazer(e1, of2.desfazer), e2 = aplicarDesfazer(e1, u);
+    ok(normal(e2) === normal(e0), "17. desfazer devolve o fim original (sem fim)");
+    const u2 = S.desfazer(e2, of2.desfazer);
+    ok(!u2.planoApagar.length && !u2.planoRestaurar.length && !u2.parcelasApagar.length &&
+       !u2.regrasApagar.length && !u2.regrasRestaurar.length && u2.mudados === 0, "17. desfazer de novo: nada a fazer");
+  }
+  // --- 18: parcela criada pela oficializacao e mexida depois fica (como a celula)
+  {
+    const e1 = clonar(est1);
+    e1.parcelas.find(p => p.id === of.desfazer.parcelas[0].id).parcelas = 3;
+    const u = S.desfazer(e1, of.desfazer);
+    ok(u.parcelasApagar.length === 1 && u.mudados === 1, "18. a parcela mexida depois fica; a outra sai");
+    const e2 = clonar(est1);
+    e2.regras.find(r => r.id === of.desfazer.regrasNovas[1].id).percentual = 0.004;
+    ok(S.desfazer(e2, of.desfazer).regrasApagar.length === 1, "18. a regra nova mexida depois fica");
+  }
+  // --- 19: mes sem valor no plano que termina igual ao que ja dava nao e congelado
+  {
+    const d2 = base();
+    d2.categorias.push({ id: "out", nome: "Outros", tipo: "despesa", calculo: "manual" });
+    const alt = [{ id: "m1", tipo: "serie", cat: "out", de: "2027-01-01", ate: null, modo: "pct", pct: 0.1 }];
+    ok(Object.keys(S.aplicar(d2, alt).tocadas).length === 0, "19. % sobre zero (sem valor e sem regra) não toca nada");
+    ok(S.oficializar(d2, alt, estadoDe(d2), { nome: "T", novoId: () => "x", agora: "" }).plano.length === 0,
+       "19. e tornar oficial não grava zeros no plano");
+    const igual = MOTOR.valorDaRegra(d0.regras[2], "2027-03-01", 0);
+    ok(!S.aplicar(d0, [{ id: "m2", tipo: "valor", cat: "div", comp: "2027-03-01", valor: igual }]).tocadas["2027-03-01|div"],
+       "19. valor igual ao da regra: o mês não é congelado");
+  }
+  // --- 20: a taxa muda Rendimentos DIRETAMENTE: destaque forte, nao "cadeia"
+  {
+    const alts = [{ id: "n1", tipo: "taxa", cat: "ren", de: "2027-01-01", percentual: 0.0065 }];
+    const r = S.aplicar(d0, alts), mk = S.marcas(pb, P(r.dados), r);
+    ok(mk["2027-01-01|ren"] === "direta" && mk["2027-06-01|ren"] === "direta", "20. Rendimentos desde a taxa = direta");
+    ok(!mk["2026-12-01|ren"], "20. antes da taxa, sem marca");
+  }
+  // --- 21: previa do valor de um mes
+  {
+    const p = S.previa(d0, pb, { id: "o1", tipo: "valor", cat: "via", comp: "2027-06-01", valor: 30000 });
+    ok(p.meses === 1 && p.primeiro.comp === "2027-06-01", "21. prévia do valor: um mês");
+    perto(p.primeiro.antes, 500, "21. antes 500");
+    perto(p.dif, 29500, "21. +29.500");
+  }
+}
+
+(async function(){
+  try {
+    const html = await (await fetch("../index.html?v=" + Date.now())).text();
+    for (const bloco of ["motor", "simulacao"]){
+      const m = html.match(new RegExp("\\/\\*<" + bloco + ">\\*\\/([\\s\\S]*?)\\/\\*<\\/" + bloco + ">\\*\\/"));
+      if (!ok(!!m, "bloco <" + bloco + "> encontrado no index.html")) return fim();
+      (0, eval)(m[1]);
+    }
+    casos();
+  } catch (e){ ok(false, "erro: " + e.message + "\n" + e.stack); }
+  fim();
+})();
+</script>

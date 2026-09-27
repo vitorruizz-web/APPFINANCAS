@@ -75,10 +75,22 @@ MOCK = r"""
 
     if (metodo === "GET") return json(DADOS[tabela]);
 
+    const prefer = String((opts.headers || {})["Prefer"] || "");
     if (metodo === "POST"){
       const linhas = JSON.parse(opts.body);
+      const merge = prefer.indexOf("merge-duplicates") >= 0;
+      const porId = /on_conflict=id(&|$)/.test(url);
+      // como o PostgREST: id repetido sem upsert por id e 409, e nada e gravado
+      // (e o que acontece quando o salvar repete um insert cuja resposta se perdeu)
+      if (!(merge && porId) && linhas.some(l => l.id !== undefined &&
+          DADOS[tabela].some(x => String(x.id) === String(l.id))))
+        return json({ code: "23505", message: "duplicate key value violates unique constraint" }, 409);
       const out = linhas.map((l, i) => {
         const novo = Object.assign({ id: tabela + "-" + Date.now() + "-" + i }, l);
+        if (merge && porId){
+          const j = DADOS[tabela].findIndex(x => String(x.id) === String(l.id));
+          if (j >= 0){ DADOS[tabela][j] = novo; return novo; }
+        }
         // merge-duplicates: substitui quem tem a mesma chave natural
         const chaves = { fin_plan:["competencia","category_id"], fin_months:["competencia"],
                          fin_balances:["competencia","account_id"], fin_categories:["nome"],
@@ -93,11 +105,21 @@ MOCK = r"""
       return json(out, 201);
     }
     if (metodo === "PATCH"){
-      const id = (url.match(/id=eq\.([^&]+)/) || [])[1];
+      // filtros da URL que o app usa: col=eq.valor e col=is.null
+      const filtros = (url.split("?")[1] || "").split("&").filter(Boolean).map(s => s.split("="));
+      const passa = x => filtros.every(([k, v]) => {
+        v = decodeURIComponent(v || "");
+        if (v === "is.null") return x[k] === null || x[k] === undefined;
+        if (v.indexOf("eq.") === 0) return String(x[k]) === v.slice(3);
+        return true;
+      });
       const linha = JSON.parse(opts.body);
-      const j = DADOS[tabela].findIndex(x => String(x.id) === id);
-      if (j >= 0) Object.assign(DADOS[tabela][j], linha);
-      return json(j >= 0 ? [DADOS[tabela][j]] : []);
+      const alvos = DADOS[tabela].filter(passa);
+      alvos.forEach(x => Object.assign(x, linha));
+      // como o PostgREST: sem "return=representation" a resposta e 204, sem corpo --
+      // inclusive quando o filtro nao achou linha nenhuma
+      if (prefer.indexOf("return=representation") < 0) return new Response(null, { status: 204 });
+      return json(alvos);
     }
     if (metodo === "DELETE"){
       // importacao de CDBs: apaga todos os lotes menos o novo
@@ -105,6 +127,13 @@ MOCK = r"""
       if (neq !== undefined){
         const fica = decodeURIComponent(neq);
         DADOS[tabela] = DADOS[tabela].filter(x => String(x.lote) === fica);
+        return new Response(null, { status: 204 });
+      }
+      // desfazer uma simulacao apaga varios de uma vez: id=in.(a,b,c)
+      const varios = (url.match(/id=in\.\(([^)]*)\)/) || [])[1];
+      if (varios !== undefined){
+        const fora = decodeURIComponent(varios).split(",");
+        DADOS[tabela] = DADOS[tabela].filter(x => fora.indexOf(String(x.id)) < 0);
         return new Response(null, { status: 204 });
       }
       const id = (url.match(/id=eq\.([^&]+)/) || [])[1];

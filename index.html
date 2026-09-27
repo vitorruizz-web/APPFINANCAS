@@ -570,6 +570,78 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
 .arq{position:relative;overflow:hidden;display:inline-flex;align-items:center;cursor:pointer}
 .arq input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 @media (max-width:520px){ .col-r{grid-template-columns:1fr;gap:2px} }
+/* ---------------- simulacoes ----------------
+   Violeta = "simulado": a quinta matiz, com um significado so. Conferida em
+   26/09/2026 com tools/validar_paleta.py (contraste 5,7 no fundo; contra o
+   tiffany dE 91 em visao normal e 54 sob daltonismo; o par mais perto, o
+   steel, 45 e 30 -- pisos 15 e 8) e com o validador do guia de graficos
+   (OKLab: daltonismo 19, visao normal 26, faixa de luminosidade ok).
+   A linha da simulacao e TRACEJADA: a forma separa plano e simulacao mesmo se
+   a cor falhar. Texto nunca usa a cor da serie: a identidade vem da amostra
+   ao lado (.key), e a celula mudada ganha FUNDO, nao letra colorida. */
+:root{--sim:#8D7AF0;--sim-g:rgba(141,122,240,.13)}
+.nota.sim{border-left-color:var(--sim)}
+.nota .acoes{margin-top:12px}
+.sim-top{display:flex;align-items:center;gap:8px;margin:18px 0 0;flex-wrap:wrap}
+.sim-top .btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-right:3px}
+.sim-top .tit{flex:1 1 150px;min-width:0}
+.sim-top .tit .k{font-size:10.5px;color:var(--sim);letter-spacing:.09em;text-transform:uppercase}
+.sim-top .tit .n{font-family:var(--serif);font-size:25px;line-height:1.15;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* "nao salvo" e Salvar quebram JUNTOS, a direita (no celular o botao sozinho ia para a esquerda) */
+.sim-acoes{display:flex;align-items:center;gap:10px;margin-left:auto}
+.naosalvo{font-size:11.5px;color:var(--sand)}
+/* amostra de linha: continua = plano, tracejada = simulacao */
+.key{display:inline-block;width:14px;height:0;border-top:2px solid var(--tif);vertical-align:middle;
+  margin:-2px 6px 0 0}
+.key.s{border-top-style:dashed;border-top-color:var(--sim)}
+.sim-fim{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:6px}
+.sim-fim .v small{font-size:12px;color:inherit;opacity:.8}
+table.plano td.sim-d{background:var(--sim-g);box-shadow:inset 0 -2px 0 var(--sim)}
+table.plano td.sim-c{background:rgba(141,122,240,.06)}
+table.plano.sim-anos td:first-child{color:var(--ink-2)}
+.legenda .sw-plano{height:0;width:16px;border-top:2px solid var(--tif);border-radius:0}
+.legenda .sw-sim{height:0;width:16px;border-top:2px dashed var(--sim);border-radius:0}
+/* grafico: caixa de valores (uma so, as duas series) e o foco pelo teclado */
+.grafwrap.gsim{position:relative}
+.grafwrap.gsim svg{touch-action:pan-y}
+.grafwrap.gsim svg:focus{outline:none}
+.grafwrap.gsim svg:focus-visible{outline:2px solid var(--steel);outline-offset:3px;border-radius:6px}
+.gtip{position:absolute;left:0;top:0;z-index:5;display:none;pointer-events:none;
+  background:var(--raised);border:1px solid var(--line-2);border-radius:8px;
+  padding:8px 11px;font-size:12px;line-height:1.55;white-space:nowrap;box-shadow:0 8px 22px rgba(0,0,0,.45)}
+.gtip.on{display:block}
+.gtip .m{font-size:11px;color:var(--ink-3);margin-bottom:1px}
+.gtip .r{display:flex;align-items:center;gap:6px}
+.gtip .r .key{margin:0}
+.gtip .r b{font-weight:600;color:var(--ink)}
+.gtip .r span:last-child{color:var(--ink-3)}
+.gtip .r.d{margin-top:3px;padding-top:3px;border-top:1px solid var(--line)}
+.gtip .r.d b.pos{color:var(--tif)} .gtip .r.d b.neg{color:var(--clay)}
+.row.alt .nm{white-space:normal}
+.alt-aviso{display:block;font-size:11.5px;color:var(--sand);margin-top:3px}
+.vazio.sim-vazio{padding:16px 0}
+.tipos{display:grid;gap:8px}
+.tipos button{display:block;text-align:left;border:1px solid var(--line-2);border-radius:var(--r);
+  padding:12px 14px;background:var(--surface);transition:border-color .15s,background .15s}
+.tipos button:hover{border-color:var(--sim);background:var(--raised)}
+.tipos button b{display:block;font-weight:600;font-size:14.5px;margin-bottom:2px}
+.tipos button span{font-size:12.5px;color:var(--ink-3)}
+.f-seg{display:block;margin:14px 0 0;font-size:12px;color:var(--ink-3)}
+.f-seg .seg{display:flex;margin-top:6px}
+.f-seg .seg button{flex:1;text-align:center}
+.btn[disabled]{opacity:.45;cursor:default;pointer-events:none}
+.regra-off{opacity:.45}
+@media (max-width:520px){
+  /* no celular os tres numeros do fim do ano continuam lado a lado */
+  .fatos.sim-fim{grid-template-columns:repeat(3,minmax(0,1fr));gap:0}
+  .fatos.sim-fim > .fato,.fatos.sim-fim > .fato:first-child{border-top:0;padding:12px 0 0 10px}
+  .fatos.sim-fim > .fato{border-left:1px solid var(--line)}
+  .fatos.sim-fim > .fato:first-child{border-left:0;padding-left:0}
+  .sim-fim .fato .v{font-size:13.5px}
+  .sim-fim .fato .k{font-size:10.5px}
+}
 </style>
 </head>
 <body>
@@ -1964,6 +2036,336 @@ window.XLSXLER = (function () {
 })();
 /*</xlsx>*/
 
+/*<simulacao>*/
+// ============================================================
+// SIMULACOES  -- funcoes puras, sem I/O. Dependem so do MOTOR.
+// Testadas por tests/test_simulacao.html.
+//
+// Uma simulacao NAO copia o plano: e uma lista de alteracoes aplicada por
+// cima dele. O app calcula "plano oficial + alteracoes" pelo MESMO motor, e
+// tornar oficial grava essas alteracoes com os MESMOS numeros -- o que a
+// simulacao mostrava e o que o plano passa a mostrar (invariante do teste).
+//
+// Arredonda so o que iria para o banco, na precisao da coluna: fin_plan 6
+// casas, parcela 2, taxa 8. Assim a projecao simulada ja e a que o banco daria.
+//
+// Tipos de alteracao (alem de id, tipo e cat):
+//   valor      comp, valor                  o previsto do mes passa a `valor`
+//   serie      de, ate|null, modo, valor|pct cada mes passa a `valor` (modo
+//                                           "valor") ou muda `pct` (0.10 = +10%)
+//   pontual    comp, valor, descricao       soma por cima (parcela unica)
+//   parcelado  inicio, parcelas, valor, descricao   soma por cima, N meses
+//   taxa       de, percentual               rendimento = saldo inicial x percentual
+// ============================================================
+window.SIM = (function () {
+  const mesN = MOTOR.mesN;
+  const EPS = 1e-6;
+  const ehSim = id => String(id).indexOf("sim:") === 0;
+  const vaz = v => v === null || v === undefined;
+
+  // Arredonda como o numeric do Postgres (metade para longe do zero), pela
+  // representacao DECIMAL: 2500.555 * 100 da 250055.49999 em ponto flutuante,
+  // mas "2500.555e2" e 250055.5 exato.
+  function arred(v, n){
+    const s = String(v);
+    if (s.indexOf("e") >= 0) return Math.round(v * Math.pow(10, n)) / Math.pow(10, n);
+    const x = Math.round(Math.abs(Number(s + "e" + n)));
+    return (v < 0 ? -1 : 1) * Number(x + "e-" + n);
+  }
+
+  function somaMes(c, n){
+    let [a, m] = c.split("-").map(Number); m += n;
+    while (m > 12){ m -= 12; a++; } while (m < 1){ m += 12; a--; }
+    return a + "-" + String(m).padStart(2, "0") + "-01";
+  }
+
+  // meses de [de, ate] que caem dentro do horizonte (ate nulo = ate o fim)
+  function mesesEntre(comps, de, ate){
+    const ini = comps[0], fim = comps[comps.length - 1];
+    const a = de > ini ? de : ini, b = (ate && ate < fim) ? ate : fim;
+    const out = [];
+    for (let c = a; c <= b; c = somaMes(c, 1)) out.push(c);
+    return out;
+  }
+
+  // A taxa simulada vira a UNICA regra da categoria a partir de `de`: o motor
+  // escolhe a de menor vigencia, e uma regra sem fim perderia para qualquer
+  // regra com fim que ainda valesse. Em ordem de `de` (empate: ordem da
+  // lista), cada taxa encerra a anterior.
+  function regrasComTaxas(regras, taxas){
+    const out = (regras || []).map(r => Object.assign({}, r));
+    const ord = taxas.map((t, i) => ({ t: t, i: i }))
+      .sort((a, b) => a.t.de < b.t.de ? -1 : a.t.de > b.t.de ? 1 : a.i - b.i)
+      .map(x => x.t);
+    for (const t of ord){
+      const n = mesN(t.de);
+      for (const r of out){
+        if (r.category_id !== t.cat || r.ativo === false) continue;
+        if (mesN(r.inicio) >= n) r.ativo = false;
+        else if (!r.fim || mesN(r.fim) >= n) r.fim = somaMes(t.de, -1);
+      }
+      out.push({ id: "sim:" + t.id, category_id: t.cat, tipo: "pct_saldo", valor: null,
+                 percentual: arred(+t.percentual, 8), mes: null, inicio: t.de, fim: null,
+                 reajuste_pct: null, reajuste_mes: null, obs: null, ativo: true });
+    }
+    // taxa simulada que outra, de mesmo inicio, desligou: nao existe
+    return out.filter(r => !(ehSim(r.id) && r.ativo === false));
+  }
+
+  // Aplica as alteracoes sobre a ENTRADA do motor (o formato de dadosMotor()).
+  // Nao muda `d`. Devolve { dados, avisos: {id: [texto]}, tocadas: {"comp|cat": true} }.
+  function aplicar(d, alts){
+    alts = alts || [];
+    const avisos = {};
+    const avisa = (a, t) => {
+      const l = (avisos[a.id] = avisos[a.id] || []);
+      if (l.indexOf(t) < 0) l.push(t);
+    };
+    const cats = {};
+    for (const c of d.categorias) cats[c.id] = c;
+    const comps = d.competencias, ini = comps[0], fim = comps[comps.length - 1];
+
+    const validas = alts.filter(a => {
+      if (cats[a.cat]) return true;
+      avisa(a, "a categoria não existe mais");
+      return false;
+    });
+
+    const regras = regrasComTaxas(d.regras, validas.filter(a => a.tipo === "taxa"));
+    for (const a of validas)
+      if (a.tipo === "taxa" && a.de > fim) avisa(a, "fora do horizonte do plano");
+
+    // celulas tocadas por valor/serie, cada uma com as suas alteracoes NA ORDEM DA LISTA
+    const porCelula = {};
+    for (const a of validas){
+      if (a.tipo !== "valor" && a.tipo !== "serie") continue;
+      const meses = a.tipo === "valor"
+        ? ((a.comp >= ini && a.comp <= fim) ? [a.comp] : [])
+        : mesesEntre(comps, a.de, a.ate);
+      if (!meses.length){ avisa(a, "fora do horizonte do plano"); continue; }
+      if (a.tipo === "serie" && (a.de < ini || (a.ate && a.ate > fim)))
+        avisa(a, "parte fica fora do horizonte do plano");
+      for (const c of meses) (porCelula[c + "|" + a.cat] = porCelula[c + "|" + a.cat] || []).push(a);
+    }
+
+    const plano = {};
+    for (const c in d.plano) plano[c] = Object.assign({}, d.plano[c]);
+    const tocadas = {};
+    for (const k in porCelula){
+      const [comp, cat] = k.split("|");
+      const lista = porCelula[k];
+      // 1. base oficial: o plano, senao a regra (null = regra pct_saldo, que depende do saldo)
+      const posto = d.plano[comp] ? d.plano[comp][cat] : undefined;
+      const temCelula = !vaz(posto);
+      let v;
+      if (temCelula) v = +posto;
+      else {
+        const r = MOTOR.regraDoMes(regras, cat, comp);
+        v = !r ? 0 : (r.tipo === "pct_saldo" ? null : MOTOR.valorDaRegra(r, comp, 0));
+      }
+      const base = v;
+      // 2. series de valor: a ultima vence
+      for (const a of lista) if (a.tipo === "serie" && a.modo === "valor") v = +a.valor;
+      // 3. series de %: acumulam, inclusive sobre a serie de valor
+      for (const a of lista) if (a.tipo === "serie" && a.modo === "pct"){
+        if (v === null){ avisa(a, "Rendimentos acompanha o saldo: use a taxa de rendimento"); continue; }
+        v = v * (1 + (+a.pct));
+      }
+      // 4. valor de um mes: o mais especifico vence
+      for (const a of lista) if (a.tipo === "valor") v = +a.valor;
+      if (v === null) continue;      // so % sobre mes de regra pct_saldo: fica a regra
+      // mes sem valor no plano que termina igual ao que ja dava (ex.: % sobre zero):
+      // congelar gravaria uma linha a toa ao tornar oficial -- e ela barraria
+      // qualquer regra futura da categoria naquele mes
+      if (!temCelula && base !== null && Math.abs(v - base) < 1e-9) continue;
+      (plano[comp] = plano[comp] || {})[cat] = arred(v, 6);
+      tocadas[k] = true;
+    }
+
+    const parcelas = (d.parcelas || []).slice();
+    for (const a of validas){
+      if (a.tipo !== "pontual" && a.tipo !== "parcelado") continue;
+      const inicio = a.tipo === "pontual" ? a.comp : a.inicio;
+      const n = a.tipo === "pontual" ? 1 : Math.round(+a.parcelas);
+      const ult = somaMes(inicio, n - 1);
+      if (ult < ini || inicio > fim) avisa(a, "fora do horizonte do plano");
+      else if (inicio < ini || ult > fim) avisa(a, "parte fica fora do horizonte do plano");
+      parcelas.push({ id: "sim:" + a.id, category_id: a.cat, descricao: a.descricao,
+                      obs: a.descricao, valor: arred(+a.valor, 2), inicio: inicio, parcelas: n, ativo: true });
+    }
+
+    const taxaDesde = {};
+    for (const a of validas)
+      if (a.tipo === "taxa" && (!taxaDesde[a.cat] || a.de < taxaDesde[a.cat])) taxaDesde[a.cat] = a.de;
+    return { dados: Object.assign({}, d, { plano: plano, regras: regras, parcelas: parcelas }),
+             avisos: avisos, tocadas: tocadas, taxaDesde: taxaDesde };
+  }
+
+  // Para a tabela: que celulas a simulacao mudou DIRETAMENTE (alteracao ou
+  // parcela simulada) e quais mudaram so pela CADEIA (Rendimentos que
+  // acompanham o saldo). pb/ps: projecoes do motor, oficial e simulada.
+  function marcas(pb, ps, res){
+    const out = {}, taxa = res.taxaDesde || {};
+    for (let i = 0; i < ps.length; i++){
+      const comp = ps[i].competencia, parc = ps[i].parcelas || {};
+      for (const cat in ps[i].previsto){
+        const k = comp + "|" + cat;
+        const mudou = Math.abs(ps[i].previsto[cat] - pb[i].previsto[cat]) > 0.005;
+        // a taxa simulada muda Rendimentos DIRETAMENTE a partir do seu mes
+        if (res.tocadas[k] || (parc[cat] || []).some(x => ehSim(x.id)) || (mudou && taxa[cat] && comp >= taxa[cat]))
+          out[k] = "direta";
+        else if (mudou) out[k] = "cadeia";
+      }
+    }
+    return out;
+  }
+
+  // Plano x simulacao: mes a mes e no fim de cada ano.
+  function comparar(pb, ps){
+    const meses = pb.map((m, i) => ({ competencia: m.competencia, plano: m.previsao,
+                                      sim: ps[i].previsao, dif: ps[i].previsao - m.previsao }));
+    const fins = {};
+    for (const m of meses) fins[m.competencia.slice(0, 4)] = m;
+    return { meses: meses,
+             anos: Object.keys(fins).sort().map(a => Object.assign({ ano: a }, fins[a])) };
+  }
+
+  // Efeito de UMA alteracao valor/serie, isolada, contra a projecao oficial --
+  // para a previa do formulario. Base oficial = previsto - parcelas oficiais.
+  function previa(d, pb, alt){
+    const res = aplicar(d, [alt]);
+    let n = 0, dif = 0, primeiro = null;
+    for (const m of pb){
+      if (!res.tocadas[m.competencia + "|" + alt.cat]) continue;
+      const antes = (m.previsto[alt.cat] || 0) -
+        (m.parcelas[alt.cat] || []).reduce((s, x) => s + x.valor, 0);
+      const depois = res.dados.plano[m.competencia][alt.cat];
+      if (!primeiro) primeiro = { comp: m.competencia, antes: antes, depois: depois };
+      n++; dif += depois - antes;
+    }
+    return { meses: n, primeiro: primeiro, dif: dif, avisos: res.avisos[alt.id] || [] };
+  }
+
+  // Para a previa da taxa: a taxa oficial em `de` e os meses digitados a mao
+  // (com valor no plano), que a regra nao alcanca.
+  function previaTaxa(d, alt){
+    const r = MOTOR.regraDoMes(d.regras, alt.cat, alt.de);
+    const digitados = d.competencias.filter(c => c >= alt.de && d.plano[c] && !vaz(d.plano[c][alt.cat]));
+    return { antes: (r && r.tipo === "pct_saldo") ? +r.percentual : null, digitados: digitados };
+  }
+
+  // As gravacoes que tornam a simulacao o plano oficial, e o registro para
+  // desfazer. `atual` = { plano: linhas por comp/cat (id, valor, obs, origem),
+  // regras: linhas (com id) }; `opts` = { nome, novoId, agora }.
+  // Os id novos nascem AQUI: o registro ja sabe o que apagar antes de gravar.
+  function oficializar(d, alts, atual, opts){
+    const res = aplicar(d, alts);
+    const nota = "simulação: " + opts.nome;
+    const reg = { versao: 1, em: opts.agora, completo: false,
+                  plano: [], parcelas: [], regrasNovas: [], regrasAlteradas: [] };
+    const plano = [];
+    for (const k in res.tocadas){
+      const [comp, cat] = k.split("|");
+      const v = res.dados.plano[comp][cat];
+      const antes = atual.plano[comp] && atual.plano[comp][cat];
+      if (antes && Math.abs((+antes.valor) - v) < EPS) continue;      // ja esta assim
+      const obsAntes = antes && !vaz(antes.obs) ? antes.obs : null;
+      plano.push({ competencia: comp, category_id: cat, valor: v, origem: "manual",
+                   obs: antes ? obsAntes : nota });
+      reg.plano.push({ comp: comp, cat: cat, depois: v,
+        antes: antes ? { valor: +antes.valor, obs: obsAntes, origem: antes.origem || "manual" } : null });
+    }
+    const parcelas = [];
+    for (const p of res.dados.parcelas){
+      if (!ehSim(p.id)) continue;
+      const id = opts.novoId();
+      parcelas.push({ id: id, category_id: p.category_id, descricao: p.descricao, valor: p.valor,
+                      inicio: p.inicio, parcelas: p.parcelas, obs: nota, ativo: true });
+      reg.parcelas.push({ id: id, depois: { category_id: p.category_id, valor: p.valor, inicio: p.inicio, parcelas: p.parcelas } });
+    }
+    const regrasNovas = [], regrasAlteradas = [], porId = {};
+    for (const r of (atual.regras || [])) porId[r.id] = r;
+    for (const r of res.dados.regras){
+      if (ehSim(r.id)){
+        const id = opts.novoId();
+        regrasNovas.push({ id: id, category_id: r.category_id, tipo: "pct_saldo", valor: null,
+          percentual: r.percentual, mes: null, inicio: r.inicio, fim: r.fim,
+          reajuste_pct: null, reajuste_mes: null, obs: nota, ativo: true });
+        reg.regrasNovas.push({ id: id, depois: { percentual: r.percentual, inicio: r.inicio, fim: r.fim || null } });
+        continue;
+      }
+      const o = porId[r.id];
+      if (!o) continue;
+      const antes = { fim: o.fim || null, ativo: o.ativo !== false };
+      const depois = { fim: r.fim || null, ativo: r.ativo !== false };
+      if (antes.fim === depois.fim && antes.ativo === depois.ativo) continue;
+      regrasAlteradas.push({ id: r.id, campos: depois });
+      reg.regrasAlteradas.push({ id: r.id, antes: antes, depois: depois });
+    }
+    return { plano: plano, parcelas: parcelas, regrasNovas: regrasNovas,
+             regrasAlteradas: regrasAlteradas, desfazer: reg };
+  }
+
+  // O que desfazer AGORA, comparando o registro com o estado atual. Nunca
+  // desfaz o que foi mudado depois: celula ou regra que nao esta como a
+  // simulacao deixou fica como esta e entra em `mudados`. O que nem chegou a
+  // ser gravado (oficializacao incompleta) e ignorado.
+  // `atual` = { plano: linhas por comp/cat, parcelas: linhas, regras: linhas }
+  function desfazer(atual, reg){
+    const out = { planoApagar: [], planoRestaurar: [], parcelasApagar: [],
+                  regrasApagar: [], regrasRestaurar: [], mudados: 0 };
+    const vale = (linha, v) => !!linha && Math.abs((+linha.valor) - v) < EPS;
+    for (const p of (reg.plano || [])){
+      const cur = atual.plano[p.comp] && atual.plano[p.comp][p.cat];
+      if (vale(cur, p.depois)){
+        if (p.antes === null) out.planoApagar.push({ id: cur.id, comp: p.comp, cat: p.cat });
+        else out.planoRestaurar.push({ competencia: p.comp, category_id: p.cat,
+          valor: p.antes.valor, obs: p.antes.obs, origem: p.antes.origem });
+      } else if (p.antes === null ? !cur : vale(cur, p.antes.valor)){
+        // nao chegou a ser gravada: nada a fazer
+      } else out.mudados++;
+    }
+    // parcela e regra criadas pela oficializacao: saem so se ainda estao como a
+    // simulacao deixou (mexidas depois ficam, como a celula). Registro so com o
+    // id (sem "depois") = apaga se existir.
+    const dia = s => String(s || "").slice(0, 10);
+    const par = {};
+    for (const x of (atual.parcelas || [])) par[x.id] = x;
+    for (const e of (reg.parcelas || [])){
+      const id = typeof e === "string" ? e : e.id, dep = typeof e === "string" ? null : e.depois, cur = par[id];
+      if (!cur) continue;
+      if (!dep || (cur.category_id === dep.category_id && Math.abs((+cur.valor) - dep.valor) < EPS &&
+                   dia(cur.inicio) === dia(dep.inicio) && +cur.parcelas === +dep.parcelas && cur.ativo !== false))
+        out.parcelasApagar.push(id);
+      else out.mudados++;
+    }
+    const regra = {};
+    for (const r of (atual.regras || [])) regra[r.id] = r;
+    for (const e of (reg.regrasNovas || [])){
+      const id = typeof e === "string" ? e : e.id, dep = typeof e === "string" ? null : e.depois, cur = regra[id];
+      if (!cur) continue;
+      if (!dep || (Math.abs((+cur.percentual) - dep.percentual) < 1e-12 && dia(cur.inicio) === dia(dep.inicio) &&
+                   (cur.fim ? dia(cur.fim) : null) === (dep.fim ? dia(dep.fim) : null) && cur.ativo !== false))
+        out.regrasApagar.push(id);
+      else out.mudados++;
+    }
+    const igual = (a, b) => a.fim === b.fim && a.ativo === b.ativo;
+    for (const x of (reg.regrasAlteradas || [])){
+      const cur = regra[x.id];
+      if (!cur) continue;
+      const agora = { fim: cur.fim || null, ativo: cur.ativo !== false };
+      if (igual(agora, x.depois)) out.regrasRestaurar.push({ id: x.id, campos: x.antes });
+      else if (!igual(agora, x.antes)) out.mudados++;
+    }
+    return out;
+  }
+
+  return { aplicar: aplicar, regrasComTaxas: regrasComTaxas, marcas: marcas, comparar: comparar,
+           previa: previa, previaTaxa: previaTaxa, oficializar: oficializar, desfazer: desfazer,
+           somaMes: somaMes, arred: arred };
+})();
+/*</simulacao>*/
+
 
 // ============================================================
 // CONFIGURACAO
@@ -1973,7 +2375,7 @@ const SB_KEY = "sb_publishable_FWIZqq1F_J-guCTrJY93iQ_k2kpd0wY";
 
 const TABELAS = ["fin_categories","fin_accounts","fin_rules","fin_plan",
                  "fin_entries","fin_balances","fin_months","fin_settings",
-                 "fin_installments","fin_cdbs"];
+                 "fin_installments","fin_cdbs","fin_simulations"];
 const MESES =["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const MESES_L = ["janeiro","fevereiro","março","abril","maio","junho",
                  "julho","agosto","setembro","outubro","novembro","dezembro"];
@@ -2144,17 +2546,18 @@ async function sbFetch(caminho, opts, jaTentou){
 // ============================================================
 const estado = {
   uid:null, email:null,
-  categorias:[], contas:[], regras:[], parcelas:[], cdbs:[],
+  categorias:[], contas:[], regras:[], parcelas:[], cdbs:[], simulacoes:[],
   plano:{}, meses:{}, balances:{}, entries:{}, settings:{},
   competencias:[],
 };
 let dadosTravados = true;   // bloqueia gravacao ate uma leitura bem-sucedida
+let simIndisponivel = false;   // tabela fin_simulations ausente (migracao 008 nao aplicada)
 let proj = [];
 let mesAtual = compHoje();
 let anoSel = compHoje().slice(0,4);
 const chaveCache = () => "fin_cache_" + (estado.uid || "anon");
 
-function indexar(cats, conts, regras, plan, ents, bals, mss, sets, parc, cdbs){
+function indexar(cats, conts, regras, plan, ents, bals, mss, sets, parc, cdbs, sims){
   for (const c of cats){ c.nome = repara(c.nome); c.grupo = repara(c.grupo); }
   for (const a of conts){ a.nome = repara(a.nome); a.instituicao = repara(a.instituicao); }
   for (const p of plan) p.obs = repara(p.obs);
@@ -2178,6 +2581,10 @@ function indexar(cats, conts, regras, plan, ents, bals, mss, sets, parc, cdbs){
   // os que ja venceram (resgate preenchido) so servem ao rendimento do passado
   estado.cdbs = ordenarCdbs(doLote.filter(c => !c.resgate));
   estado.cdbsResgatados = doLote.filter(c => c.resgate);
+  // simulacoes, a mais nova primeiro (o cache de antes da migracao 008 nao as tem)
+  estado.simulacoes = (sims || []).map(s => Object.assign(s, { nome: repara(s.nome),
+      alteracoes: Array.isArray(s.alteracoes) ? s.alteracoes : [] }))
+    .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
   agendaCache = null;
   horizonte();
 }
@@ -2227,19 +2634,30 @@ function realizadoCat(comp){
   return r;
 }
 
+// Le as tabelas do banco. Lanca erro se qualquer leitura falhar e NAO mexe na
+// memoria: quem decide o que fazer com a falha e quem chamou.
+function buscarTudo(){
+  return Promise.all(TABELAS.map(t => {
+    const q = sbFetch(t + "?select=*" + (t==="fin_plan"||t==="fin_entries"||t==="fin_cdbs" ? "&limit=20000" : ""));
+    // sem a migracao 008 a tabela de simulacoes nao existe (HTTP 404): o app abre igual
+    if (t === "fin_simulations")
+      return q.then(x => { simIndisponivel = false; return x; },
+                    e => { if (!/HTTP 404/.test(e.message)) throw e; simIndisponivel = true; return []; });
+    if (t !== "fin_cdbs") return q;
+    // a aba Vencimentos nao pode derrubar o app: sem a migracao 006 a tabela
+    // nao existe (HTTP 404) e o resto tem de abrir normalmente
+    return q.then(x => { cdbsIndisponivel = false; return x; },
+                  e => { if (!/HTTP 404/.test(e.message)) throw e; cdbsIndisponivel = true; return []; });
+  }));
+}
+function aplicarCarga(res){
+  indexar.apply(null, res);
+  dadosTravados = false;
+  try { localStorage.setItem(chaveCache(), JSON.stringify(res)); } catch(e){}
+}
 async function carregarTudo(){
   try {
-    const res = await Promise.all(TABELAS.map(t => {
-      const q = sbFetch(t + "?select=*" + (t==="fin_plan"||t==="fin_entries"||t==="fin_cdbs" ? "&limit=20000" : ""));
-      if (t !== "fin_cdbs") return q;
-      // a aba Vencimentos nao pode derrubar o app: sem a migracao 006 a tabela
-      // nao existe (HTTP 404) e o resto tem de abrir normalmente
-      return q.then(x => { cdbsIndisponivel = false; return x; },
-                    e => { if (!/HTTP 404/.test(e.message)) throw e; cdbsIndisponivel = true; return []; });
-    }));
-    indexar.apply(null, res);
-    dadosTravados = false;
-    try { localStorage.setItem(chaveCache(), JSON.stringify(res)); } catch(e){}
+    aplicarCarga(await buscarTudo());
     return true;
   } catch (err){
     let cache = null;
@@ -2273,15 +2691,29 @@ async function salvar(tabela, linhas, conflito){
     catch (e2){ toast("Não gravou: " + e2.message); throw e2; }
   }
 }
-async function patch(tabela, id, linha){
+async function patch(tabela, id, linha, extra){
   if (bloqueadoPeloDisfarce()) return null;
   if (dadosTravados){ toast("Sem conexão — nada foi gravado"); return null; }
-  return sbFetch(tabela + "?id=eq." + id, { method:"PATCH", body: JSON.stringify(linha) });
+  // extra (opcional): { volta: true } pede as linhas de volta -- PATCH que nao
+  // acha linha devolve 204 e passaria por sucesso -- e { filtro: "&col=is.null" }
+  // faz o PATCH condicional (so grava se a linha ainda esta como se espera)
+  const h = extra && extra.volta ? { "Prefer": "return=representation" } : undefined;
+  return sbFetch(tabela + "?id=eq." + id + ((extra && extra.filtro) || ""),
+                 { method:"PATCH", headers: h, body: JSON.stringify(linha) });
 }
 async function apagar(tabela, id){
   if (bloqueadoPeloDisfarce()) return;
   if (dadosTravados){ toast("Sem conexão — nada foi apagado"); return; }
   await sbFetch(tabela + "?id=eq." + id, { method:"DELETE" });
+}
+// Varios de uma vez (id=in.(...)): desfazer uma serie longa seriam dezenas de pedidos.
+async function apagarVarios(tabela, ids){
+  if (!ids || !ids.length) return;
+  if (bloqueadoPeloDisfarce()) return;
+  if (dadosTravados){ toast("Sem conexão — nada foi apagado"); return; }
+  // em lotes: uma URL com centenas de id passaria do limite de alguns proxies
+  for (let i = 0; i < ids.length; i += 40)
+    await sbFetch(tabela + "?id=in.(" + ids.slice(i, i + 40).map(encodeURIComponent).join(",") + ")", { method:"DELETE" });
 }
 
 async function definirPlano(comp, catId, valor){
@@ -2704,6 +3136,8 @@ function compromissos(){
   const hoje = compHoje(); let n=0, restante=0, ultimo="";
   for (const p of estado.parcelas){
     if (p.ativo === false) continue;
+    const cat = estado.categorias.find(c => c.id === p.category_id);
+    if (cat && cat.tipo === "receita") continue;   // receita a receber nao e divida
     const ini = MOTOR.mesN(p.inicio), fimN = ini + (+p.parcelas) - 1, agora = MOTOR.mesN(hoje);
     if (fimN < agora) continue;
     n++; restante += (fimN - Math.max(ini,agora) + 1) * (+p.valor);
@@ -4785,6 +5219,7 @@ function colunasPlano(modo){
 function renderPlano(){
   const el = document.getElementById("s-plano");
   if (!estado.categorias.length){ el.innerHTML = avisoTravado() + semDados(); return; }
+  if (simAberta) return renderSimulacao(el);
   const modo = estado.settings.planoModo || "grupos";
   const cols = colunasPlano(modo);
   const hoje = compHoje();
@@ -4818,7 +5253,7 @@ function renderPlano(){
   }
   h += '</tbody></table>';
 
-  el.innerHTML = avisoTravado() +
+  el.innerHTML = avisoTravado() + blocoSimulacoes() +
     '<div class="hdr"><h2>Plano completo</h2>' +
       '<button class="btn mini plain xls" data-x="plano">Excel</button>' +
       '<span class="seg" id="seg-modo">' +
@@ -4836,6 +5271,7 @@ function renderPlano(){
     '<button class="btn plain" id="mais12">Estender 12 meses</button></div>';
 
   ligarEdicaoTabela(el);
+  ligarSimulacoes(el);
   el.querySelectorAll("#seg-modo button").forEach(b => b.onclick = async () => {
     estado.settings.planoModo = b.dataset.m;
     render(); gravarPrefs();
@@ -4924,8 +5360,10 @@ function listaRegras(){
   if (!estado.regras.length)
     return '<div class="vazio"><b>Nenhuma regra ainda.</b><br>Regras preenchem sozinhas os meses em que você não digitou nada.</div>';
   return estado.regras.slice().sort((a,b) => a.inicio.localeCompare(b.inicio)).map(r =>
-    '<div class="row"><span class="nm">' + esc(descRegra(r)) +
-    '<br><span class="t11 d3">' + rotulo(r.inicio) + ' → ' + (r.fim?rotulo(r.fim):"sem fim") + '</span></span>' +
+    '<div class="row' + (r.ativo === false ? ' regra-off' : '') + '"><span class="nm">' + esc(descRegra(r)) +
+    '<br><span class="t11 d3">' + rotulo(r.inicio) + ' → ' + (r.fim?rotulo(r.fim):"sem fim") +
+    // desligada por uma simulacao que virou oficial: fica visivel, mas nao vale
+    (r.ativo === false ? ' · desligada' : '') + '</span></span>' +
     '<button class="btn mini plain ed-regra" data-id="' + r.id + '">editar</button></div>').join("");
 }
 function folhaRegra(regra){
@@ -4966,13 +5404,1058 @@ function folhaRegra(regra){
           mes: tipo === "anual" ? (parseNum(document.getElementById("r-mes").value)||1) : null,
           inicio: (document.getElementById("r-ini").value || mesAtual.slice(0,7)) + "-01",
           fim: document.getElementById("r-fim").value ? document.getElementById("r-fim").value + "-01" : null,
-          ativo:true };
+          // regra desligada por uma simulacao oficializada continua desligada ao ser editada
+          ativo: regra ? regra.ativo !== false : true };
         if ((tipo==="pct_saldo"||tipo==="crescimento") && linha.percentual === null){ toast("Informe o percentual"); return; }
         if (tipo !== "pct_saldo" && linha.valor === null){ toast("Informe o valor"); return; }
         if (regra){ await patch("fin_rules", regra.id, linha); Object.assign(regra, linha); }
         else { const res = await salvar("fin_rules", linha); if (res && res[0]) estado.regras.push(res[0]); }
         fecharFolha(); reprojetar(); render(); toast("Regra salva");
       };
+    });
+}
+
+// ============================================================
+// SIMULACOES (aba Plano)
+// Uma simulacao e uma lista de alteracoes por cima do plano oficial. O
+// calculo mora no bloco <simulacao> (puro, testado); aqui ficam a tela, o
+// rascunho no aparelho e a gravacao.
+// ============================================================
+let simAberta = null;          // { id|null, nome, alteracoes, oficializada_em, desfazer, salvo }
+let simAno = null;
+let simOcupado = false;        // uma gravacao por vez: toque duplo nao oficializa duas vezes
+
+const TIPOS_ALT = [
+  ["valor",     "Valor de um mês",          "Muda o previsto de uma categoria num mês."],
+  ["serie",     "Daqui para a frente",      "Passa a valer um valor, ou muda um %, a partir de um mês."],
+  ["pontual",   "Gasto ou receita pontual", "Um valor a mais num mês: carro, viagem, venda, bônus."],
+  ["parcelado", "Parcelado",                "Um valor por mês durante N meses: financiamento, curso."],
+  ["taxa",      "Taxa de rendimento",       "Quanto os investimentos rendem ao mês, a partir de um mês."],
+];
+const plural = (n, um, varios) => n + " " + (n === 1 ? um : varios);
+const nAlt = n => plural(n, "alteração", "alterações");
+const catDe = id => estado.categorias.find(x => x.id === id) || null;
+const nomeCat = id => { const c = catDe(id); return c ? c.nome : "categoria apagada"; };
+const dataCurta = s => { const d = new Date(s);
+  return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear(); };
+const nomePadrao = () => "Simulação " + dataCurta(new Date().toISOString()).slice(0, 5);
+const pctAoMes = p => (p * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + "%";
+const pctSin = p => (p >= 0 ? "+" : "−") + (Math.abs(p) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 }) + "%";
+const fmtsinK = v => (v >= 0 ? "+" : "−") + "R$ " + fmtk(Math.abs(v));
+const idCurto = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const primeiroMesAlt = a => a.comp || a.de || a.inicio;
+const clonarAlts = a => JSON.parse(JSON.stringify(a || []));
+// fechada = virou oficial (ou comecou a virar): as alteracoes ja estao no
+// plano, e aplica-las de novo contaria o parcelado duas vezes
+const simFechada = s => !!(s && (s.oficializada_em || s.desfazer));
+const retratoSim = s => JSON.stringify({ nome: s.nome, alteracoes: s.alteracoes });
+const simSuja = () => !!simAberta && !simFechada(simAberta) && retratoSim(simAberta) !== simAberta.salvo;
+
+function uuid(){
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+  const h = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+  return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20);
+}
+
+// ---- rascunhos: um por simulacao (e um da simulacao nova), no aparelho.
+// Fechar o app nao perde nada, e o rascunho de uma nunca sobrescreve o de outra.
+const prefixoRascunho = () => "fin_sim_rascunho_" + (estado.uid || "anon") + "_";
+const chaveRascunho = id => prefixoRascunho() + (id || "nova");
+function lerRascunho(id){
+  try {
+    const r = JSON.parse(localStorage.getItem(chaveRascunho(id)) || "null");
+    return (r && Array.isArray(r.alteracoes) && r.alteracoes.length) ? r : null;
+  } catch (e){ return null; }
+}
+function rascunhos(){
+  const out = [];
+  try {
+    const pre = prefixoRascunho();
+    for (let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (!k || k.indexOf(pre) !== 0) continue;
+      const suf = k.slice(pre.length), r = lerRascunho(suf === "nova" ? null : suf);
+      if (r) out.push(r);
+    }
+  } catch (e){}
+  return out;
+}
+function limparRascunho(id){ try { localStorage.removeItem(chaveRascunho(id)); } catch (e){} }
+function gravarRascunho(){
+  if (!simAberta || simFechada(simAberta)) return;
+  if (!simSuja()){ limparRascunho(simAberta.id); return; }
+  try {
+    localStorage.setItem(chaveRascunho(simAberta.id), JSON.stringify({ id: simAberta.id, nome: simAberta.nome,
+      alteracoes: simAberta.alteracoes, em: new Date().toISOString() }));
+  } catch (e){}
+}
+
+// plano oficial + alteracoes, pelo mesmo motor
+function calcSim(alts){
+  const d = dadosMotor();
+  const res = SIM.aplicar(d, alts);
+  return { d: d, res: res, ps: MOTOR.projetar(res.dados) };
+}
+const anosDoPlano = () => [...new Set(proj.map(m => m.competencia.slice(0, 4)))];
+function anoInicialSim(alts){
+  const anos = anosDoPlano();
+  const ms = (alts || []).map(primeiroMesAlt).filter(Boolean).sort();
+  const a = (ms[0] || somaMes(compHoje(), 1)).slice(0, 4);
+  if (anos.includes(a)) return a;
+  const h = compHoje().slice(0, 4);
+  return anos.includes(h) ? h : anos[0];
+}
+
+// ---- a secao "Simulacoes" no topo da aba Plano
+function blocoSimulacoes(){
+  const ras = rascunhos(), deId = {};
+  for (const r of ras) if (r.id) deId[r.id] = r;
+  const i = proj.length - 1;
+  const fimH = i >= 0 ? rotulo(proj[i].competencia) : "";
+  let rows = "";
+  // rascunho sem linha propria na lista: o da simulacao nova, o de uma apagada em
+  // outro aparelho (sem isso sumiria) e o de uma que virou oficial em outro
+  // aparelho -- esse so da para descartar: reabrir aplicaria tudo duas vezes
+  for (const r of ras){
+    const s = r.id ? estado.simulacoes.find(x => x.id === r.id) : null;
+    if (s && !simFechada(s)) continue;
+    const fechou = !!s;
+    rows += '<div class="row"><span class="nm">' + esc(r.nome) + '<br><span class="t11 abr">' +
+      (fechou ? "rascunho de uma simulação que já virou oficial" : "rascunho não salvo · " + nAlt(r.alteracoes.length)) +
+      '</span></span>' + (fechou ? "" : '<button class="btn mini plain" data-ras-abrir="' + esc(r.id || "") + '">continuar</button>') +
+      '<button class="btn mini plain" data-ras-desc="' + esc(r.id || "") + '">descartar</button></div>';
+  }
+  for (const s of estado.simulacoes){
+    const alts = s.alteracoes || [];
+    let det;
+    if (s.oficializada_em)
+      det = '<span class="pos">oficial desde ' + dataCurta(s.oficializada_em) + '</span> · ' + nAlt(alts.length);
+    else if (s.desfazer) det = '<span class="abr">oficialização incompleta</span>';
+    else {
+      det = nAlt(alts.length);
+      if (alts.length && i >= 0){
+        const dif = calcSim(alts).ps[i].previsao - proj[i].previsao;
+        det += ' · fim de ' + fimH + ': <span class="' + (dif >= 0 ? "pos" : "neg") + '">' + fmtsinK(dif) + '</span>';
+      }
+    }
+    if (deId[s.id] && !simFechada(s)) det += ' · <span class="abr">alterações não salvas</span>';
+    rows += '<div class="row"><span class="nm">' + esc(s.nome) + '<br><span class="t11 d3">' + det + '</span></span>' +
+      '<button class="btn mini plain" data-sim="' + esc(s.id) + '">abrir</button></div>';
+  }
+  if (!rows) rows = '<div class="vazio sim-vazio"><b>Nenhuma simulação.</b><br>Teste um gasto grande, um financiamento ou um ' +
+    'reajuste<br>e veja onde cada ano termina — o plano não muda.</div>';
+  return '<div class="hdr"><h2>Simulações</h2><span class="aux">“e se…” sem mexer no plano</span></div><div class="rule"></div>' +
+    (simIndisponivel ? '<div class="nota fria" style="margin:0 0 8px">Para <b>guardar</b> simulações falta aplicar a ' +
+      'migração 008 no Supabase. Dá para simular, mas não para guardar.</div>' : "") +
+    rows + '<div class="acoes"><button class="btn" id="sim-nova">Nova simulação</button></div>';
+}
+function ligarSimulacoes(el){
+  el.querySelector("#sim-nova").onclick = () => abrirSim(null);
+  el.querySelectorAll("[data-sim]").forEach(b => b.onclick = () =>
+    abrirSim(estado.simulacoes.find(s => s.id === b.dataset.sim)));
+  el.querySelectorAll("[data-ras-abrir]").forEach(b => b.onclick = () => abrirRascunho(lerRascunho(b.dataset.rasAbrir || null)));
+  el.querySelectorAll("[data-ras-desc]").forEach(b => b.onclick = () => {
+    const id = b.dataset.rasDesc || null, r = lerRascunho(id);
+    if (!r) return render();
+    abrirFolha('<h3>Descartar o rascunho?</h3><div class="sub">"' + esc(r.nome) + '": ' + (r.alteracoes.length === 1
+      ? "a alteração não salva se perde." : "as " + r.alteracoes.length + " alterações não salvas se perdem.") + '</div>' +
+      '<div class="acoes"><button class="btn pri" id="rd-ok">Descartar</button>' +
+      '<button class="btn plain" id="rd-cancel">Cancelar</button></div>', () => {
+        document.getElementById("rd-cancel").onclick = fecharFolha;
+        document.getElementById("rd-ok").onclick = () => { limparRascunho(id); fecharFolha(); render(); toast("Rascunho descartado"); };
+      });
+  });
+}
+
+// Abre uma simulacao guardada (ou nova, com s = null). Um rascunho pendente de
+// OUTRA simulacao pergunta antes: so existe um rascunho.
+function abrirSim(s){
+  if (s){
+    const ras = simFechada(s) ? null : lerRascunho(s.id);
+    if (ras) return abrirRascunho(ras);        // continua de onde parou
+    return abrirSimObj(Object.assign({}, s, { alteracoes: clonarAlts(s.alteracoes), salvo: retratoSim(s) }));
+  }
+  // so existe um rascunho de simulacao NOVA: ele pergunta antes
+  const ras = lerRascunho(null);
+  if (ras) return abrirFolha('<h3>Há uma simulação nova não salva</h3><div class="sub">"' + esc(ras.nome) + '" tem ' +
+      nAlt(ras.alteracoes.length) + ' que ainda não foram salvas.</div>' +
+      '<div class="acoes" style="flex-direction:column;align-items:stretch">' +
+      '<button class="btn pri" id="r-cont">Continuar essa</button>' +
+      '<button class="btn" id="r-desc">Descartar e começar outra</button>' +
+      '<button class="btn plain" id="r-canc">Cancelar</button></div>', () => {
+        document.getElementById("r-canc").onclick = fecharFolha;
+        document.getElementById("r-cont").onclick = () => { fecharFolha(); abrirRascunho(ras); };
+        document.getElementById("r-desc").onclick = () => { fecharFolha(); limparRascunho(null); abrirSim(null); };
+      });
+  const nome = nomePadrao();
+  abrirSimObj({ id: null, nome: nome, alteracoes: [], oficializada_em: null, desfazer: null,
+                salvo: retratoSim({ nome: nome, alteracoes: [] }) });
+}
+function abrirRascunho(ras){
+  if (!ras) return;
+  const s = ras.id ? estado.simulacoes.find(x => x.id === ras.id) : null;
+  if (s && simFechada(s)){
+    // virou oficial em outro aparelho: reabrir como nova aplicaria tudo duas vezes
+    limparRascunho(ras.id); render();
+    return toast("Essa simulação já virou oficial em outro aparelho — o rascunho foi descartado");
+  }
+  if (s) return abrirSimObj(Object.assign({}, s, { nome: ras.nome, alteracoes: clonarAlts(ras.alteracoes), salvo: retratoSim(s) }));
+  // simulacao nova -- ou apagada em outro aparelho, que mantem o id: salvar recria a linha
+  abrirSimObj({ id: ras.id || null, nome: ras.nome, alteracoes: clonarAlts(ras.alteracoes), oficializada_em: null,
+                desfazer: null, salvo: retratoSim({ nome: ras.nome, alteracoes: [] }) });
+}
+function abrirSimObj(o){
+  simAberta = o;
+  simAno = anoInicialSim(o.alteracoes);
+  window.scrollTo(0, 0);
+  render();
+}
+function fecharSim(){
+  gravarRascunho();
+  simAberta = null;
+  window.scrollTo(0, 0);
+  render();
+}
+// toda mudanca na simulacao aberta passa aqui: rascunho no aparelho + redesenho
+// sem perder a rolagem
+function mudouSim(anoNovo){
+  if (anoNovo) simAno = anoNovo;
+  gravarRascunho();
+  const alto = window.scrollY;
+  render();
+  window.scrollTo(0, alto);
+}
+
+// ---- a tela da simulacao (no lugar do conteudo da aba Plano)
+function renderSimulacao(el){
+  const s = simAberta;
+  const anos = anosDoPlano();
+  if (!anos.includes(simAno)) simAno = anoInicialSim(s.alteracoes);
+  let h = avisoTravado() +
+    '<div class="sim-top"><button class="btn mini plain" id="sim-voltar">' + ICO.ant + 'Plano</button>' +
+    '<div class="tit"><div class="k">Simulação</div><div class="n">' + esc(s.nome) + '</div></div>' +
+    (simFechada(s) ? "" : '<span class="sim-acoes">' + (simSuja() ? '<span class="naosalvo">não salvo</span>' : "") +
+      '<button class="btn mini pri" id="sim-salvar">Salvar</button></span>') + '</div>';
+
+  if (simFechada(s)){
+    h += '<div class="nota sim">' + (s.oficializada_em
+        ? 'Esta simulação <b>virou o plano oficial</b> em ' + dataCurta(s.oficializada_em) +
+          '. Ela fica aqui como histórico: as alterações já estão no plano.'
+        : '<b>A oficialização não terminou.</b> Parte destas alterações pode já estar no plano. ' +
+          'Use <b>Desfazer</b> para voltar ao plano de antes e tente de novo.') +
+      '<div class="acoes"><button class="btn mini" id="sim-desfazer">Desfazer</button></div></div>' +
+      '<div class="hdr"><h2>Alterações</h2><span class="aux">' + nAlt(s.alteracoes.length) + '</span></div>' +
+      '<div class="rule"></div>' + listaAlteracoes(s.alteracoes, {}, true) +
+      '<div class="acoes"><button class="btn plain" id="sim-excluir">Excluir simulação</button></div>';
+    el.innerHTML = h;
+    ligarSim(el);
+    return;
+  }
+
+  const c = calcSim(s.alteracoes);
+  const cmp = SIM.comparar(proj, c.ps);
+  const hoje = compHoje().slice(0, 4);
+  // rascunho de simulacao apagada em outro aparelho tem id mas nao tem linha: so descarta
+  const guardada = !!(s.id && estado.simulacoes.some(x => x.id === s.id));
+  const daqui = cmp.anos.filter(x => x.ano >= hoje);
+  h += '<div class="nota sim">O plano oficial <b>não muda</b> até você salvar esta simulação como oficial.</div>' +
+    '<div class="hdr"><h2>Fim do ano</h2><span class="seg" id="sim-anos">' + anos.map(a =>
+      '<button data-a="' + a + '"' + (a === simAno ? ' class="on"' : "") + '>' + a + '</button>').join("") + '</span></div>' +
+    blocoFimAno(cmp.anos.find(x => x.ano === simAno)) +
+    '<div class="grafwrap gsim" id="graf-sim"></div>' +
+    '<div class="hdr"><h2>Onde cada ano termina</h2></div>' + tabelaAnosSim(daqui.length ? daqui : cmp.anos) +
+    '<div class="hdr"><h2>Alterações</h2><span class="aux">' + nAlt(s.alteracoes.length) + '</span></div>' +
+    '<div class="rule"></div>' + listaAlteracoes(s.alteracoes, c.res.avisos, false) +
+    '<div class="acoes"><button class="btn" id="sim-add">Adicionar alteração</button></div>' +
+    '<div class="hdr"><h2>' + simAno + ' mês a mês</h2><span class="aux">toque numa célula para alterar</span></div>' +
+    '<div class="tabwrap">' + tabelaSim(simAno, c) + '</div>' +
+    '<div class="acoes">' +
+      (guardada ? '<button class="btn plain" id="sim-excluir">Excluir simulação</button>'
+                : '<button class="btn plain" id="sim-descartar">Descartar simulação</button>') +
+      (guardada && simSuja() ? '<button class="btn plain" id="sim-reverter">Descartar mudanças</button>' : "") +
+    '</div>';
+  el.innerHTML = h;
+  desenharSim(c);
+  ligarSim(el);
+}
+function ligarSim(el){
+  const liga = (id, fn) => { const b = el.querySelector("#" + id); if (b) b.onclick = fn; };
+  liga("sim-voltar", fecharSim);
+  liga("sim-salvar", folhaSalvarSim);
+  liga("sim-add", folhaTipoAlteracao);
+  liga("sim-descartar", folhaDescartarSim);
+  liga("sim-excluir", folhaExcluirSim);
+  liga("sim-desfazer", folhaDesfazerSim);
+  liga("sim-reverter", () => {
+    const s = estado.simulacoes.find(x => x.id === simAberta.id);
+    if (!s) return folhaDescartarSim();
+    limparRascunho(simAberta.id);
+    abrirSimObj(Object.assign({}, s, { alteracoes: clonarAlts(s.alteracoes), salvo: retratoSim(s) }));
+    toast("Mudanças descartadas");
+  });
+  el.querySelectorAll("#sim-anos button").forEach(b => b.onclick = () => mudouSim(b.dataset.a));
+  el.querySelectorAll("[data-alt-ed]").forEach(b => b.onclick = () => {
+    const a = simAberta.alteracoes.find(x => x.id === b.dataset.altEd);
+    if (a) folhaAlteracao(a.tipo, a);
+  });
+  el.querySelectorAll("[data-alt-rm]").forEach(b => b.onclick = () => {
+    simAberta.alteracoes = simAberta.alteracoes.filter(x => x.id !== b.dataset.altRm);
+    mudouSim(); toast("Alteração removida");
+  });
+  el.querySelectorAll(".sim-tab td.ed").forEach(td => td.onclick = () => tocarCelulaSim(td.dataset.comp, td.dataset.cat));
+}
+
+function blocoFimAno(x){
+  if (!x) return "";
+  const cls = Math.abs(x.dif) < 0.005 ? "d3" : x.dif >= 0 ? "pos" : "neg";
+  return '<div class="fatos sim-fim">' +
+    '<div class="fato"><div class="k"><span class="key"></span>Plano · ' + rotulo(x.competencia) + '</div>' +
+      '<div class="v">' + esc(fmt(x.plano)) + '</div></div>' +
+    '<div class="fato"><div class="k"><span class="key s"></span>Simulação</div><div class="v">' + esc(fmt(x.sim)) + '</div></div>' +
+    '<div class="fato"><div class="k">Diferença</div><div class="v ' + cls + '">' + esc(fmtsin(x.dif)) +
+      (x.plano ? ' <small>' + fmtpct(x.dif / x.plano) + '</small>' : "") + '</div></div></div>';
+}
+function tabelaAnosSim(lista){
+  const z = v => Math.abs(v) < 0.005;
+  return '<div class="tabwrap"><table class="plano sim-anos"><thead><tr><th>Ano</th><th><span class="key"></span>Plano</th>' +
+    '<th><span class="key s"></span>Simulação</th><th>Diferença</th></tr></thead><tbody>' + lista.map(x =>
+      '<tr><td>' + x.ano + '</td><td>' + fmtn(x.plano) + '</td><td class="forte">' + fmtn(x.sim) + '</td>' +
+      '<td class="' + (z(x.dif) ? "z" : x.dif >= 0 ? "pos" : "neg") + '">' + (z(x.dif) ? "·" : fmtsin(x.dif)) + '</td></tr>').join("") +
+    '</tbody></table></div>';
+}
+function descAlteracao(a){
+  const cat = nomeCat(a.cat);
+  switch (a.tipo){
+    case "valor":
+      return { titulo: cat + " em " + rotulo(a.comp) + ": " + fmt(a.valor), detalhe: "valor de um mês" };
+    case "serie":
+      return { titulo: cat + ": " + (a.modo === "pct" ? pctSin(a.pct) : fmt(a.valor) + " por mês"),
+               detalhe: a.ate ? "de " + rotulo(a.de) + " a " + rotulo(a.ate) : "de " + rotulo(a.de) + " em diante" };
+    case "pontual": {
+      const rec = (catDe(a.cat) || {}).tipo === "receita";
+      return { titulo: a.descricao + ": " + fmt(a.valor) + " em " + rotulo(a.comp),
+               detalhe: cat + (rec ? " · receita pontual" : " · gasto pontual") };
+    }
+    case "parcelado":
+      return { titulo: a.descricao + ": " + a.parcelas + "× " + fmt(a.valor),
+               detalhe: cat + " · " + rotulo(a.inicio) + " a " + rotulo(SIM.somaMes(a.inicio, a.parcelas - 1)) +
+                        " · total " + fmt(a.valor * a.parcelas) };
+    case "taxa":
+      return { titulo: cat + ": " + pctAoMes(a.percentual) + " ao mês", detalhe: "taxa de rendimento de " + rotulo(a.de) + " em diante" };
+  }
+  return { titulo: "?", detalhe: "" };
+}
+function listaAlteracoes(alts, avisos, soLeitura){
+  if (!alts.length) return '<div class="vazio sim-vazio">Nenhuma alteração ainda.<br>Adicione uma, ou toque numa célula da tabela abaixo.</div>';
+  return alts.map(a => {
+    const d = descAlteracao(a);
+    const av = (avisos[a.id] || []).map(t => '<span class="alt-aviso">' + esc(t) + '</span>').join("");
+    return '<div class="row alt"><span class="nm">' + esc(d.titulo) + '<br><span class="t11 d3">' + esc(d.detalhe) +
+      '</span>' + av + '</span>' + (soLeitura ? "" :
+        '<button class="btn mini plain" data-alt-ed="' + esc(a.id) + '">editar</button>' +
+        '<button class="btn mini plain" data-alt-rm="' + esc(a.id) + '">remover</button>') + '</div>';
+  }).join("");
+}
+function tabelaSim(ano, c){
+  const cats = estado.categorias.filter(x => x.ativo !== false);
+  const marca = SIM.marcas(proj, c.ps, c.res);
+  const hoje = compHoje();
+  let h = '<table class="plano sim-tab"><thead><tr><th>Mês</th>' +
+    cats.map(x => '<th class="' + (x.tipo === "receita" ? "rec" : "des") + '">' + esc(x.nome) + '</th>').join("") +
+    '<th class="colsep rec">Receitas</th><th class="des">Saídas</th>' +
+    '<th class="colsep"><span class="key s"></span>Simulação</th><th><span class="key"></span>Plano</th><th>Δ</th></tr></thead><tbody>';
+  c.ps.forEach((m, i) => {
+    if (m.competencia.slice(0, 4) !== ano) return;
+    const b = proj[i], dif = m.previsao - b.previsao, z = Math.abs(dif) < 0.005;
+    h += '<tr' + (m.competencia === hoje ? ' class="agora"' : "") + '><td>' + rotulo(m.competencia) + '</td>' +
+      cats.map(x => {
+        const v = m.previsto[x.id] || 0, mk = marca[m.competencia + "|" + x.id];
+        return '<td class="ed' + (v ? "" : " z") + (mk === "direta" ? " sim-d" : mk === "cadeia" ? " sim-c" : "") +
+          '" data-comp="' + m.competencia + '" data-cat="' + esc(x.id) + '"' +
+          (mk ? ' title="no plano: ' + esc(fmtn(b.previsto[x.id] || 0)) + '"' : "") + '>' + (v ? fmtn(v) : "·") + '</td>';
+      }).join("") +
+      '<td class="colsep pos">' + fmtn(m.receitas) + '</td><td class="neg">' + fmtn(m.saidas) + '</td>' +
+      '<td class="colsep forte">' + fmtn(m.previsao) + '</td><td>' + fmtn(b.previsao) + '</td>' +
+      '<td class="' + (z ? "z" : dif >= 0 ? "pos" : "neg") + '">' + (z ? "·" : fmtsin(dif)) + '</td></tr>';
+  });
+  return h + '</tbody></table>';
+}
+
+// Duas linhas no MESMO eixo: plano (tiffany, continua) e simulacao (--sim,
+// TRACEJADA: a forma separa as duas mesmo se a cor falhar, e tracejado le
+// como projecao). Linha nao precisa de base no zero -- a grade de fio, em
+// numeros redondos, da a escala. Tocar/passar o mouse (ou as setas, com o
+// grafico em foco) mostra os dois valores do mes numa caixa so. Largura
+// MEDIDA do container: com viewBox fixo o texto sai esmagado (licao do Resumo).
+// marcas do eixo: todas na MESMA unidade (0,9 mi ao lado de 1,0 mi, nunca 900k),
+// com as casas que o passo pede para duas marcas nunca sairem iguais
+function fmtEixo(v, passo, emMi){
+  const x = dis(v), p = Math.abs(dis(passo)), a = Math.abs(x);
+  if (emMi){
+    const casas = Math.min(3, Math.max(0, Math.ceil(-Math.log10(p / 1e6) - 1e-9)));
+    return (x / 1e6).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas }) + " mi";
+  }
+  if (a >= 1e3 && p >= 1e3) return Math.round(x / 1e3).toLocaleString("pt-BR") + "k";
+  return Math.round(x).toLocaleString("pt-BR");
+}
+function desenharSim(c){
+  const box = document.getElementById("graf-sim");
+  if (!box || !simAberta || simFechada(simAberta)) return;
+  c = c || calcSim(simAberta.alteracoes);
+  const idx = [];
+  proj.forEach((m, i) => { if (m.competencia.slice(0, 4) === simAno) idx.push(i); });
+  if (!idx.length){ box.innerHTML = ""; return; }
+  const W = Math.max(280, Math.round(box.getBoundingClientRect().width) || 340);
+  const H = 214, PL = 50, PR = 12, PT = 12, PB = 26;
+  const pl = idx.map(i => proj[i].previsao), sm = idx.map(i => c.ps[i].previsao);
+  let mn = Math.min.apply(null, pl.concat(sm)), mx = Math.max.apply(null, pl.concat(sm));
+  if (mx - mn < 1){ mx += 1; mn -= 1; }
+  // grade em numeros redondos (1, 2 ou 5 x 10^n), umas 4 faixas
+  const bruto = (mx - mn) / 4, pot = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const passo = [1, 2, 5, 10].map(k => k * pot).find(p => p >= bruto);
+  const lo = Math.floor(mn / passo) * passo, hi = Math.ceil(mx / passo) * passo;
+  const emMi = Math.max(Math.abs(dis(lo)), Math.abs(dis(hi))) >= 1e6;
+  const y = v => PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB);
+  const n = idx.length, ult = n - 1;
+  const cx = k => n === 1 ? (PL + W - PR) / 2 : PL + k * (W - PL - PR) / ult;
+  const hoje = compHoje();
+  let grade = "", eixo = "";
+  for (let v = lo; v <= hi + passo / 2; v += passo){
+    const gy = y(v).toFixed(1);
+    grade += '<line x1="' + PL + '" y1="' + gy + '" x2="' + (W - PR / 2) + '" y2="' + gy + '" stroke="var(--line)"/>' +
+      '<text x="' + (PL - 8) + '" y="' + (y(v) + 3.5).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="var(--ink-3)">' +
+      esc(fmtEixo(v, passo, emMi)) + '</text>';
+  }
+  idx.forEach((i, k) => {
+    eixo += '<text x="' + cx(k).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="' +
+      (proj[i].competencia === hoje ? "var(--sand)" : "var(--ink-3)") + '">' + MESES[+proj[i].competencia.split("-")[1] - 1] + '</text>';
+  });
+  const caminho = vs => vs.map((v, k) => (k ? "L" : "M") + cx(k).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+  // ponto: r 4 na cor da serie, com anel de 2px na cor do fundo (fica legivel onde cruza a outra linha)
+  const ponto = (k, v, cor, cls) => '<circle' + (cls ? ' class="' + cls + '"' : "") + ' cx="' + cx(k).toFixed(1) +
+    '" cy="' + y(v).toFixed(1) + '" r="4" fill="' + cor + '" stroke="var(--bg)" stroke-width="2"/>';
+  box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" tabindex="0" role="img" ' +
+    'aria-label="Previsão do plano (linha contínua) e da simulação (linha tracejada) em ' + simAno +
+    '. Use as setas para ver os valores de cada mês.">' + grade +
+    '<path d="' + caminho(pl) + '" fill="none" stroke="var(--tif)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<path d="' + caminho(sm) + '" fill="none" stroke="var(--sim)" stroke-width="2" stroke-dasharray="6 4" ' +
+      'stroke-linejoin="round" stroke-linecap="round"/>' +
+    ponto(ult, pl[ult], "var(--tif)") + ponto(ult, sm[ult], "var(--sim)") + eixo +
+    '<g class="gcruz" style="display:none"><line y1="' + PT + '" y2="' + (H - PB) + '" stroke="var(--ink-4)"/>' +
+      ponto(0, pl[0], "var(--tif)", "cp") + ponto(0, sm[0], "var(--sim)", "cs") + '</g></svg>' +
+    '<div class="gtip" aria-hidden="true"></div>' +
+    '<div class="legenda"><span><i class="sw-plano"></i>plano</span><span><i class="sw-sim"></i>simulação</span>' +
+    '<span class="d3">toque no gráfico para ver cada mês</span></div>';
+
+  const svg = box.querySelector("svg"), cruz = box.querySelector(".gcruz"), tip = box.querySelector(".gtip");
+  let atual = -1;
+  const mostra = k => {
+    if (k < 0){ cruz.style.display = "none"; tip.classList.remove("on"); atual = -1; return; }
+    atual = k;
+    const x = cx(k).toFixed(1), p = pl[k], s = sm[k], d = s - p;
+    cruz.style.display = "";
+    const ln = cruz.querySelector("line"); ln.setAttribute("x1", x); ln.setAttribute("x2", x);
+    const cp = cruz.querySelector(".cp"), cs = cruz.querySelector(".cs");
+    cp.setAttribute("cx", x); cp.setAttribute("cy", y(p).toFixed(1));
+    cs.setAttribute("cx", x); cs.setAttribute("cy", y(s).toFixed(1));
+    // o valor manda, o nome acompanha
+    tip.innerHTML = '<div class="m">' + esc(rotuloL(proj[idx[k]].competencia)) + '</div>' +
+      '<div class="r"><span class="key"></span><b>' + esc(fmt(p)) + '</b><span>plano</span></div>' +
+      '<div class="r"><span class="key s"></span><b>' + esc(fmt(s)) + '</b><span>simulação</span></div>' +
+      '<div class="r d"><b class="' + (Math.abs(d) < 0.005 ? "" : d >= 0 ? "pos" : "neg") + '">' + esc(fmtsin(d)) +
+      '</b><span>diferença</span></div>';
+    // ao LADO da linha-guia, no alto do grafico: nao cobre os pontos do mes nem os rotulos dos meses
+    tip.classList.add("on");
+    const esc_ = svg.getBoundingClientRect().width / W, tw = tip.offsetWidth, xr = cx(k) * esc_;
+    tip.style.left = (xr + 12 + tw <= box.clientWidth ? xr + 12 : Math.max(0, xr - 12 - tw)) + "px";
+    tip.style.top = (PT * esc_) + "px";
+  };
+  const maisPerto = ev => {
+    const r = svg.getBoundingClientRect(), xv = (ev.clientX - r.left) * W / r.width;
+    let k = 0;
+    for (let j = 1; j < n; j++) if (Math.abs(cx(j) - xv) < Math.abs(cx(k) - xv)) k = j;
+    return k;
+  };
+  svg.addEventListener("pointermove", ev => mostra(maisPerto(ev)));
+  svg.addEventListener("pointerdown", ev => mostra(maisPerto(ev)));
+  svg.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse") mostra(-1); });
+  svg.addEventListener("focus", () => mostra(atual >= 0 ? atual : ult));
+  svg.addEventListener("blur", () => mostra(-1));
+  svg.addEventListener("keydown", ev => {
+    if (ev.key === "ArrowRight"){ ev.preventDefault(); mostra(atual < 0 ? ult : Math.min(ult, atual + 1)); }
+    else if (ev.key === "ArrowLeft"){ ev.preventDefault(); mostra(atual < 0 ? 0 : Math.max(0, atual - 1)); }
+    else if (ev.key === "Escape") mostra(-1);
+  });
+}
+
+// ---- alteracoes: escolher o tipo, preencher, ver a previa
+function padraoAlt(tipo){
+  const prox = somaMes(compHoje(), 1);
+  const ativas = estado.categorias.filter(c => c.ativo !== false);
+  const cat = (ativas[0] || {}).id;
+  const taxa = (ativas.find(c => c.calculo === "pct_saldo") || {}).id;
+  return ({
+    valor:     { cat: cat, comp: prox, valor: null },
+    serie:     { cat: cat, de: prox, ate: null, modo: "valor", valor: null, pct: null },
+    pontual:   { cat: cat, comp: prox, valor: null, descricao: "" },
+    parcelado: { cat: cat, inicio: prox, parcelas: 12, valor: null, descricao: "" },
+    taxa:      { cat: taxa, de: prox, percentual: null },
+  })[tipo] || {};
+}
+// base simulada da celula, sem as parcelas: o valor que "valor de um mes" substitui
+function baseSim(comp, cat){
+  const m = calcSim(simAberta.alteracoes).ps.find(x => x.competencia === comp);
+  if (!m) return null;
+  return SIM.arred((m.previsto[cat] || 0) - (m.parcelas[cat] || []).reduce((s, x) => s + x.valor, 0), 2);
+}
+function tocarCelulaSim(comp, cat){
+  const a = simAberta.alteracoes.find(x => x.tipo === "valor" && x.comp === comp && x.cat === cat);
+  if (a) return folhaAlteracao("valor", a, { daTabela: true });
+  folhaAlteracao("valor", null, { cat: cat, comp: comp, valor: baseSim(comp, cat), daTabela: true });
+}
+function folhaTipoAlteracao(){
+  const temTaxa = estado.categorias.some(c => c.calculo === "pct_saldo" && c.ativo !== false);
+  abrirFolha('<h3>Adicionar alteração</h3><div class="sub">O que você quer testar?</div><div class="tipos">' +
+    TIPOS_ALT.filter(t => t[0] !== "taxa" || temTaxa).map(t =>
+      '<button data-t="' + t[0] + '"><b>' + t[1] + '</b><span>' + t[2] + '</span></button>').join("") +
+    '</div><div class="acoes"><button class="btn plain" id="t-cancel">Cancelar</button></div>', () => {
+      document.getElementById("t-cancel").onclick = fecharFolha;
+      document.querySelectorAll(".tipos button").forEach(b => b.onclick = () => folhaAlteracao(b.dataset.t, null));
+    });
+}
+
+// Formulario de UMA alteracao (nova ou editando). A previa sai do bloco puro,
+// com a MESMA conta da simulacao -- nao existe uma segunda formula na tela.
+function folhaAlteracao(tipo, alt, opts){
+  opts = opts || {};
+  const editando = !!alt;
+  const a = editando ? Object.assign({}, alt)
+    : Object.assign({ id: idCurto(), tipo: tipo }, padraoAlt(tipo),
+        opts.cat ? { cat: opts.cat } : {}, opts.comp ? { comp: opts.comp } : {},
+        vazio(opts.valor) ? {} : { valor: opts.valor });
+  const ativas = estado.categorias.filter(c => c.ativo !== false);
+  const deTaxa = ativas.filter(c => c.calculo === "pct_saldo");
+  // categoria apagada ou desligada fica escolhida como "(categoria apagada)", em vez de
+  // virar em silencio a primeira da lista
+  const opcoes = lista => (a.cat && !lista.some(c => c.id === a.cat)
+      ? '<option value="' + esc(a.cat) + '" selected>(' + (catDe(a.cat) ? "categoria desativada" : "categoria apagada") +
+        ')</option>' : "") +
+    lista.map(c => '<option value="' + esc(c.id) + '"' + (c.id === a.cat ? " selected" : "") + '>' +
+    esc(c.nome) + (c.tipo === "receita" ? " (receita)" : "") + '</option>').join("");
+  const campoMes = (id, rot, v) => '<label class="f">' + rot + '<input id="' + id + '" type="month" value="' +
+    (v ? esc(v.slice(0, 7)) : "") + '"></label>';
+  const campoNum = (id, rot, v) => '<label class="f">' + rot + '<input id="' + id + '" inputmode="decimal" value="' +
+    (vazio(v) ? "" : fmtn(v)) + '" placeholder="0,00"></label>';
+  const campoPct = (id, rot, v, ph) => '<label class="f">' + rot + '<input id="' + id + '" inputmode="decimal" value="' +
+    (vazio(v) ? "" : String(+(v * 100).toFixed(6)).replace(".", ",")) + '" placeholder="' + ph + '"></label>';
+  const campoCat = lista => '<label class="f">Categoria<select id="a-cat">' + opcoes(lista) + '</select></label>';
+  const campoDesc = ph => '<label class="f">O que é<input id="a-desc" value="' + esc(a.descricao || "") +
+    '" placeholder="' + ph + '" maxlength="80"></label>';
+  const seg = (id, rot, itens, on) => '<div class="f-seg">' + rot + '<span class="seg" id="' + id + '">' +
+    itens.map(x => '<button type="button" data-v="' + x[0] + '"' + (x[0] === on ? ' class="on"' : "") + '>' + x[1] + '</button>').join("") +
+    '</span></div>';
+
+  let corpo = "";
+  if (a.tipo === "valor") corpo = campoCat(ativas) +
+    '<div class="f2">' + campoMes("a-comp", "Mês", a.comp) + campoNum("a-valor", "Valor na simulação", a.valor) + '</div>' +
+    (opts.daTabela ? seg("a-alcance", "Vale para", [["mes", "Só este mês"], ["diante", "Deste mês em diante"]], "mes") : "");
+  else if (a.tipo === "serie") corpo = campoCat(ativas) +
+    '<div class="f2">' + campoMes("a-de", "A partir de", a.de) + campoMes("a-ate", "Até (vazio = até o fim)", a.ate) + '</div>' +
+    seg("a-modo", "Como muda", [["valor", "Passa a valer R$"], ["pct", "Muda em %"]], a.modo === "pct" ? "pct" : "valor") +
+    '<div id="a-box-valor">' + campoNum("a-valor", "Valor por mês", a.valor) + '</div>' +
+    '<div id="a-box-pct">' + campoPct("a-pct", "Percentual", a.pct, "ex.: 10 ou -5") + '</div>';
+  else if (a.tipo === "pontual") corpo = campoDesc("Ex.: Carro novo") + campoCat(ativas) +
+    '<div class="f2">' + campoMes("a-comp", "Mês", a.comp) + campoNum("a-valor", "Valor", a.valor) + '</div>';
+  else if (a.tipo === "parcelado") corpo = campoDesc("Ex.: Financiamento do carro") + campoCat(ativas) +
+    '<div class="f2">' + campoNum("a-valor", "Valor da parcela", a.valor) +
+    '<label class="f">Nº de parcelas<input id="a-n" inputmode="numeric" value="' + esc(a.parcelas || "") + '"></label></div>' +
+    campoMes("a-ini", "Primeira parcela", a.inicio);
+  else if (a.tipo === "taxa") corpo = (deTaxa.length > 1 ? campoCat(deTaxa)
+      : '<input type="hidden" id="a-cat" value="' + esc(a.cat || (deTaxa[0] || {}).id || "") + '">') +
+    '<div class="f2">' + campoMes("a-de", "A partir de", a.de) + campoPct("a-pct", "Taxa ao mês (%)", a.percentual, "ex.: 0,75") + '</div>';
+
+  const T = TIPOS_ALT.find(t => t[0] === a.tipo) || TIPOS_ALT[0];
+  abrirFolha('<h3>' + T[1] + '</h3><div class="sub">' + T[2] + '</div>' + corpo +
+    '<div id="a-previa" class="nota fria" style="margin-top:18px"></div>' +
+    '<div class="acoes"><button class="btn pri" id="a-ok">' + (editando ? "Aplicar" : "Adicionar") + '</button>' +
+    (editando ? '<button class="btn plain" id="a-rm">Remover</button>' : "") +
+    '<button class="btn plain" id="a-cancel">Cancelar</button></div>', () => {
+      const $ = id => document.getElementById(id);
+      let alcance = "mes";
+      const ligaSeg = (id, cb) => {
+        const s = $(id); if (!s) return;
+        s.querySelectorAll("button").forEach(b => b.onclick = () => {
+          s.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+          cb(b.dataset.v); previa();
+        });
+      };
+      // o % nao existe para Rendimentos: o valor depende do saldo (use a taxa)
+      const ajustaModo = () => {
+        if (!$("a-modo")) return;
+        const c = catDe($("a-cat").value);
+        const pctOk = !(c && c.calculo === "pct_saldo");
+        $("a-modo").querySelector('[data-v="pct"]').style.display = pctOk ? "" : "none";
+        if (!pctOk && a.modo === "pct"){
+          a.modo = "valor";
+          $("a-modo").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.v === "valor"));
+        }
+        $("a-box-valor").style.display = a.modo === "pct" ? "none" : "";
+        $("a-box-pct").style.display = a.modo === "pct" ? "" : "none";
+      };
+      const previa = () => {
+        ajustaModo();
+        const r = lerAlteracao(a, alcance);
+        $("a-previa").innerHTML = r.erro ? '<span class="d3">' + esc(r.erro) + '</span>' : previaAlteracao(r.alt);
+      };
+      ligaSeg("a-alcance", v => { alcance = v; });
+      ligaSeg("a-modo", v => { a.modo = v; });
+      document.querySelectorAll("#sheet input, #sheet select").forEach(x => {
+        x.addEventListener("input", previa); x.addEventListener("change", previa);
+      });
+      previa();
+      $("a-cancel").onclick = fecharFolha;
+      if ($("a-rm")) $("a-rm").onclick = () => {
+        simAberta.alteracoes = simAberta.alteracoes.filter(x => x.id !== a.id);
+        fecharFolha(); mudouSim(); toast("Alteração removida");
+      };
+      $("a-ok").onclick = () => {
+        const r = lerAlteracao(a, alcance);
+        if (r.erro){ toast(r.erro); return; }
+        const i = simAberta.alteracoes.findIndex(x => x.id === a.id);
+        if (i >= 0) simAberta.alteracoes[i] = r.alt; else simAberta.alteracoes.push(r.alt);
+        fecharFolha(); mudouSim(primeiroMesAlt(r.alt).slice(0, 4));
+        toast(i >= 0 ? "Alteração atualizada" : "Alteração adicionada");
+        tremer();
+      };
+    });
+}
+// Le o formulario aberto: { alt } pronta, ou { erro } com o motivo.
+function lerAlteracao(a, alcance){
+  const $ = id => document.getElementById(id);
+  const val = id => $(id) ? $(id).value : "";
+  const mes = id => val(id) ? val(id) + "-01" : null;
+  const alt = { id: a.id, tipo: a.tipo, cat: val("a-cat") };
+  if (!alt.cat) return { erro: "Escolha a categoria" };
+  if (a.tipo === "valor"){
+    alt.comp = mes("a-comp"); alt.valor = parseNum(val("a-valor"));
+    if (!alt.comp) return { erro: "Informe o mês" };
+    if (alt.valor === null) return { erro: "Informe o valor" };
+    if (alt.valor < 0) return { erro: "O valor não pode ser negativo" };
+    if (alcance === "diante")
+      return { alt: { id: a.id, tipo: "serie", cat: alt.cat, de: alt.comp, ate: null, modo: "valor", valor: alt.valor } };
+  } else if (a.tipo === "serie"){
+    alt.de = mes("a-de"); alt.ate = mes("a-ate"); alt.modo = a.modo === "pct" ? "pct" : "valor";
+    if (!alt.de) return { erro: "Informe o mês de início" };
+    if (alt.ate && alt.ate < alt.de) return { erro: "O fim vem antes do início" };
+    if (alt.modo === "valor"){
+      alt.valor = parseNum(val("a-valor"));
+      if (alt.valor === null) return { erro: "Informe o valor por mês" };
+      if (alt.valor < 0) return { erro: "O valor não pode ser negativo" };
+    } else {
+      const p = parseNum(val("a-pct"));
+      if (p === null || p === 0) return { erro: "Informe o percentual (diferente de zero)" };
+      if (p <= -100) return { erro: "O percentual não pode tirar 100% ou mais" };
+      if (p > 1000) return { erro: "Percentual alto demais" };
+      alt.pct = p / 100;
+    }
+  } else if (a.tipo === "pontual" || a.tipo === "parcelado"){
+    alt.descricao = val("a-desc").trim(); alt.valor = parseNum(val("a-valor"));
+    if (!alt.descricao) return { erro: "Diga o que é" };
+    // a parcela e gravada em centavos (e o banco exige > 0)
+    if (!alt.valor || SIM.arred(alt.valor, 2) <= 0) return { erro: "Informe o valor" };
+    alt.valor = SIM.arred(alt.valor, 2);
+    if (a.tipo === "pontual"){
+      alt.comp = mes("a-comp");
+      if (!alt.comp) return { erro: "Informe o mês" };
+    } else {
+      alt.parcelas = Math.round(parseNum(val("a-n")) || 0); alt.inicio = mes("a-ini");
+      if (!alt.parcelas || alt.parcelas < 1 || alt.parcelas > 600) return { erro: "Informe quantas parcelas (1 a 600)" };
+      if (!alt.inicio) return { erro: "Informe a primeira parcela" };
+    }
+  } else if (a.tipo === "taxa"){
+    alt.de = mes("a-de");
+    const p = parseNum(val("a-pct"));
+    if (!alt.de) return { erro: "Informe o mês de início" };
+    if (p === null || p <= 0) return { erro: "Informe a taxa ao mês" };
+    if (p > 100) return { erro: "Taxa alta demais (máximo 100% ao mês)" };
+    alt.percentual = p / 100;
+  }
+  return { alt: alt };
+}
+function previaAlteracao(alt){
+  const d = dadosMotor();
+  const c = catDe(alt.cat), cat = c ? c.nome : "?";
+  const rec = c && c.tipo === "receita";
+  const av = l => (l && l.length) ? l.map(t => '<span class="alt-aviso">' + esc(t) + '</span>').join("") : "";
+  if (alt.tipo === "valor" || alt.tipo === "serie"){
+    const p = SIM.previa(d, proj, alt);
+    if (!p.primeiro) return "Nada muda dentro do horizonte do plano." + av(p.avisos);
+    const f = p.primeiro;
+    // para uma despesa, gastar mais e o lado ruim
+    const cls = Math.abs(p.dif) < 0.005 ? "d3" : ((p.dif >= 0) === !!rec ? "pos" : "neg");
+    let t = alt.tipo === "valor"
+      ? '<b>' + esc(cat) + '</b> em ' + rotulo(f.comp) + ': ' + esc(fmt(f.antes)) + ' no plano → <b>' + esc(fmt(f.depois)) + '</b>'
+      : '<b>' + esc(cat) + '</b> de ' + rotulo(alt.de) + (alt.ate ? ' a ' + rotulo(alt.ate) : ' em diante') + ' (' +
+        plural(p.meses, "mês", "meses") + '): ' + esc(fmt(f.antes)) + ' → <b>' + esc(fmt(f.depois)) + '</b> em ' + rotulo(f.comp);
+    t += ' · <span class="' + cls + '">' + esc(fmtsin(p.dif)) + '</span> no total.';
+    if (c && c.calculo === "pct_saldo")
+      t += '<br><span class="d3">Rendimentos fica congelado nesses meses. Para mudar quanto rende, use a taxa de rendimento.</span>';
+    return t + av(p.avisos);
+  }
+  const avisos = SIM.aplicar(d, [alt]).avisos[alt.id];
+  if (alt.tipo === "pontual")
+    return '<b>' + esc(alt.descricao) + '</b>: ' + esc(fmt(alt.valor)) + ' a mais ' + (rec ? 'de receita em ' : 'em ') +
+      esc(cat) + ' em ' + rotulo(alt.comp) + '.' + av(avisos);
+  if (alt.tipo === "parcelado")
+    return '<b>' + esc(fmt(alt.valor)) + '</b> por mês de <b>' + rotulo(alt.inicio) + '</b> a <b>' +
+      rotulo(SIM.somaMes(alt.inicio, alt.parcelas - 1)) + '</b> — total de <b>' + esc(fmt(alt.valor * alt.parcelas)) + '</b>' +
+      (rec ? ' de receita' : '') + '.' + av(avisos);
+  const t = SIM.previaTaxa(d, alt);
+  let s = '<b>' + esc(cat) + '</b> de ' + rotulo(alt.de) + ' em diante: ' +
+    (t.antes === null ? "" : pctAoMes(t.antes) + ' → ') + '<b>' + pctAoMes(alt.percentual) + ' ao mês</b>.';
+  if (t.digitados.length)
+    s += '<span class="alt-aviso">' + (t.digitados.length === 1 ? "1 mês tem valor digitado à mão e não muda: "
+      : t.digitados.length + " meses têm valor digitado à mão e não mudam: ") +
+      t.digitados.slice(0, 4).map(rotulo).join(", ") + (t.digitados.length > 4 ? "…" : "") + '.</span>';
+  return s + av(avisos);
+}
+
+// ---- salvar, tornar oficial, desfazer, excluir
+// As travas de toda escrita (modo discreto, sem conexao) conferidas ANTES de
+// uma sequencia de gravacoes: patch devolve null tanto travado quanto em
+// sucesso (204), entao nao da para descobrir depois.
+function podeGravar(){
+  if (bloqueadoPeloDisfarce()) return false;
+  if (dadosTravados){ toast("Sem conexão — nada foi gravado"); return false; }
+  return true;
+}
+// Conferida antes de CADA passo de uma sequencia: o modo discreto pode ser ligado
+// no meio, e ai salvar/patch devolvem null sem gravar -- seguir em frente mudaria a
+// memoria sem mudar o banco. Com `r`, exige tambem que a gravacao tenha voltado.
+function exigirGravacao(r){
+  if (disfarce || dadosTravados || r === null) throw new Error("gravação travada (modo discreto ou sem conexão)");
+  return r;
+}
+// Oficializar e desfazer decidem pelo BANCO, nao pela memoria: um app aberto ha dias
+// no celular, ou uma resposta perdida no meio de uma gravacao, deixa a memoria
+// diferente do banco -- e o desfazer diria "voltou ao que era" com a simulacao ainda
+// no plano. Recarrega tudo e ressincroniza a simulacao aberta.
+async function recarregarDoBanco(s){
+  toast("Conferindo o banco…");
+  // so a BUSCA: se falhar, memoria e travas ficam como estavam -- cair na copia do
+  // aparelho no meio da sessao mostraria dado velho e travaria o app ate reabrir
+  let res;
+  try { res = await buscarTudo(); }
+  catch (e){ toast("Sem conexão com o banco — nada foi gravado. Tente de novo"); return false; }
+  aplicarCarga(res);
+  reprojetar();
+  if (s && s.id){
+    const f = estado.simulacoes.find(x => x.id === s.id);
+    // apagada em outro aparelho: fica o registro da memoria (o desfazer confere tudo com o banco)
+    if (f){ s.oficializada_em = f.oficializada_em || null; s.desfazer = f.desfazer || null; }
+  }
+  return true;
+}
+// Desfazer so na ordem inversa: uma oficializada DEPOIS pode ter mexido no que esta
+// devolveria (a taxa dela encerra a regra desta), e desfazer fora de ordem estragaria
+// a mais nova sem ninguem ver.
+function oficializadasDepois(s){
+  const quando = (s.desfazer && s.desfazer.em) || "";
+  return estado.simulacoes.filter(x => x.id !== s.id && x.desfazer && (x.desfazer.em || "") > quando);
+}
+function fimGravacaoSim(s){
+  s.salvo = retratoSim(s);
+  atualizarSimNoEstado(s);
+  reprojetar(); fecharFolha(); render();
+}
+async function umaVez(fn){
+  if (simOcupado){ toast("Gravando… aguarde"); return; }
+  simOcupado = true;
+  try { await fn(); } finally { simOcupado = false; }
+}
+async function umaVezValor(fn){
+  if (simOcupado){ toast("Gravando… aguarde"); return null; }
+  simOcupado = true;
+  try { return await fn(); } finally { simOcupado = false; }
+}
+function atualizarSimNoEstado(s){
+  const linha = { id: s.id, nome: s.nome, alteracoes: clonarAlts(s.alteracoes),
+                  oficializada_em: s.oficializada_em || null, desfazer: s.desfazer || null,
+                  created_at: s.created_at || new Date().toISOString() };
+  const i = estado.simulacoes.findIndex(x => x.id === s.id);
+  if (i >= 0) Object.assign(estado.simulacoes[i], linha);
+  else estado.simulacoes.unshift(linha);
+}
+function resumoOficializar(of){
+  const itens = [];
+  if (of.plano.length){
+    const por = {};
+    for (const l of of.plano) (por[l.category_id] = por[l.category_id] || []).push(l.competencia);
+    const det = Object.keys(por).map(cat => {
+      const cs = por[cat].sort();
+      return esc(nomeCat(cat)) + " " + (cs.length === 1 ? rotulo(cs[0])
+        : rotulo(cs[0]) + " a " + rotulo(cs[cs.length - 1]) + " (" + cs.length + ")");
+    });
+    itens.push('<b>' + plural(of.plano.length, "valor", "valores") + ' no plano</b>: ' + det.join("; "));
+  }
+  const pont = of.parcelas.filter(p => p.parcelas === 1).length, parc = of.parcelas.length - pont;
+  if (parc) itens.push('<b>' + plural(parc, "parcelado", "parcelados") + '</b> em Compromissos');
+  if (pont) itens.push('<b>' + plural(pont, "valor pontual", "valores pontuais") + '</b> em Compromissos');
+  if (of.regrasNovas.length) itens.push('<b>' + plural(of.regrasNovas.length, "taxa de rendimento", "taxas de rendimento") +
+    '</b> nas Regras' + (of.regrasAlteradas.length ? ' (' + plural(of.regrasAlteradas.length, "regra antiga encerrada",
+    "regras antigas encerradas") + ')' : ''));
+  return itens.length ? itens.join("<br>") : "Nada: o plano já está assim.";
+}
+function folhaSalvarSim(){
+  const s = simAberta;
+  if (simIndisponivel){ toast("Falta aplicar a migração 008 no Supabase para guardar simulações"); return; }
+  const c = calcSim(s.alteracoes), i = proj.length - 1;
+  const dif = i >= 0 ? c.ps[i].previsao - proj[i].previsao : 0;
+  const lerNome = () => (document.getElementById("s-nome").value || "").trim() || nomePadrao();
+  const passo1 = () => abrirFolha('<h3>Salvar simulação</h3>' +
+    '<div class="sub">' + nAlt(s.alteracoes.length) + (i >= 0 && s.alteracoes.length
+      ? ' · fim de ' + rotulo(proj[i].competencia) + ': plano ' + esc(fmt(proj[i].previsao)) + ', simulação ' +
+        esc(fmt(c.ps[i].previsao)) + ' (<span class="' + (dif >= 0 ? "pos" : "neg") + '">' + esc(fmtsin(dif)) + '</span>)' : "") +
+    '</div>' +
+    '<label class="f">Nome<input id="s-nome" value="' + esc(s.nome) + '" maxlength="80"></label>' +
+    '<div class="acoes" style="flex-direction:column;align-items:stretch">' +
+      '<button class="btn pri" id="s-guardar">Guardar simulação</button>' +
+      '<button class="btn" id="s-oficial"' + (s.alteracoes.length ? "" : " disabled") + '>Guardar e tornar o plano oficial</button>' +
+      '<button class="btn plain" id="s-cancel">Cancelar</button></div>', () => {
+        document.getElementById("s-cancel").onclick = fecharFolha;
+        document.getElementById("s-guardar").onclick = () => { s.nome = lerNome(); umaVez(() => guardarSim(false)); };
+        document.getElementById("s-oficial").onclick = () => { s.nome = lerNome(); umaVez(passo2); };
+      });
+  // o resumo sai do BANCO recem-lido: e o que de fato vai ser gravado
+  const passo2 = async () => {
+    if (!podeGravar() || !(await recarregarDoBanco(s))) return;
+    render();
+    if (simFechada(s)){ fecharFolha(); toast(s.oficializada_em ? "Essa simulação já foi oficializada"
+      : "Uma oficialização desta simulação ficou pela metade — use Desfazer antes de tentar de novo"); return; }
+    const of = SIM.oficializar(dadosMotor(), s.alteracoes, { plano: estado.plano, regras: estado.regras },
+                               { nome: s.nome, novoId: () => "x", agora: "" });
+    const nada = !of.plano.length && !of.parcelas.length && !of.regrasNovas.length && !of.regrasAlteradas.length;
+    abrirFolha('<h3>Tornar o plano oficial?</h3>' +
+      '<div class="sub">"' + esc(s.nome) + '" passa a ser o plano. ' + (nada ? "" : "Isto grava:") + '</div>' +
+      '<div class="nota sim" style="margin-top:0">' + (nada ? "Nada a gravar: com o plano de hoje, esta simulação não muda nada."
+        : resumoOficializar(of)) + '</div>' +
+      (nada ? "" : '<div class="sub" style="margin:14px 0 0">Resumo, Mês e Plano passam a usar estes números. Dá para ' +
+        'desfazer depois, abrindo a simulação na lista.</div>') +
+      '<div class="acoes">' + (nada ? "" : '<button class="btn pri" id="s-conf">Confirmar</button>') +
+      '<button class="btn plain" id="s-volta">Voltar</button></div>', () => {
+        document.getElementById("s-volta").onclick = passo1;
+        const conf = document.getElementById("s-conf");
+        if (conf) conf.onclick = () => umaVez(() => guardarSim(true));
+      });
+  };
+  passo1();
+}
+// Grava a simulacao aberta (insert na primeira vez, PATCH depois) e, se
+// pedido, torna oficial.
+async function guardarSim(tornarOficial){
+  const s = simAberta;
+  if (!s || !podeGravar()) return;
+  const agora = new Date().toISOString(), eraNova = !s.id;
+  let aviso = "Simulação guardada";
+  try {
+    let r = null;
+    if (s.id){
+      // condicional: simulacao que outro aparelho ja oficializou vira historico, e as
+      // alteracoes dela nao podem ser trocadas por baixo
+      r = await patch("fin_simulations", s.id, { nome: s.nome, alteracoes: s.alteracoes, updated_at: agora },
+                      { volta: true, filtro: "&desfazer=is.null&oficializada_em=is.null" });
+      if (r && !r.length){
+        const ha = await sbFetch("fin_simulations?select=id&id=eq." + s.id);
+        if (ha && ha.length){
+          await recarregarDoBanco(s); render();
+          toast("Essa simulação já virou oficial em outro aparelho — suas mudanças ficaram no rascunho");
+          return;
+        }
+      }
+    }
+    if (!r || !r.length){
+      // nova -- ou apagada em outro aparelho (o PATCH nao achou a linha): (re)cria com o
+      // id gerado no aparelho, e o upsert por id deixa repetir o pedido sem duplicar
+      r = exigirGravacao(await salvar("fin_simulations",
+        { id: s.id || uuid(), nome: s.nome, alteracoes: s.alteracoes, updated_at: agora }, "id"));
+      if (!r[0]) throw new Error("o banco não devolveu a simulação");
+      if (!eraNova) aviso = "A simulação tinha sido apagada em outro aparelho — guardei de novo";
+    }
+    s.id = r[0].id; s.created_at = r[0].created_at;
+  } catch (e){ toast("Não gravou: " + e.message); return; }
+  s.salvo = retratoSim(s);
+  atualizarSimNoEstado(s);
+  limparRascunho(s.id);
+  if (eraNova) limparRascunho(null);
+  if (tornarOficial) return oficializarSim(s);
+  fecharFolha(); render(); toast(aviso); tremer();
+}
+// Torna a simulacao o plano oficial. Sem transacao no PostgREST, a ORDEM e o
+// que protege: o registro para desfazer vai para o banco ANTES de tocar no
+// plano, ja com os id novos -- se algo falhar no meio, Desfazer sabe o que
+// apagar e ignora o que nao chegou a ser gravado.
+async function oficializarSim(s){
+  if (!podeGravar()) return;
+  if (!(await recarregarDoBanco(s))) return fimGravacaoSim(s);
+  if (s.oficializada_em){ toast("Essa simulação já foi oficializada — nada foi gravado"); return fimGravacaoSim(s); }
+  if (s.desfazer){ toast("Uma oficialização desta simulação ficou pela metade — use Desfazer antes de tentar de novo");
+    return fimGravacaoSim(s); }
+  const of = SIM.oficializar(dadosMotor(), s.alteracoes, { plano: estado.plano, regras: estado.regras },
+                             { nome: s.nome, novoId: uuid, agora: new Date().toISOString() });
+  if (!of.plano.length && !of.parcelas.length && !of.regrasNovas.length && !of.regrasAlteradas.length){
+    toast("Nada a gravar: com o plano de hoje, esta simulação não muda nada");
+    return fimGravacaoSim(s);
+  }
+  const marca = campos => Object.assign({ updated_at: new Date().toISOString() }, campos);
+  try {
+    // 1. o registro para desfazer, ANTES de tocar no plano -- e so se ninguem chegou
+    //    antes: PATCH condicional, 0 linhas = outro aparelho oficializou primeiro
+    exigirGravacao();
+    const r1 = exigirGravacao(await patch("fin_simulations", s.id, marca({ desfazer: of.desfazer }),
+      { volta: true, filtro: "&desfazer=is.null&oficializada_em=is.null" }));
+    if (!r1.length) throw Object.assign(new Error("já havia uma oficialização registrada"), { antes: true });
+    s.desfazer = of.desfazer;
+    // 2. plano; 3. compromissos e regras com upsert por id -- repetir um pedido cuja
+    //    resposta se perdeu nao duplica nem da 409
+    if (of.plano.length){
+      exigirGravacao();
+      const r = exigirGravacao(await salvar("fin_plan", of.plano, "user_id,competencia,category_id"));
+      for (const l of r) (estado.plano[l.competencia] = estado.plano[l.competencia] || {})[l.category_id] = l;
+    }
+    if (of.parcelas.length){
+      exigirGravacao();
+      estado.parcelas.push(...exigirGravacao(await salvar("fin_installments", of.parcelas, "id")));
+    }
+    if (of.regrasNovas.length){
+      exigirGravacao();
+      estado.regras.push(...exigirGravacao(await salvar("fin_rules", of.regrasNovas, "id")));
+    }
+    for (const x of of.regrasAlteradas){
+      exigirGravacao();
+      const r = exigirGravacao(await patch("fin_rules", x.id, x.campos, { volta: true }));
+      if (!r.length) throw new Error("uma regra foi apagada em outro aparelho");
+      Object.assign(estado.regras.find(q => q.id === x.id), x.campos);
+    }
+    // 4. pronto
+    const fimReg = Object.assign({}, of.desfazer, { completo: true }), quando = new Date().toISOString();
+    exigirGravacao();
+    const rf = exigirGravacao(await patch("fin_simulations", s.id, marca({ desfazer: fimReg, oficializada_em: quando }), { volta: true }));
+    if (!rf.length) throw new Error("a simulação sumiu do banco no meio da gravação");
+    s.desfazer = fimReg; s.oficializada_em = quando;
+    toast("Pronto: a simulação virou o plano oficial"); tremer(12);
+  } catch (e){
+    toast(e.antes ? "Essa simulação já tinha uma oficialização registrada — nada foi gravado. Abra de novo para conferir"
+      : s.desfazer ? "Não terminou de gravar (" + e.message + "). Abra a simulação e use Desfazer"
+      : "Não deu para confirmar com o banco (" + e.message + "). O plano não mudou — confira a simulação antes de tentar de novo");
+  } finally {
+    fimGravacaoSim(s);
+  }
+}
+async function folhaDesfazerSim(){
+  const s = simAberta;
+  if (!podeGravar()) return;
+  const ok = await umaVezValor(() => recarregarDoBanco(s));
+  if (!ok) return;
+  render();
+  if (!s.desfazer){ toast("Nada a desfazer: essa simulação já foi desfeita em outro aparelho"); return; }
+  const depois = oficializadasDepois(s);
+  if (depois.length) return abrirFolha('<h3>Desfaça antes a mais nova</h3><div class="sub">' +
+      depois.map(x => '"' + esc(x.nome) + '"').join(", ") + (depois.length === 1 ? " foi oficializada" : " foram oficializadas") +
+      ' depois desta e pode' + (depois.length === 1 ? "" : "m") + ' ter mexido no que ela devolveria. ' +
+      'Desfaça na ordem inversa: a mais nova primeiro.</div>' +
+      '<div class="acoes"><button class="btn pri" id="d-ok2">Entendi</button></div>', () => {
+        document.getElementById("d-ok2").onclick = fecharFolha;
+      });
+  const u = SIM.desfazer({ plano: estado.plano, parcelas: estado.parcelas, regras: estado.regras }, s.desfazer);
+  const nPlano = u.planoApagar.length + u.planoRestaurar.length, nRegras = u.regrasApagar.length + u.regrasRestaurar.length;
+  const itens = [nPlano ? plural(nPlano, "valor no plano", "valores no plano") : "",
+                 u.parcelasApagar.length ? plural(u.parcelasApagar.length, "compromisso", "compromissos") : "",
+                 nRegras ? plural(nRegras, "regra de rendimento", "regras de rendimento") : ""].filter(Boolean);
+  abrirFolha('<h3>Desfazer "' + esc(s.nome) + '"?</h3>' +
+    '<div class="sub">O plano volta ao que era antes desta simulação.</div>' +
+    '<div class="nota fria" style="margin-top:0">' + (itens.length ? "Volta: " + itens.join(" · ") + "." : "Nada a desfazer no plano.") +
+    (u.mudados ? '<br><b>' + (u.mudados === 1 ? "1 item foi mudado" : u.mudados + " itens foram mudados") +
+      ' depois</b> e fica como está.' : "") + '</div>' +
+    '<div class="acoes"><button class="btn pri" id="d-ok">Desfazer</button>' +
+    '<button class="btn plain" id="d-cancel">Cancelar</button></div>', () => {
+      document.getElementById("d-cancel").onclick = fecharFolha;
+      document.getElementById("d-ok").onclick = () => umaVez(() => desfazerSim(s));
+    });
+}
+// Idempotente: se parar no meio, tocar em Desfazer de novo termina o servico
+// (o que ja voltou esta "como antes" e e ignorado).
+async function desfazerSim(s){
+  if (!podeGravar()) return;
+  if (!(await recarregarDoBanco(s))) return fimGravacaoSim(s);
+  if (!s.desfazer){ toast("Nada a desfazer: essa simulação já foi desfeita em outro aparelho"); return fimGravacaoSim(s); }
+  if (oficializadasDepois(s).length){ toast("Desfaça antes a simulação oficializada depois desta"); return fimGravacaoSim(s); }
+  const u = SIM.desfazer({ plano: estado.plano, parcelas: estado.parcelas, regras: estado.regras }, s.desfazer);
+  try {
+    exigirGravacao();
+    await apagarVarios("fin_plan", u.planoApagar.map(x => x.id));
+    for (const x of u.planoApagar) if (estado.plano[x.comp]) delete estado.plano[x.comp][x.cat];
+    if (u.planoRestaurar.length){
+      exigirGravacao();
+      const r = exigirGravacao(await salvar("fin_plan", u.planoRestaurar, "user_id,competencia,category_id"));
+      for (const l of r) (estado.plano[l.competencia] = estado.plano[l.competencia] || {})[l.category_id] = l;
+    }
+    exigirGravacao();
+    await apagarVarios("fin_installments", u.parcelasApagar);
+    estado.parcelas = estado.parcelas.filter(p => u.parcelasApagar.indexOf(p.id) < 0);
+    exigirGravacao();
+    await apagarVarios("fin_rules", u.regrasApagar);
+    estado.regras = estado.regras.filter(r => u.regrasApagar.indexOf(r.id) < 0);
+    for (const x of u.regrasRestaurar){
+      exigirGravacao();
+      await patch("fin_rules", x.id, x.campos, { volta: true });
+      const q = estado.regras.find(r => r.id === x.id);
+      if (q) Object.assign(q, x.campos);
+    }
+    exigirGravacao();
+    await patch("fin_simulations", s.id, { oficializada_em: null, desfazer: null, updated_at: new Date().toISOString() }, { volta: true });
+    s.oficializada_em = null; s.desfazer = null;
+    toast(!u.mudados ? "Desfeito: o plano voltou ao que era"
+      : u.mudados === 1 ? "Desfeito — 1 item mudado depois ficou como estava"
+      : "Desfeito — " + u.mudados + " itens mudados depois ficaram como estavam");
+  } catch (e){
+    toast("Não terminou de desfazer (" + e.message + "). Toque em Desfazer de novo");
+  } finally {
+    fimGravacaoSim(s);
+  }
+}
+function folhaExcluirSim(){
+  const s = simAberta;
+  // oficializacao pela metade: excluir perderia o unico jeito de devolver o plano
+  if (s.desfazer && !s.oficializada_em){ toast("Use Desfazer antes de excluir: a oficialização não terminou"); return; }
+  abrirFolha('<h3>Excluir "' + esc(s.nome) + '"?</h3><div class="sub">' + (simFechada(s)
+      ? 'O plano fica como está, mas você perde o <b>Desfazer</b> desta simulação.'
+      : 'A simulação some. O plano não muda.') + '</div>' +
+    '<div class="acoes"><button class="btn pri" id="x-ok">Excluir</button>' +
+    '<button class="btn plain" id="x-cancel">Cancelar</button></div>', () => {
+      document.getElementById("x-cancel").onclick = fecharFolha;
+      document.getElementById("x-ok").onclick = () => umaVez(async () => {
+        if (!podeGravar()) return;
+        try { await apagar("fin_simulations", s.id); }
+        catch (e){ toast("Não apagou: " + e.message); return; }
+        estado.simulacoes = estado.simulacoes.filter(x => x.id !== s.id);
+        limparRascunho(s.id);
+        simAberta = null; fecharFolha(); window.scrollTo(0, 0); render(); toast("Simulação excluída");
+      });
+    });
+}
+function folhaDescartarSim(){
+  const n = simAberta.alteracoes.length;
+  // nao passa por fecharSim: ele gravaria o rascunho que se quer jogar fora
+  const sai = () => { limparRascunho(simAberta.id); simAberta = null; fecharFolha(); window.scrollTo(0, 0); render(); toast("Simulação descartada"); };
+  if (!n) return sai();
+  abrirFolha('<h3>Descartar a simulação?</h3><div class="sub">' + (n === 1 ? "A alteração se perde" : "As " + n +
+    " alterações se perdem") + '. O plano não muda.</div>' +
+    '<div class="acoes"><button class="btn pri" id="dc-ok">Descartar</button>' +
+    '<button class="btn plain" id="dc-cancel">Cancelar</button></div>', () => {
+      document.getElementById("dc-cancel").onclick = fecharFolha;
+      document.getElementById("dc-ok").onclick = sai;
     });
 }
 
@@ -5358,10 +6841,11 @@ function fecharFolha(){
   document.body.classList.remove("nav-off");
 }
 document.getElementById("sheet-bg").addEventListener("click", ev => {
-  if (ev.target.id === "sheet-bg") fecharFolha();
+  // no meio de uma gravacao da simulacao a folha fica: fechar deixaria mexer no app
+  if (ev.target.id === "sheet-bg" && !simOcupado) fecharFolha();
 });
 document.addEventListener("keydown", ev => {
-  if (ev.key === "Escape" && document.getElementById("sheet-bg").classList.contains("on")) fecharFolha();
+  if (ev.key === "Escape" && document.getElementById("sheet-bg").classList.contains("on") && !simOcupado) fecharFolha();
 });
 
 // ============================================================
@@ -5448,6 +6932,7 @@ window.addEventListener("resize", () => {
     if (aba === "resumo"){ desenharArco(); desenharCombo(anoSel); }
     if (aba === "patrimonio") desenharEvolucao();
     if (aba === "vencimentos"){ desenharBarrasVenc(); desenharBarrasRend(); }
+    if (aba === "plano" && simAberta) desenharSim();
   }, 180);
 });
 

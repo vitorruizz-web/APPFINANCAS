@@ -4,7 +4,7 @@ PWA de planejamento financeiro pessoal. Projeta o patrimônio mês a mês e põe
 realizado ao lado do previsto.
 
 - **App:** `index.html` (arquivo único) + `manifest.json` + `sw.js`
-- **Banco:** Supabase, 10 tabelas `fin_*`, RLS `auth.uid() = user_id` em todas
+- **Banco:** Supabase, 11 tabelas `fin_*`, RLS `auth.uid() = user_id` em todas
 - **Motor de projeção:** o bloco `/*<motor>*/` do `index.html` — função pura,
   testada contra os 48 meses da planilha original em `tests/test_motor.html`
 - **Agregações por conta:** o bloco `/*<contas>*/` — composição, variação e série
@@ -131,12 +131,59 @@ ANBIMA, IR regressivo, curva do CDI, projeção, leitura da planilha) e o leitor
 arquivo no bloco `/*<xlsx>*/` (ZIP + `DecompressionStream` + `DOMParser`, sem
 biblioteca).
 
+## Simulações
+
+Na aba **Plano**, *Nova simulação* abre um "e se…" que **não mexe no plano**: uma
+lista de alterações aplicada por cima dele e calculada pelo mesmo motor. Se o plano
+mudar depois, a simulação acompanha — só o que ela altera fica diferente.
+
+| Tipo | Exemplo |
+|---|---|
+| Valor de um mês | Viagens em jun/2027 = R$ 30 mil |
+| Daqui para a frente | Pró-labore +10% (ou "passa a R$ X") a partir de jan/2027, fim opcional |
+| Gasto ou receita pontual | Carro novo: R$ 80 mil em jun/2027 |
+| Parcelado | Financiamento: 48× R$ 2.500 a partir de jan/2027 |
+| Taxa de rendimento | Rendimentos a 0,65% ao mês a partir de jan/2027 |
+
+No mesmo mês e categoria, o valor de um mês vence a série; porcentagens se acumulam
+(+10% e depois +5% = ×1,155). Rendimentos não aceita %: o valor dele depende do
+saldo, que depende da própria simulação — para isso existe a taxa, que vira a única
+regra da categoria a partir do mês escolhido.
+
+A tela mostra onde cada ano termina no plano × na simulação, o gráfico dos 12 meses
+(plano em linha contínua, simulação tracejada em violeta `#8D7AF0`) e a tabela do
+ano, em que tocar numa célula cria uma alteração.
+
+**Salvar** guarda só como simulação (`fin_simulations`, migração 008) ou guarda e
+**torna o plano oficial**: as alterações viram valores em `fin_plan`, compromissos
+em `fin_installments` e regras em `fin_rules`, com os mesmos números, arredondados
+na precisão de cada coluna — o que a simulação mostrava é o que o plano passa a
+mostrar. Antes de tocar no plano, o app grava o registro para **desfazer**, que
+nunca desfaz o que foi mudado depois. Oficializada, a simulação vira histórico:
+aplicá-la de novo contaria o parcelado duas vezes.
+
+Tornar oficial e desfazer **decidem pelo banco, não pela memória**: antes de gravar,
+o app recarrega tudo (um celular com o app aberto há dias, ou uma resposta perdida no
+meio de uma gravação, deixaria a memória diferente do banco). O primeiro passo é um
+PATCH condicional — se outro aparelho oficializou antes, nada é gravado —, e parcelas
+e regras novas vão com upsert por id, então repetir um pedido não duplica. Desfazer só
+na ordem inversa (a oficializada mais nova primeiro): uma taxa oficializada depois pode
+ter encerrado a regra que a mais antiga devolveria.
+
+Limitação conhecida: uma série "daqui para a frente" sem fim, ao virar oficial, grava um
+valor em cada mês **até o fim do horizonte daquele dia**. Se depois o horizonte for
+estendido, os meses novos seguem o plano de antes — o mesmo que já acontece com "Repetir
+este valor até o fim".
+
+O cálculo mora no bloco `/*<simulacao>*/` (função pura, `tests/test_simulacao.html`).
+
 ## Rodar os testes
 
 ```bash
 python -m http.server 8765
 # abrir http://localhost:8765/tests/test_motor.html        -> "TUDO PASSOU"
 # abrir http://localhost:8765/tests/test_vencimentos.html  -> "TUDO PASSOU"
+# abrir http://localhost:8765/tests/test_simulacao.html    -> "TUDO PASSOU"
 # abrir http://localhost:8765/tests/test_pluggy_funcao.html -> "TUDO PASSOU" (a Edge Function com Deno e Pluggy falsos)
 ```
 
@@ -154,7 +201,8 @@ python tools/gerar_preview.py               # gera tests/preview.html
 
 Para mexer na **análise por conta** os dados reais não servem: o apontamento só
 começa em 09/2026, então os quatro gráficos abrem vazios. Use o mock sintético,
-que traz 3 meses completos e 1 pela metade:
+que traz 3 meses completos e 1 pela metade (e Rendimentos por regra de % do saldo,
+para testar a taxa nas simulações):
 
 ```bash
 python tools/gerar_mock_sintetico.py        # numeros inventados, sobrescreve tests/mock.json
@@ -172,6 +220,7 @@ do repositório** (`.gitignore`): o repo é público e não guarda dado financei
 | `db/002_compromissos.sql` | `fin_installments` (parcelas) + RLS |
 | `db/006_cdbs.sql` | `fin_cdbs` (posição de CDBs da aba Vencimentos) + RLS |
 | `db/007_cdbs_resgate.sql` | `fin_cdbs.resgate`: títulos que já venceram, guardados para o rendimento do passado |
+| `db/008_simulacoes.sql` | `fin_simulations` (simulações: alterações por cima do plano e o registro para desfazer) + RLS |
 | `db/seed.sql` | os 4 anos da planilha (gerado, fora do git) |
 
 A proteção do dado é **RLS + cadastro de novos usuários desligado** no painel do
@@ -181,3 +230,5 @@ Supabase. A chave publicável no `index.html` é pública por design.
 
 - Design: `docs/superpowers/specs/2026-09-07-app-financas-design.md`
 - Plano de implementação: `docs/superpowers/plans/2026-09-07-app-financas.md`
+- Simulações: `docs/superpowers/specs/2026-09-26-simulacoes-design.md` e
+  `docs/superpowers/plans/2026-09-26-simulacoes.md`

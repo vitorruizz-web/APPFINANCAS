@@ -9,6 +9,11 @@ Este mock traz 6 contas e quatro meses: TRES completos (set, out, nov/2026) e
 um pela METADE (dez/2026), que e o estado em que o aviso de "faltam N contas"
 tem de aparecer e o mes tem de continuar em aberto.
 
+Rendimentos segue o desenho do app real: valor no plano ate o ultimo mes
+apurado e, dai em diante, regra de % do saldo inicial -- e isso que deixa a
+simulacao testar a alteracao "taxa de rendimento". Um parcelado (o sofa) faz
+a parcela somar por cima do plano, como no app.
+
 Nenhum numero aqui e real -- pode ir para o repositorio publico. O que nao pode
 e o mock.json gerado, que continua no .gitignore junto com o de dados reais.
 
@@ -28,6 +33,10 @@ CATS = [("cat1", "Pró-labore", "receita", "Trabalho", 1),
         ("cat2", "Rendimentos", "receita", "Investimentos", 2),
         ("cat3", "Apartamento", "despesa", "Moradia", 3),
         ("cat4", "Viagens", "despesa", "Viagens", 4)]
+# categorias calculadas por regra depois do ultimo mes apurado
+CALCULADAS = {"cat2": "pct_saldo"}
+REGRAS = [("r-ren-1", "cat2", 0.009, "2026-09-01", "2026-12-01"),
+          ("r-ren-2", "cat2", 0.0075, "2027-01-01", None)]
 PREVISTO = {"cat1": 21000.0, "cat2": 4200.0, "cat3": 6800.0, "cat4": 900.0}
 
 CONTAS = [("a1", "Conta corrente", "corrente", 1),
@@ -65,6 +74,8 @@ def main():
     plano, meses, patrimonio = [], [], 700000.0
     for c in todos:
         for cid, _, _, _, _ in CATS:
+            if cid in CALCULADAS and c > ULTIMO_APURADO:
+                continue            # dai em diante quem calcula e a regra
             plano.append({"id": "p-%s-%s" % (c, cid), "competencia": c,
                           "category_id": cid, "valor": PREVISTO[cid],
                           "origem": "planilha", "obs": None})
@@ -86,13 +97,21 @@ def main():
 
     mock = {
         "fin_categories": [{"id": i, "nome": n, "tipo": t, "grupo": g,
-                            "calculo": "manual", "ordem": o, "ativo": True, "cor": None}
+                            "calculo": CALCULADAS.get(i, "manual"), "ordem": o, "ativo": True, "cor": None}
                            for i, n, t, g, o in CATS],
         "fin_accounts": [{"id": i, "nome": n, "tipo": t, "instituicao": None,
                           "cor": None, "ordem": o, "ativo": True,
                           "considera_patrimonio": True, "inicio": INICIO_CONTAS}
                          for i, n, t, o in CONTAS],
-        "fin_rules": [], "fin_entries": [], "fin_installments": [],
+        "fin_rules": [{"id": i, "category_id": cat, "tipo": "pct_saldo", "valor": None,
+                       "percentual": pct, "mes": None, "inicio": ini, "fim": fim,
+                       "reajuste_pct": None, "reajuste_mes": None, "obs": "seed", "ativo": True}
+                      for i, cat, pct, ini, fim in REGRAS],
+        "fin_entries": [],
+        "fin_installments": [{"id": "i-sofa", "category_id": "cat3", "descricao": "Sofá da sala",
+                              "valor": 450.0, "inicio": "2026-10-01", "parcelas": 10,
+                              "obs": "Sofá da sala", "ativo": True}],
+        "fin_simulations": [],
         "fin_plan": plano, "fin_months": meses, "fin_balances": balances,
         "fin_settings": [{"user_id": "u1", "data": {}}],
     }
