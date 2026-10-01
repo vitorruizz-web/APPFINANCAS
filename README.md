@@ -126,6 +126,23 @@ pedido); o futuro é a mesma projeção do calendário. Cálculo em `VENC.rendim
   aparece como "parcial" — o valor é "pelo menos isso". Daqui para a frente, os meses fecham
   completos.
 
+**Instituições** (terceira chave da aba): quanto há em cada emissor diante do limite do FGC —
+R$ 250 mil por CPF por instituição **ou conglomerado**, principal + rendimento até o dia de uma
+quebra, com teto de R$ 1 milhão a cada 4 anos. Conta o emissor, não a corretora: o mesmo banco na
+XP e no BTG soma junto. Cálculo em `VENC.porInstituicao`.
+
+- **Valor bruto na curva** (antes do IR) e **pico**: o maior valor que a instituição atinge se nada
+  for reaplicado. Entre um crédito e o seguinte o valor só cresce, então o pico é calculado só em
+  hoje e nos dias de crédito/cupom; a data em que passa do limite sai por bisseção.
+- **Situação**: *Dentro*, *Atenção* (a projeção passa do limite ou já usa 90%) e *Acima*. O Resumo
+  avisa quando alguma passa do limite, hoje ou na projeção.
+- **Agrupamento**: o nome do emissor é normalizado (sem "BANCO", "S.A.", "FINANCEIRA"...), quem
+  tem o mesmo primeiro nome soma junto (na dúvida, somar é o lado seguro) e a tabela
+  `CONGLOMERADOS` junta os grupos de nomes diferentes (ex.: BTG + Pan) — conglomerado prudencial do
+  BC, conferido no IF.data de jun/2026 e na lista de associadas do FGC de 08/2026; rever de tempos
+  em tempos. *Juntar* e *Separar* na tela ficam em `settings.venc.fgcJuntar` (sem migração).
+- Letra Financeira e LIG não têm FGC: ficam fora da soma, com aviso.
+
 O cálculo mora no bloco `/*<vencimentos>*/` do `index.html` (função pura: dias úteis
 ANBIMA, IR regressivo, curva do CDI, projeção, leitura da planilha) e o leitor de
 arquivo no bloco `/*<xlsx>*/` (ZIP + `DecompressionStream` + `DOMParser`, sem

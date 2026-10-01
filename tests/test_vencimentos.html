@@ -642,6 +642,196 @@ function fim(){
   perto(jmDepois.valor, 1000, "juros mensais: o juro sai todo mes, o peso fica no principal", 1e-12);
   perto(jmDepois.ponderada, 0.10, "...com a mesma taxa", 1e-9);
 
+  // ------------------------------------------ por instituicao (limite do FGC)
+  // O FGC garante ate R$ 250 mil por CPF por instituicao OU conglomerado, principal +
+  // rendimento ate o dia da quebra. Conta o EMISSOR, nao a corretora.
+  const CE = V.chaveEmissor;
+  igual(CE("BANCO ALFA S.A."), "ALFA", "chave do emissor tira 'BANCO' e 'S.A.'");
+  igual(CE("ALFA"), "ALFA", "...e o nome curto de uma corretora cai na mesma chave do nome comprido da outra");
+  igual(CE("Banco Alfa S/A"), "ALFA", "caixa e 'S/A' nao contam");
+  igual(CE("BCO ALFA CONSIGNADO SA"), "ALFA CONSIGNADO", "'BCO' e 'SA' tambem saem; o resto do nome fica");
+  igual(CE("BETA FINANCEIRA S.A. - SOCIEDADE DE CRÉDITO, FINANCIAMENTO E INVESTIMENTO"), "BETA",
+        "financeira: sai a razao social comprida");
+  igual(CE("DELTA FINANCEIRA S.A - SCFI"), "DELTA", "'SCFI' sai");
+  igual(CE("BANCO GAMA (BRASIL) S/"), "GAMA BRASIL", "'S/' cortado pela corretora e parenteses");
+  igual(CE("ÉPSILON BANK - BANCO MÚLTIPLO S.A"), "EPSILON", "acento, 'BANK' e 'BANCO MÚLTIPLO' saem");
+  igual(CE("BANCO ZETA - GRUPO ETA"), "ZETA ETA", "'GRUPO' sai, o nome do grupo fica");
+  igual(CE("BANCO J. TETA S.A."), "J TETA", "ponto de abreviacao some sem separar a letra");
+  igual([CE(""), CE(null), CE(undefined)], ["", "", ""], "emissor vazio nao quebra");
+  igual(V.raizEmissor("ALFA CONSIGNADO"), "ALFA", "raiz = o primeiro nome");
+  igual(V.raizEmissor("J TETA"), "TETA", "letra solta nao e raiz (J. TETA e TETA sao o mesmo grupo)");
+  igual(V.raizEmissor(""), "", "raiz de vazio = vazio");
+  const NE = V.nomeEmissor;
+  igual(NE("BANCO ALFA S.A."), "BANCO ALFA", "nome para a tela sem 'S.A.'");
+  igual(NE("BETA FINANCEIRA S.A. - SOCIEDADE DE CRÉDITO, FINANCIAMENTO E INVESTIMENTO"), "BETA FINANCEIRA", "...sem a razao social comprida");
+  igual(NE("DELTA FINANCEIRA S.A - SCFI"), "DELTA FINANCEIRA", "...sem '- SCFI'");
+  igual(NE("BANCO GAMA (BRASIL) S/"), "BANCO GAMA (BRASIL)", "...sem o 'S/' cortado");
+  igual(NE("ÉPSILON BANK - BANCO MÚLTIPLO S.A"), "ÉPSILON BANK", "...sem '- BANCO MÚLTIPLO'");
+  igual(NE("  Gama   Brasil "), "Gama Brasil", "...com os espacos arrumados");
+  const CF = V.cobertoFGC;
+  igual([CF({ tipo:"CDB" }), CF({ tipo:"RDB" }), CF({ tipo:"LC" }), CF({ tipo:"LCI" }), CF({ tipo:"LCA" })],
+        [true, true, true, true, true], "CDB, RDB, LC, LCI e LCA tem FGC");
+  igual([CF({ tipo:"LF" }), CF({ nome:"LF ALFA - MAR/2028" }), CF({ nome:"LIG ALFA" })], [false, false, false],
+        "Letra Financeira e LIG nao tem FGC");
+  igual([CF({ nome:"CDB ALFA - MAR/2028" }), CF({ nome:"ALFA - MAR/2028" })], [true, true],
+        "sem tipo: so LF/LIG ficam de fora (a planilha da corretora e de CDBs)");
+
+  // o motor passa a dizer o bruto da data da posicao (com data e valor aplicados, reconstruido pelo IR)
+  const G0x = 1000 * Math.pow(1.15, 386 / 252), N0x = G0x - 0.175 * (G0x - 1000);
+  perto(V.projetar({ indexador:"pre", taxa:0.15, vencimento:"2027-09-21", saldo_liquido:N0x, data_aplicacao:"2025-03-10",
+                     valor_aplicado:1000 }, ctx()).brutoPos, G0x, "projetar expoe o bruto da data da posicao", 1e-9);
+  perto(V.projetar(cdbPre, ctx()).brutoPos, 1000, "...sem data nem valor aplicados, o proprio saldo", 1e-9);
+
+  const HJ = d("2026-09-21");
+  const ctxF = extra => Object.assign({ posicao: HJ, hoje: HJ,
+    degraus: V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", HJ), irPresumido: 0.15 }, extra || {});
+  // tabela de conglomerados vazia por padrao: cada teste diz a sua
+  const PI = (cdbs, extra, opts) => V.porInstituicao(cdbs, ctxF(extra), Object.assign({ conglomerados: [] }, opts || {}));
+  const fP = (t, a, b) => Math.pow(1 + t, V.du(d(a), d(b)) / 252);
+  const fa1 = { emissor:"BANCO ALFA S.A.", nome:"CDB BANCO ALFA S.A. - SET/2027", tipo:"CDB", instituicao:"BTG", indexador:"pre",
+                taxa:0.15, vencimento:"2027-09-21", saldo_liquido:900, valor_bruto:1000, data_posicao:"2026-09-21" };
+  const fa2 = { emissor:"ALFA", nome:"CDB ALFA - MAR/2028", instituicao:"XP", indexador:"pre", taxa:0.12,
+                vencimento:"2028-03-21", saldo_liquido:1900, valor_bruto:2000, data_posicao:"2026-09-21" };
+  const fa3 = { emissor:"BCO ALFA CONSIGNADO SA", nome:"CDB BCO ALFA CONSIGNADO SA - SET/2027", instituicao:"XP", indexador:"pre",
+                taxa:0.15, vencimento:"2027-09-21", saldo_liquido:450, valor_bruto:500, data_posicao:"2026-09-21" };
+  const fb1 = { emissor:"BETA FINANCEIRA S.A. - SOCIEDADE DE CRÉDITO, FINANCIAMENTO E INVESTIMENTO", nome:"CDB BETA FINANCEIRA - MAR/2027",
+                instituicao:"XP", indexador:"pre", taxa:0.10, vencimento:"2027-03-22", saldo_liquido:700, valor_bruto:750,
+                data_posicao:"2026-09-21" };
+
+  const i1 = PI([fb1, fa2, fa1, fa3]);
+  igual(i1.grupos.map(g => [g.chave, g.titulos.length]), [["ALFA", 3], ["BETA", 1]],
+        "por instituicao: ALFA junta as duas corretoras e o consignado (mesmo primeiro nome), BETA a parte, maior primeiro");
+  const ga = i1.grupos[0];
+  igual(ga.membros.map(m => m.chave), ["ALFA", "ALFA CONSIGNADO"], "membros do grupo: as chaves distintas, maior primeiro");
+  igual(ga.corretoras, ["BTG", "XP"], "corretoras do grupo, sem repetir");
+  igual(ga.nome, "ALFA", "nome do grupo = o nome mais curto dos emissores (estavel quando os valores mudam)");
+  perto(ga.hoje, 3500, "no dia da posicao, hoje = soma dos brutos informados (1.000 + 2.000 + 500)", 1e-9);
+  perto(ga.membros[1].hoje, 500, "...e cada membro com o seu pedaco", 1e-9);
+  igual(ga.titulos.map(x => x.cdb.nome), [fa1.nome, fa3.nome, fa2.nome], "titulos pela data do credito; no mesmo dia, o maior primeiro");
+  igual(ga.titulos.map(x => x.i), [2, 3, 1], "cada titulo guarda a posicao na lista de entrada (abre a ficha do CDB)");
+  perto(ga.titulos[0].hoje, 1000, "titulo: bruto de hoje", 1e-9);
+  perto(ga.titulos[0].noVenc, 1000 * fP(0.15, "2026-09-21", "2027-09-21"), "titulo: bruto no vencimento", 1e-9);
+  igual([ga.status, i1.grupos[1].status], ["dentro", "dentro"], "longe do limite: dentro");
+  igual([i1.limite, i1.teto, ga.descoberto], [250000, 1000000, 0], "FGC: 250 mil por instituicao, 1 milhao a cada 4 anos");
+  perto(ga.folga, 250000 - 3500, "folga = o limite menos o valor de hoje", 1e-9);
+  perto(ga.uso, 3500 / 250000, "uso = fracao do limite", 1e-12);
+  perto(i1.total, 3500 + 750, "total = soma das instituicoes", 1e-9);
+  igual(i1.maior.chave, "ALFA", "a maior instituicao");
+  // pico: o maior valor que a instituicao atinge se nada for reaplicado. Entre um
+  // vencimento e outro o valor so cresce, entao o pico cai no dia de algum credito.
+  const picoA = 1500 * fP(0.15, "2026-09-21", "2027-09-21") + 2000 * fP(0.12, "2026-09-21", "2027-09-21");
+  perto(ga.pico.valor, picoA, "pico: no dia do primeiro vencimento, os tres titulos ainda vivos", 1e-9);
+  igual(V.iso(ga.pico.dia), "2027-09-21", "...nesse dia");
+  ok(ga.pico.valor < 1500 * fP(0.15, "2026-09-21", "2027-09-21") + 2000 * fP(0.12, "2026-09-21", "2028-03-21"),
+     "o pico NAO e a soma dos valores de vencimento: os de setembro saem antes do de marco crescer");
+  igual([V.iso(ga.prox.dia), ga.prox.n], ["2027-09-21", 2], "proximo vencimento: 21/09/2027, dois titulos");
+  perto(ga.prox.valor, 1500 * fP(0.15, "2026-09-21", "2027-09-21"), "...liberando o valor de vencimento dos dois", 1e-9);
+  igual(ga.passaEm, null, "nunca passa do limite: sem data");
+
+  // limite reduzido no teste, para exercitar as situacoes com valores pequenos
+  const i2 = PI([fa1, fa2, fa3, fb1], null, { limite: 3000 });
+  const g2 = i2.grupos[0];
+  igual([g2.status, g2.folga, g2.passaEm], ["acima", 0, null], "passou do limite hoje: acima, sem folga, sem 'passa em'");
+  perto(g2.descoberto, 500, "descoberto = o que passa do limite (3.500 − 3.000)", 1e-9);
+  perto(i2.coberto, 3000 + 750, "coberto = o que cada instituicao tem ate o limite", 1e-9);
+  perto(i2.descoberto, 500, "descoberto total", 1e-9);
+  igual(i2.n, { dentro: 1, atencao: 0, acima: 1 }, "contagem por situacao");
+  // atencao por estar perto (90% ou mais), mesmo sem a projecao passar
+  const fd1 = { emissor:"DELTA", indexador:"pre", taxa:0.10, vencimento:"2026-10-21", saldo_liquido:900, valor_bruto:950,
+                data_posicao:"2026-09-21" };
+  const gd = PI([fd1], null, { limite: 1000 }).grupos[0];
+  ok(gd.pico.valor < 1000, "(o titulo vence antes de chegar a 1.000)");
+  igual([gd.status, gd.passaEm], ["atencao", null], "95% do limite: atencao");
+  // atencao porque a projecao passa: 2.500 a 15% chega a 3.000 em 329 dias uteis
+  const fg1 = { emissor:"GAMA", indexador:"pre", taxa:0.15, vencimento:"2028-09-21", saldo_liquido:2400, valor_bruto:2500,
+                data_posicao:"2026-09-21" };
+  const gg = PI([fg1], null, { limite: 3000 }).grupos[0];
+  igual(gg.status, "atencao", "hoje dentro (2.500 < 90% de 3.000), mas a projecao passa: atencao");
+  const Eg = x => 2500 * Math.pow(1.15, V.du(HJ, x) / 252);
+  ok(gg.passaEm !== null && Eg(gg.passaEm) > 3000 && Eg(gg.passaEm - 1) <= 3000,
+     "passa em = o primeiro dia acima do limite (" + (gg.passaEm === null ? "nulo" : V.iso(gg.passaEm)) + ")");
+  ok(gg.pico.valor > 3000 && V.iso(gg.pico.dia) === "2028-09-21", "...e o pico e no vencimento");
+
+  // juros mensais: o juro sai todo mes; o valor e o principal + o juro desde o ultimo cupom
+  const fj = { emissor:"ETA", indexador:"pre", taxa:0.12, vencimento:"2027-01-15", saldo_liquido:1000, valor_aplicado:1000,
+               juros_mensais:true, data_posicao:"2026-09-21" };
+  const gj = PI([fj]).grupos[0];
+  perto(gj.hoje, 1000 * fP(0.12, "2026-09-15", "2026-09-21"), "juros mensais: hoje = principal + juro desde o ultimo cupom", 1e-9);
+  const perJ = [["2026-09-15", "2026-10-15"], ["2026-10-15", "2026-11-15"], ["2026-11-15", "2026-12-15"], ["2026-12-15", "2027-01-15"]];
+  perto(gj.pico.valor, 1000 * Math.pow(1.12, Math.max(...perJ.map(([a, b]) => V.du(d(a), d(b)))) / 252),
+        "juros mensais: pico = principal + o maior cupom (nao acumula)", 1e-9);
+
+  // posicao antiga anda ate hoje; sem o bruto da corretora, vale o que o motor reconstroi
+  perto(PI([Object.assign({}, fa1, { data_posicao: "2026-09-01" })]).grupos[0].hoje, 1000 * fP(0.15, "2026-09-01", "2026-09-21"),
+        "posicao antiga: o bruto anda ate hoje pela taxa", 1e-9);
+  const fs = { emissor:"ALFA", indexador:"pre", taxa:0.15, vencimento:"2027-09-21", saldo_liquido:1000, data_aplicacao:"2026-03-02",
+               data_posicao:"2026-09-21" };
+  const gs = PI([fs]).grupos[0];
+  perto(gs.hoje, V.projetar(fs, ctxF()).brutoPos, "sem o bruto da corretora: o bruto que o motor reconstroi", 1e-9);
+  ok(gs.hoje > 1000, "...que e maior que o saldo liquido");
+
+  // o que nao entra
+  const lf = Object.assign({}, fb1, { tipo:"LF", nome:"LF BETA - SET/2028", vencimento:"2028-09-21" });
+  const i3 = PI([fa1, lf, Object.assign({}, fa2, { resgate:"2026-08-01" }),
+                 Object.assign({}, fa2, { vencimento:"2026-09-18" }),
+                 Object.assign({}, fa2, { saldo_liquido:0, valor_bruto:0 })]);
+  igual(i3.grupos.map(g => [g.chave, g.titulos.length]), [["ALFA", 1]], "LF, resgatado, ja pago e saldo zero ficam fora dos grupos");
+  igual(i3.semFGC.map(x => [x.cdb.nome, x.i]), [["LF BETA - SET/2028", 1]], "a LF aparece a parte: Letra Financeira nao tem FGC");
+  perto(i3.total, 1000, "o total so soma o que tem FGC", 1e-9);
+  igual(PI([Object.assign({}, fa2, { emissor: null, nome: "CDB - MAR/2028" })]).grupos.map(g => g.nome), ["(sem emissor)"],
+        "titulo sem emissor no nome: grupo com rotulo, nunca linha sem nome");
+  const i0 = PI([]);
+  igual([i0.grupos.length, i0.total, i0.maior, i0.semFGC.length], [0, 0, null, 0], "carteira vazia: nada, sem quebrar");
+
+  // conglomerado: nomes diferentes, um limite so (a tabela; a padrao vem de fonte oficial)
+  const fg2 = { emissor:"BANCO GAMA (BRASIL) S/", nome:"CDB GAMA", instituicao:"BTG", indexador:"pre", taxa:0.10,
+                vencimento:"2027-03-22", saldo_liquido:300, valor_bruto:320, data_posicao:"2026-09-21" };
+  const i4 = PI([fa1, fb1, fg2], null, { conglomerados: [{ nome: "Grupo Teta", re: /^(BETA|GAMA)\b/ }] });
+  const teta = i4.grupos.find(g => g.chave === "@Grupo Teta");
+  ok(!!teta && teta.titulos.length === 2 && teta.conglomerado === "Grupo Teta" && teta.nome === "Grupo Teta",
+     "conglomerado da tabela junta emissores de nomes diferentes (BETA + GAMA)");
+  perto(teta ? teta.hoje : NaN, 750 + 320, "...no mesmo limite", 1e-9);
+  igual(i1.grupos[0].conglomerado, null, "grupo pelo nome nao e conglomerado da tabela");
+  ok(Array.isArray(V.CONGLOMERADOS) && V.CONGLOMERADOS.every(c => typeof c.nome === "string" && c.re instanceof RegExp),
+     "tabela padrao de conglomerados: nome e padrao em cada linha");
+  // a tabela padrao (conglomerado prudencial do BC = o que o FGC usa). Nomes de banco sao
+  // publicos; os pares conferem grupos de nomes diferentes e os que NAO sao do mesmo grupo.
+  const gP = nome => V.grupoEmissor(CE(nome), {});
+  igual([gP("BANCO BTG PACTUAL S.A."), gP("BANCO PAN S/A"), gP("PAN FINANCEIRA S.A. - CFI")], ["@BTG Pactual", "@BTG Pactual", "@BTG Pactual"],
+        "BTG e Pan: o mesmo conglomerado");
+  ok(gP("PICPAY BANK - BANCO MÚLTIPLO S.A") !== gP("BANCO ORIGINAL S.A."), "PicPay e Original: conglomerados separados desde 2024");
+  igual([gP("BANCO AGIBANK S.A."), gP("AGI FINANCEIRA S.A. - SCFI")], ["@Agibank", "@Agibank"], "Agibank e Agi Financeira");
+  igual([gP("BANCO BRADESCO S.A."), gP("BANCO DIGIO S.A."), gP("BANCO BRADESCARD S.A.")], ["@Bradesco", "@Bradesco", "@Bradesco"],
+        "Bradesco, Digio e Bradescard");
+  igual([gP("ITAÚ UNIBANCO S.A."), gP("BANCO ITAUCARD S.A.")], ["@Itaú", "@Itaú"], "Itaú e Itaucard");
+  igual([gP("BANCO SANTANDER (BRASIL) S.A."), gP("AYMORÉ CRÉDITO, FINANCIAMENTO E INVESTIMENTO S.A.")], ["@Santander", "@Santander"],
+        "Santander e Aymoré");
+  igual([gP("BANCO SAFRA S.A."), gP("BANCO J. SAFRA S.A.")], ["@Safra", "@Safra"], "J. Safra cai no Safra (pela raiz do nome)");
+  igual([gP("BANCO DO BRASIL S.A."), gP("BB-BANCO DE INVESTIMENTO S.A.")], ["@Banco do Brasil", "@Banco do Brasil"], "BB e BB-BI");
+  igual([gP("BANCO C6 S.A."), gP("BANCO C6 CONSIGNADO S.A.")], ["@C6", "@C6"], "C6 e C6 Consignado");
+  igual([gP("NUBANK"), gP("NU FINANCEIRA S.A. - SCFI")], ["@Nubank", "@Nubank"], "o nome curto e o da Nu Financeira");
+  igual(gP("BANCO INTER S.A."), "INTER", "fora da tabela: a raiz do nome");
+  igual(CE("BANK OF CHINA (BRASIL) S.A."), "CHINA BRASIL", "'OF' sai da chave (nome em ingles)");
+  // escolhas do usuario: juntar a outro grupo e separar
+  const i5 = PI([fa1, fa2, fa3, fb1], null, { juntar: { "BETA": "ALFA", "ALFA CONSIGNADO": "=" } });
+  igual(i5.grupos.map(g => [g.chave, g.titulos.length]).sort(), [["=ALFA CONSIGNADO", 1], ["ALFA", 3]],
+        "juntar BETA ao grupo ALFA e separar o consignado");
+  igual(i5.grupos.find(g => g.chave === "=ALFA CONSIGNADO").nome, "BCO ALFA CONSIGNADO", "o separado leva o proprio nome");
+  const i5b = PI([fb1, fg2], null, { conglomerados: [{ nome: "Grupo Teta", re: /^(BETA|GAMA)\b/ }], juntar: { "GAMA BRASIL": "=" } });
+  igual(i5b.grupos.map(g => g.chave).sort(), ["=GAMA BRASIL", "@Grupo Teta"], "separar tambem tira da tabela de conglomerados");
+  const i6 = PI([fa1, fb1], null, { juntar: { "BETA": 7, "ALFA": null } });
+  igual(i6.grupos.map(g => g.chave).sort(), ["ALFA", "BETA"], "preferencia malformada e ignorada");
+  igual(V.grupoEmissor("ALFA CONSIGNADO", {}, []), "ALFA", "grupoEmissor: sem escolha nem tabela, a raiz");
+
+  // teto global e curva ausente
+  ok(PI([fa1, fb1], null, { teto: 1500 }).acimaTeto && !i1.acimaTeto,
+     "acima do teto global quando o garantido passa dele (teto reduzido no teste)");
+  const fc = { emissor:"ALFA", indexador:"cdi", taxa:1.1, vencimento:"2027-09-21", saldo_liquido:900, valor_bruto:1000,
+               data_posicao:"2026-09-21" };
+  const i8 = PI([fc, fa1], { degraus: null });
+  igual(i8.semTaxa, 1, "sem a curva do CDI: conta os pos-fixados parados");
+  perto(i8.grupos[0].titulos.find(x => x.cdb === fc).noVenc, 1000, "...que ficam no valor de hoje", 1e-9);
+
   // ==MAIS_TESTES==
 
   fim();

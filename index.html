@@ -552,6 +552,29 @@ body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
 .vr-sub b{font-weight:500}
 .row.prem{flex-wrap:wrap}
 .vvisao{margin:14px 0 0}
+/* por instituicao (FGC): o medidor vai ate o limite (ou ate o maior pico, se algum
+   passar dele). Cheio = hoje; claro = ate o pico projetado; fio = R$ 250 mil. A cor e a
+   situacao (tiffany dentro, sand atencao, clay acima, as do proprio app) e vem SEMPRE
+   com o nome escrito ao lado; o trilho e um degrau claro da mesma cor. */
+.irow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 12px;width:100%;padding:11px 0;
+  border-bottom:1px solid var(--line);text-align:left;--st:var(--tif);--st-g:var(--tif-g)}
+.irow.st-atencao{--st:var(--sand);--st-g:var(--sand-g)}
+.irow.st-acima{--st:var(--clay);--st-g:var(--clay-g)}
+.irow:hover .vr-nm{color:var(--steel)}
+.irow.on{border-bottom-color:transparent}
+.ibar{grid-column:1/-1;position:relative;height:8px;border-radius:4px;background:var(--st-g);margin:2px 0 1px}
+.ibar i{position:absolute;top:0;bottom:0;display:block}
+.ibar .if{left:0;min-width:3px;border-radius:4px;background:var(--st)}
+.ibar .ip{background:var(--st);opacity:.32;border-radius:0 4px 4px 0}
+.ibar .il{width:2px;margin-left:-1px;top:-3px;bottom:-3px;background:var(--ink-3);border-radius:1px}
+.ist{display:inline-flex;align-items:center;gap:5px;color:var(--ink-2)}
+.ist i{width:7px;height:7px;border-radius:50%;background:var(--st);display:inline-block}
+.idet{padding:0 0 12px 12px;border-bottom:1px solid var(--line);box-shadow:inset 2px 0 0 var(--line-2)}
+.idet .conc{margin:0 0 4px}
+.iacoes{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.legenda .sw-if{background:var(--tif)}
+.legenda .sw-ip{background:var(--tif);opacity:.32}
+.legenda .sw-il{width:2px;height:12px;background:var(--ink-3);border-radius:1px}
 .rrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
 .rrow.futuro .vr-nm,.rrow.futuro .vr-v{color:var(--ink-2)}
 .rrow.parcial .vr-v{color:var(--ink-2)}
@@ -1191,7 +1214,7 @@ window.VENC = (function () {
       const liq = (G, dia) => Pb !== null ? G - Math.max(0, G - Pb) * irEm(dia)
                                           : G - Math.max(0, G - N0) * irPres;
       const bruto = G0 * F, liquido = liq(bruto, cred);
-      r = { fator: F, bruto, ir: bruto - liquido, liquido, valorHoje: liq(G0 * Fh, h),
+      r = { fator: F, bruto, ir: bruto - liquido, liquido, valorHoje: liq(G0 * Fh, h), brutoPos: G0,
             eventos: [{ dia: cred, tipo: "vencimento", bruto, ir: bruto - liquido, liquido }] };
     }
     if (pago) r.valorHoje = 0;
@@ -1559,6 +1582,181 @@ window.VENC = (function () {
                efetiva: tipos[k].ef / tipos[k].valor })) };
   }
 
+  // ------------------------------------------- por instituicao (limite do FGC)
+  // O FGC garante ate R$ 250 mil por CPF por instituicao OU CONGLOMERADO (o prudencial
+  // do Banco Central), principal + rendimento ate o dia da quebra, e paga no maximo
+  // R$ 1 milhao a cada 4 anos somando todas as garantias. Conta o EMISSOR, nao a
+  // corretora: o mesmo banco na XP e no BTG soma no mesmo limite. Na duvida, JUNTAR e o
+  // lado seguro -- superestima a exposicao, nunca a esconde --; o usuario separa o que
+  // souber que e de outro grupo.
+  const FGC = { limite: 250000, teto: 1000000, atencao: 0.9 };
+  // Os conglomerados com mais de uma associada do FGC, pelo conglomerado prudencial do BC:
+  // cadastro do IF.data de jun/2026 e lista "instituicoes associadas e conglomerados" do
+  // FGC de 07/08/2026, que batem entre si. O padrao casa com o comeco da chave (ou com a
+  // raiz). A composicao muda (o PicPay saiu do Original em 2024, a John Deere entrou no
+  // Bradesco em 2025): rever de tempos em tempos. Master e ligados foram liquidados.
+  const CONGLOMERADOS = [
+    { nome: "BTG Pactual", re: /^(BTG|PAN|SISTEMA|BESA|NACIONAL)\b/ },
+    { nome: "Bradesco", re: /^(BRADESCO|BRADESCARD|DIGIO|KIRTON|LOSANGO|JOHN DEERE)\b/ },
+    { nome: "Itaú", re: /^(ITAU|ITAUCARD|ITAUBANK|INVESTCRED|LUIZACRED|AVENUE)\b/ },
+    { nome: "Santander", re: /^(SANTANDER|AYMORE|BANDEPE|RCI|HYUNDAI)\b/ },
+    { nome: "Safra", re: /^(SAFRA|ALFA)\b/ },
+    { nome: "Banco do Brasil", re: /^(BRASIL|BB)\b/ },
+    { nome: "BV", re: /^(BV|VOTORANTIM)\b/ },
+    { nome: "BMG", re: /^BMG\b/ },
+    { nome: "C6", re: /^C6\b/ },
+    { nome: "Mercantil do Brasil", re: /^MERCANTIL\b/ },
+    { nome: "Agibank", re: /^(AGIBANK|AGI)\b/ },
+    { nome: "Omni", re: /^OMNI\b/ },
+    { nome: "Sofisa", re: /^SOFISA\b/ },
+    { nome: "BRB", re: /^BRB\b/ },
+    { nome: "Daycoval", re: /^DAYCOVAL\b/ },
+    { nome: "Stellantis", re: /^STELLANTIS\b/ },
+    { nome: "Crefisa", re: /^CREFISA\b/ },
+    { nome: "Bari", re: /^BARI\b/ },
+    { nome: "UBS", re: /^UBS\b/ },
+    { nome: "Citibank", re: /^CITIBANK\b/ },
+    { nome: "J.P. Morgan", re: /^(JP|JPMORGAN)\b/ },
+    { nome: "Bank of China", re: /^(CHINA|BOC)\b/ },
+    // a Nu Financeira e a unica emissora do grupo: aqui so junta os dois jeitos de escrever
+    { nome: "Nubank", re: /^(NU|NUBANK)\b/ },
+  ];
+  const TIPOS_FGC = { CDB: 1, RDB: 1, LC: 1, LCI: 1, LCA: 1, LCD: 1 };
+  // forma juridica, tipo de instituicao e conectivos: nao identificam o emissor
+  const GENERICAS = new Set(["BANCO", "BCO", "BANK", "MULTIPLO", "S", "A", "SA", "LTDA", "FINANCEIRA", "FINANCEIRO",
+    "SCFI", "CFI", "SOCIEDADE", "CREDITO", "FINANCIAMENTO", "FINANCIAMENTOS", "INVESTIMENTO", "INVESTIMENTOS",
+    "FINANCIADOR", "FINANCIADORA", "GRUPO", "DE", "DO", "DA", "DOS", "DAS", "E", "OF", "THE"]);
+  // "BANCO ALFA S.A." e "ALFA" -> "ALFA": cada corretora escreve o emissor de um jeito
+  const chaveEmissor = nome => String(nome == null ? "" : nome).normalize("NFD").replace(/[^ -~]/g, "")
+    .toUpperCase().replace(/\./g, "").replace(/[^A-Z0-9]+/g, " ").trim().split(" ")
+    .filter(p => p && !GENERICAS.has(p)).join(" ");
+  // o primeiro nome que nao e letra solta: "ALFA CONSIGNADO" -> "ALFA", "J TETA" -> "TETA"
+  function raizEmissor(chave) {
+    const ps = String(chave || "").split(" ").filter(Boolean);
+    return ps.find(p => p.length >= 2) || ps[0] || "";
+  }
+  // nome para a tela: sem a forma juridica e sem a razao social comprida
+  const nomeEmissor = s => String(s == null ? "" : s).replace(/\s+/g, " ").trim()
+    .replace(/\s*-\s*(SOCIEDADE|SOC\b|CR[ÉE]DITO|SCFI|CFI|BANCO M[ÚU]LTIPLO).*$/i, "")
+    .replace(/[\s,]+S\.?\s*\/?\s*A\.?$/i, "").replace(/[\s,]+S\/$/i, "").trim();
+  // Letra Financeira e LIG nao tem FGC. Sem tipo, a linha veio da planilha de CDBs.
+  function cobertoFGC(c) {
+    const t = String(c.tipo || "").toUpperCase().trim();
+    return t ? !!TIPOS_FGC[t] : !/^\s*(LF|LFS|LFSC|LFSN|LIG)\b/i.test(c.nome || "");
+  }
+  // Grupo de um emissor: a escolha do usuario (outro grupo, ou "=" para ficar sozinho),
+  // senao a tabela de conglomerados, senao a raiz do nome.
+  function grupoEmissor(chave, juntar, congl) {
+    const u = juntar && Object.prototype.hasOwnProperty.call(juntar, chave) ? juntar[chave] : null;
+    if (typeof u === "string" && u) return u === "=" ? "=" + chave : u;
+    const raiz = raizEmissor(chave);                    // "J SAFRA" casa pela raiz "SAFRA"
+    for (const c of congl || CONGLOMERADOS) if (c.re.test(chave) || c.re.test(raiz)) return "@" + c.nome;
+    return raiz || chave;
+  }
+  // O bruto de um titulo no dia d (de hoje ao credito): o que o FGC cobriria se o emissor
+  // quebrasse naquele dia. Juros mensais: principal + juro desde o ultimo cupom pago --
+  // o juro sai todo mes, nao acumula.
+  function curvaBruto(cdb, p, t, T, degraus) {
+    if (cdb.juros_mensais && p.principal) {
+      const datas = datasCupom(T, t), P = p.principal;
+      return { pagamentos: datas.slice(1).map(proxUtil), em: d => {
+        let k = 0;
+        while (k + 2 < datas.length && proxUtil(datas[k + 1]) < d) k++;
+        return P * fator(cdb, datas[k], Math.min(Math.max(d, datas[k]), T), degraus);
+      } };
+    }
+    const B = valor(cdb.valor_bruto), base = B !== null && B > 0 ? B : p.brutoPos;
+    return { pagamentos: [], base, em: d => base * fator(cdb, t, Math.min(Math.max(d, t), T), degraus) };
+  }
+  // opts: { juntar: {chave do emissor: chave do grupo | "="}, conglomerados, limite, teto }
+  // -> { grupos (maior primeiro), total, coberto, descoberto, maior, n, semFGC, semTaxa, acimaTeto }
+  // pico = o maior valor que a instituicao atinge se nada for reaplicado. Entre um credito
+  // e o seguinte o valor so cresce, entao o pico cai em hoje ou no dia de algum credito
+  // (ou cupom): calcula so nesses dias, com o fator andando de um ao outro.
+  function porInstituicao(cdbs, ctx, opts) {
+    opts = opts || {};
+    const L = opts.limite || FGC.limite, TETO = opts.teto || FGC.teto;
+    const congl = opts.conglomerados || CONGLOMERADOS, juntar = opts.juntar || {};
+    const h0 = isFinite(ctx.hoje) ? ctx.hoje : ctx.posicao;
+    const degraus = ctx.degraus || [{ desde: -Infinity, cdi: 0 }];      // sem taxa: o CDI fica parado
+    const porGrupo = {}, semFGC = [];
+    let semTaxa = 0;
+    const lista = cdbs || [];
+    for (let i = 0; i < lista.length; i++) {
+      const cdb = lista[i];
+      if (cdb.resgate) continue;
+      const t = cdb.data_posicao ? dn(cdb.data_posicao) : ctx.posicao, T = dn(cdb.vencimento);
+      if (!isFinite(T)) continue;
+      const cred = proxUtil(T), h = Math.max(t, h0);
+      if (h > cred) continue;                                           // ja caiu na conta
+      const p = projetar(cdb, ctx), curva = curvaBruto(cdb, p, t, T, degraus);
+      const hoje = curva.em(h);
+      if (!(hoje > 0)) continue;
+      const it = { cdb, i, hoje, noVenc: curva.pagamentos.length || !p.fator ? curva.em(cred) : curva.base * p.fator,
+                   credito: cred, t, T, curva };
+      if (!cobertoFGC(cdb)) { semFGC.push({ cdb, i, hoje, noVenc: it.noVenc, credito: cred }); continue; }
+      if (cdb.indexador !== "pre" && !ctx.degraus) semTaxa++;
+      const cru = cdb.emissor || emissor(cdb.nome), ch = chaveEmissor(cru), gk = grupoEmissor(ch, juntar, congl);
+      const g = porGrupo[gk] || (porGrupo[gk] = { itens: [], membros: {} });
+      g.itens.push(it);
+      const m = g.membros[ch] || (g.membros[ch] = { chave: ch, nomes: [], hoje: 0 });
+      m.hoje += hoje; m.nomes.push(nomeEmissor(cru));
+    }
+    const curto = l => l.slice().sort((a, b) => a.length - b.length || a.localeCompare(b))[0] || "";
+    const grupos = Object.keys(porGrupo).map(gk => {
+      const g = porGrupo[gk], itens = g.itens;
+      const hoje = itens.reduce((s, it) => s + it.hoje, 0);
+      const cs = new Set([h0]);
+      for (const it of itens) {
+        cs.add(it.credito);
+        for (const x of it.curva.pagamentos) if (x >= h0 && x <= it.credito) cs.add(x);
+      }
+      const cands = [...cs].sort((a, b) => a - b), E = cands.map(() => 0);
+      for (const it of itens) {
+        if (it.curva.pagamentos.length) { cands.forEach((d, i) => { if (d <= it.credito) E[i] += it.curva.em(d); }); continue; }
+        let f = 1, prev = it.t;                     // cada dia util entra uma vez so no fator
+        cands.forEach((d, i) => {
+          if (d > it.credito) return;
+          const dd = Math.min(Math.max(d, it.t), it.T);
+          if (dd > prev) { f *= fator(it.cdb, prev, dd, degraus); prev = dd; }
+          E[i] += it.curva.base * f;
+        });
+      }
+      E[0] = hoje;
+      let ip = 0;
+      E.forEach((x, i) => { if (x > E[ip]) ip = i; });
+      const pico = { valor: E[ip], dia: cands[ip] };
+      // primeiro dia acima do limite: entre dois candidatos o valor so cresce -> bissecao
+      let passaEm = null;
+      if (hoje <= L && pico.valor > L) {
+        const k = E.findIndex(x => x > L);
+        const Ed = d => itens.reduce((s, it) => s + (d <= it.credito ? it.curva.em(d) : 0), 0);
+        let lo = cands[k - 1], hi = cands[k];
+        while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (Ed(mid) > L) hi = mid; else lo = mid; }
+        passaEm = hi;
+      }
+      const c0 = Math.min.apply(null, itens.map(it => it.credito));
+      const doDia = itens.filter(it => it.credito === c0);
+      const membros = Object.keys(g.membros).map(k => g.membros[k]).sort((a, b) => b.hoje - a.hoje)
+        .map(m => ({ chave: m.chave, nome: curto(m.nomes), hoje: m.hoje }));
+      const conglomerado = gk.charAt(0) === "@" ? gk.slice(1) : null;
+      return {
+        chave: gk, nome: conglomerado || curto(membros.map(m => m.nome)) || "(sem emissor)", conglomerado, membros,
+        titulos: itens.slice().sort((a, b) => a.credito - b.credito || b.noVenc - a.noVenc)
+          .map(it => ({ cdb: it.cdb, i: it.i, hoje: it.hoje, noVenc: it.noVenc, credito: it.credito })),
+        corretoras: [...new Set(itens.map(it => it.cdb.instituicao).filter(Boolean))].sort(),
+        hoje, uso: hoje / L, folga: Math.max(0, L - hoje), descoberto: Math.max(0, hoje - L), pico, passaEm,
+        prox: { dia: c0, valor: doDia.reduce((s, it) => s + it.noVenc, 0), n: doDia.length },
+        status: hoje > L ? "acima" : pico.valor > L || hoje >= FGC.atencao * L ? "atencao" : "dentro",
+      };
+    }).sort((a, b) => b.hoje - a.hoje || a.nome.localeCompare(b.nome));
+    const n = { dentro: 0, atencao: 0, acima: 0 };
+    let total = 0, coberto = 0, descoberto = 0;
+    for (const g of grupos) { n[g.status]++; total += g.hoje; coberto += Math.min(g.hoje, L); descoberto += g.descoberto; }
+    return { limite: L, teto: TETO, grupos, total, coberto, descoberto, maior: grupos[0] || null, n,
+             semFGC, semTaxa, acimaTeto: coberto > TETO };
+  }
+
   // ---------------------------------------------------- Open Finance (Pluggy)
   // A posicao vem da XP e do BTG pelo Open Finance, via Meu Pluggy. Entra a renda
   // fixa BANCARIA (CDB, RDB, LC, LCI, LCA); Tesouro, debenture, CRI/CRA, LF e LIG
@@ -1871,6 +2069,7 @@ window.VENC = (function () {
 
   return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
            diaBrasilia, taxaPluggy, dePluggy, lerPluggy, rendimentoMensal, taxaMedia, problemasConexao,
+           FGC, CONGLOMERADOS, chaveEmissor, raizEmissor, nomeEmissor, cobertoFGC, grupoEmissor, porInstituicao,
            dataReuniao, curvaCDI, cdiEm, fator, projetar, datasCupom, agenda,
            norm, numBR, parseData, parseTaxa, emissor, mapearColunas, ler, lerAbas };
 })();
@@ -2807,9 +3006,10 @@ function ligarExcel(){
     else if (q === "mes")   exportarXLSX([abaMes], "Financas " + rotulo(mesAtual).replace("/","-"));
     else if (q === "patrimonio") exportarXLSX([abaPatrimonio, abaContasMes], "Financas patrimonio");
     else if (q === "plano") exportarXLSX([abaPlano], "Financas plano");
-    else if (q === "vencimentos") exportarXLSX([abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencCDBs], "Financas vencimentos");
+    else if (q === "vencimentos") exportarXLSX([abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencInstituicoes, abaVencCDBs],
+                                               "Financas vencimentos");
     else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos,
-                      abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencCDBs], "Financas completo");
+                      abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencInstituicoes, abaVencCDBs], "Financas completo");
   });
 }
 const avisoTravado = () => dadosTravados
@@ -2841,6 +3041,11 @@ function ligarAvisoConexao(){
       .catch(() => { window.prompt("Copie e cole na conversa com o Claude:", txt); });
   });
   document.querySelectorAll(".ir-venc").forEach(b => b.onclick = () => irPara("vencimentos"));
+  document.querySelectorAll(".ir-fgc").forEach(b => b.onclick = () => {
+    estado.settings.venc = Object.assign(prefVenc(), { visao: "inst" });
+    irPara("vencimentos");
+    gravarPrefs().catch(() => {});
+  });
 }
 const semDados = () =>
   '<div class="vazio"><b>Nada por aqui ainda.</b><br>Cadastre categorias e contas em Ajustes.</div>';
@@ -2872,7 +3077,7 @@ function renderResumo(){
     mesCorrente(ult) +
     fatos(fechados, fim);
 
-  el.innerHTML = avisoTravado() + avisoConexao() +
+  el.innerHTML = avisoTravado() + avisoConexao() + avisoFGC() +
     '<div class="col-a">' + heroi + leitura() + '</div>' +
     '<div class="col-b">' +
       '<div class="hdr"><h2>Mês a mês</h2>' +
@@ -4475,9 +4680,9 @@ function renderVencimentos(){
     const prox = ag.eventos.find(e => e.dia >= hoje);
     vencMes = VENC.iso(prox ? prox.dia : hoje).slice(0, 7);
   }
-  const visao = prefVenc().visao === "rend" ? "rend" : "cal";
+  const visao = ["rend", "inst"].includes(prefVenc().visao) ? prefVenc().visao : "cal";
   el.innerHTML = avisoTravado() + avisoConexao() + linhaPosicao() + segVisaoVenc(visao) +
-    (visao === "rend" ? blocoRendimento(hoje) :
+    (visao === "rend" ? blocoRendimento(hoje) : visao === "inst" ? blocoInstituicoes() :
       heroiVenc(ag, hoje) +
       '<div class="hdr"><h2>Quanto cai por mês</h2>' +
         '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' + segAnosVenc(ag) + '</div>' +
@@ -4485,7 +4690,7 @@ function renderVencimentos(){
       navMesVenc() + calendarioVenc(ag, hoje) + resumoMesVenc(ag) +
       '<div class="vlista">' + listaVenc(ag, hoje) + '</div>') +
     premissasVenc() + conexoesVenc();
-  if (visao === "rend") desenharBarrasRend(); else desenharBarrasVenc();
+  if (visao === "rend") desenharBarrasRend(); else if (visao === "cal") desenharBarrasVenc();
   ligarAcoesVenc(el);
   talvezSincronizar();
   // taxa velha: busca em segundo plano e redesenha UMA vez quando chegar
@@ -4743,7 +4948,7 @@ const historicoVenc = () => (prefVenc().historico) || (sincInfo && sincInfo.hist
 const mesParcial = (m, h) => !!(h && h.completoDesde && m.mes < h.completoDesde && m.situacao !== "futuro");
 function segVisaoVenc(visao){
   return '<div class="vvisao"><span class="seg" id="seg-venc-visao">' +
-    [["cal", "Calendário"], ["rend", "Rendimento"]].map(k =>
+    [["cal", "Calendário"], ["rend", "Rendimento"], ["inst", "Instituições"]].map(k =>
       '<button data-v="' + k[0] + '"' + (k[0] === visao ? ' class="on"' : '') + '>' + k[1] + '</button>').join("") + '</span></div>';
 }
 // o que o mes ja rendeu de fato: o mes inteiro no passado, ate hoje no mes em curso
@@ -4937,6 +5142,152 @@ function desenharBarrasRend(){
       '<span><i class="sw-bar" style="opacity:.28"></i>projeção</span></div>';
 }
 
+// ------------------------------------------------------------ por instituicao (FGC)
+// Quanto ha em cada emissor diante do limite de R$ 250 mil do FGC. O calculo e o
+// VENC.porInstituicao; juntar/separar emissores fica nas preferencias
+// (settings.venc.fgcJuntar) -- vale nos dois aparelhos e nao mexe no banco.
+let instCache = null, instAberta = null;
+function instAtual(){
+  const ctx = ctxVenc(), juntar = prefVenc().fgcJuntar || {};
+  const chave = JSON.stringify([estado.cdbs.length, estado.cdbs.length ? estado.cdbs[0].lote : "",
+    ctx.posicao, ctx.hoje, ctx.irPresumido, ctx.degraus, prefVenc().jurosMensais || {}, juntar]);
+  // a ordem da lista e a da agenda: o indice de cada titulo abre a ficha dele (folhaCDB)
+  if (!instCache || instCache.chave !== chave) instCache = { chave: chave, r: VENC.porInstituicao(cdbsComAjustes(), ctx, { juntar: juntar }) };
+  return instCache.r;
+}
+const ST_INST = { dentro: "Dentro", atencao: "Atenção", acima: "Acima" };
+const LIMITE_TXT = "R$ " + (VENC.FGC.limite / 1000) + " mil";
+const usoTxt = u => pctTxt(u * 100, u < 0.1 ? 1 : 0);
+const mesAno = d => { const s = VENC.iso(d); return MESES[+s.slice(5, 7) - 1] + "/" + s.slice(2, 4); };
+const corretoraCurta = c => c.instituicao ? String(c.instituicao).split(/\s+/)[0] : "";
+// de qual emissor e o titulo (a mesma chave que o VENC.porInstituicao usa nos membros)
+const chaveDoTitulo = c => VENC.chaveEmissor(c.emissor || VENC.emissor(c.nome));
+const linhaTituloInst = t => '<button class="vrow" data-i="' + t.i + '" title="' + esc(t.cdb.nome) + '">' +
+  '<span class="vr-nm">vence ' + VENC.dataBR(t.cdb.vencimento) + '</span><span class="vr-v">' + esc(fmt(t.hoje)) + '</span>' +
+  '<span class="vr-sub">' + [corretoraCurta(t.cdb), descTaxa(t.cdb), t.cdb.juros_mensais ? "juros mensais" : ""]
+    .filter(Boolean).map(esc).join(" · ") + '</span>' +
+  '<span class="vr-sub r">no vencimento ' + esc(fmt(t.noVenc)) + '</span></button>';
+function blocoInstituicoes(){
+  const r = instAtual();
+  if (!r.grupos.length) return '<div class="vazio">Nenhum título com garantia do FGC na posição.</div>';
+  const m = r.maior, n = r.n;
+  const cap = m.status === "acima"
+    ? '<b class="neg">' + esc(fmt(m.descoberto)) + '</b> acima do limite de ' + LIMITE_TXT + ' — essa parte fica sem a garantia do FGC'
+    : usoTxt(m.uso) + ' do limite de ' + LIMITE_TXT + ' · folga de <b>' + esc(fmt(m.folga)) + '</b>' +
+      (m.passaEm !== null ? ' · <span class="abr">passa do limite em ' + diaBR(m.passaEm) + '</span>' : '');
+  const sit = [n.dentro + " dentro", n.atencao ? n.atencao + " em atenção" : "", n.acima ? n.acima + " acima" : ""].filter(Boolean).join(" · ");
+  const fatos = [
+    ["Instituições", String(r.grupos.length), '<small> ' + sit + '</small>'],
+    ["Total em CDBs", esc(fmt(r.total)), '<small> bruto na curva</small>'],
+    ["Garantido pelo FGC", esc(fmt(r.coberto)), r.descoberto > 0.005
+      ? '<small class="neg"> ' + esc(fmt(r.descoberto)) + ' sem garantia</small>' : '<small> tudo coberto</small>'],
+    ["Teto de R$ 1 milhão", usoTxt(r.coberto / r.teto), '<small> usado · vale a cada 4 anos</small>'],
+  ];
+  const escala = Math.max(r.limite, ...r.grupos.map(g => g.pico.valor));
+  const notas = [];
+  if (r.semFGC.length) notas.push(r.semFGC.length + (r.semFGC.length === 1 ? " título sem FGC (Letra Financeira) soma " : " títulos sem FGC (Letra Financeira) somam ") +
+    fmt(r.semFGC.reduce((s, x) => s + x.hoje, 0)) + " e fica" + (r.semFGC.length === 1 ? "" : "m") + " fora das contas.");
+  if (r.semTaxa) notas.push("Sem as taxas do Banco Central neste aparelho, " + r.semTaxa + (r.semTaxa === 1 ? " pós-fixado fica parado" : " pós-fixados ficam parados") +
+    " no valor de hoje na projeção — toque em Atualizar, em Premissas.");
+  notas.push("O FGC garante até " + LIMITE_TXT + " por CPF em cada instituição ou conglomerado — principal e rendimento até o dia " +
+    "de uma quebra — e paga no máximo R$ 1 milhão a cada 4 anos. Conta o emissor, não a corretora. O valor é o bruto na curva " +
+    "(antes do IR); o pico supõe que nada é reaplicado no mesmo banco.");
+  notas.push("Emissores com o mesmo primeiro nome entram somados — na dúvida, somar é o lado seguro; separe se souber que são de " +
+    "grupos diferentes. Conta corrente, poupança ou caixinha no mesmo banco também contam para o limite e não estão aqui.");
+  return '<div class="hero"><div><div class="k-hero">maior exposição · ' + esc(m.nome) + '</div>' +
+      '<div class="val"><span class="cur">R$</span>' + esc(fmtn(m.hoje)) + '</div>' +
+      '<div class="cap">' + cap + '</div></div></div>' +
+    '<div class="fatos">' + fatos.map(f =>
+      '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
+    '<div class="hdr"><h2>Por instituição</h2><button class="btn mini plain xls" data-x="vencimentos">Excel</button></div>' +
+    '<div class="legenda"><span><i class="sw-if"></i>hoje</span><span><i class="sw-ip"></i>até o pico, sem reaplicar</span>' +
+      '<span><i class="sw-il"></i>limite de ' + LIMITE_TXT + '</span></div>' +
+    r.grupos.map(g => linhaInst(g, escala, r)).join("") +
+    '<div class="nota fria">' + notas.map(esc).join("<br>") + '</div>';
+}
+function linhaInst(g, escala, r){
+  const w = v => Math.max(0, Math.min(100, v / escala * 100));
+  const cheio = w(g.hoje), pico = w(g.pico.valor), aberta = instAberta === g.chave;
+  const nT = g.titulos.length, corr = [...new Set(g.titulos.map(t => corretoraCurta(t.cdb)).filter(Boolean))];
+  const dica = "hoje " + fmt(g.hoje) + " (" + usoTxt(g.uso) + " do limite) · pico " + fmt(g.pico.valor) + " em " + diaBR(g.pico.dia);
+  const dir = g.status === "acima" ? '<b class="neg">R$ ' + esc(fmtCurto(g.descoberto)) + ' sem garantia</b>'
+    : g.passaEm !== null ? 'passa do limite em ' + mesAno(g.passaEm)
+    : usoTxt(g.uso) + ' · folga R$ ' + esc(fmtCurto(g.folga));
+  return '<button class="irow st-' + g.status + (aberta ? ' on' : '') + '" data-g="' + esc(g.chave) + '" aria-expanded="' + aberta + '">' +
+      '<span class="vr-nm">' + esc(g.nome) + '</span><span class="vr-v">' + esc(fmt(g.hoje)) + '</span>' +
+      '<span class="ibar" title="' + esc(dica) + '"><i class="if" style="width:' + cheio.toFixed(2) + '%"></i>' +
+        (pico - cheio > 0.2 ? '<i class="ip" style="left:' + cheio.toFixed(2) + '%;width:' + (pico - cheio).toFixed(2) + '%"></i>' : '') +
+        '<i class="il" style="left:' + w(r.limite).toFixed(2) + '%"></i></span>' +
+      '<span class="vr-sub"><span class="ist"><i></i>' + ST_INST[g.status] + '</span> · ' + nT + ' título' + (nT === 1 ? '' : 's') +
+        (corr.length ? ' · ' + esc(corr.join(" e ")) : '') + '</span>' +
+      '<span class="vr-sub r">' + dir + '</span></button>' +
+    (aberta ? detalheInst(g, r) : '');
+}
+function detalheInst(g, r){
+  const juntar = prefVenc().fgcJuntar || {};
+  const linhas = [g.pico.valor > g.hoje + 0.005
+    ? 'Pico de <b>' + esc(fmt(g.pico.valor)) + '</b> em ' + diaBR(g.pico.dia) + ', se nada for reaplicado'
+    : 'Hoje é o maior valor — daqui em diante, só vence'];
+  if (g.passaEm !== null) linhas.push('<span class="abr">Passa de ' + LIMITE_TXT + ' em ' + diaBR(g.passaEm) + '</span>');
+  linhas.push('Próximo vencimento: ' + diaBR(g.prox.dia) + ' — libera ' + esc(fmt(g.prox.valor)) +
+    (g.prox.n > 1 ? ' (' + g.prox.n + ' títulos)' : ''));
+  if (g.membros.length > 1) linhas.push(g.conglomerado
+    ? 'Conglomerado ' + esc(g.conglomerado) + ' (lista do FGC): um limite só para ' + g.membros.map(x => esc(x.nome)).join(", ")
+    : 'Somados pelo primeiro nome: ' + g.membros.map(x => esc(x.nome)).join(", "));
+  const outros = r.grupos.filter(x => x.chave !== g.chave);
+  const manual = g.membros.some(x => juntar[x.chave] !== undefined);
+  return '<div class="idet"><div class="conc">' + linhas.join("<br>") + '</div>' +
+    // o emissor fica no subtitulo (com mais de um no grupo) ou no topo: a linha diz quando
+    // vence, onde esta e a taxa; o nome inteiro do titulo, na ficha
+    (g.membros.length > 1
+      ? g.membros.map(x => '<div class="grupo gv"><span>' + esc(x.nome) + '</span><span class="soma">' + esc(fmt(x.hoje)) + '</span></div>' +
+          g.titulos.filter(t => chaveDoTitulo(t.cdb) === x.chave).map(linhaTituloInst).join("")).join("")
+      : g.titulos.map(linhaTituloInst).join("")) +
+    '<div class="iacoes">' +
+      (outros.length ? '<select class="sel i-juntar" data-g="' + esc(g.chave) + '" aria-label="Juntar com outra instituição">' +
+        '<option value="">Mesmo conglomerado de…</option>' + outros.map(o =>
+          '<option value="' + esc(o.chave) + '">' + esc(o.nome) + '</option>').join("") + '</select>' : '') +
+      (g.membros.length > 1 ? g.membros.map(x => '<button class="btn mini plain i-separar" data-m="' + esc(x.chave) + '">Separar ' +
+        esc(x.nome) + '</button>').join("") : '') +
+      (manual ? '<button class="btn mini plain i-auto" data-g="' + esc(g.chave) + '">Voltar ao automático</button>' : '') +
+    '</div></div>';
+}
+// mudancas: { chave do emissor: chave do grupo | "=" (sozinho) | null (volta ao automatico) }
+function mudarJuntar(mudancas, aviso){
+  const j = Object.assign({}, prefVenc().fgcJuntar || {});
+  Object.keys(mudancas).forEach(k => { if (mudancas[k] === null) delete j[k]; else j[k] = mudancas[k]; });
+  gravarPrefVenc({ fgcJuntar: j });
+  if (aviso) toast(aviso);
+}
+function membrosDoGrupo(gk){
+  const g = instAtual().grupos.find(x => x.chave === gk);
+  return g ? g.membros.map(x => x.chave) : [];
+}
+function juntarInst(gk, alvo){
+  const mud = {};
+  membrosDoGrupo(gk).forEach(k => mud[k] = alvo);
+  instAberta = alvo;
+  mudarJuntar(mud, "Somados: um limite de " + LIMITE_TXT + " para os dois");
+}
+function autoInst(gk){
+  const mud = {};
+  membrosDoGrupo(gk).forEach(k => mud[k] = null);
+  instAberta = null;
+  mudarJuntar(mud, "De volta ao automático");
+}
+// Aviso no Resumo quando alguma instituicao passa do limite, hoje ou na projecao.
+// Disfarcado nao aparece (entregaria que ha investimentos).
+function avisoFGC(){
+  if (disfarce || !estado.cdbs.length) return "";
+  const r = instAtual();
+  const acima = r.grupos.filter(g => g.status === "acima"), vai = r.grupos.filter(g => g.status !== "acima" && g.passaEm !== null);
+  if (!acima.length && !vai.length) return "";
+  const partes = acima.map(g => esc(g.nome) + " já passou do limite: " + esc(fmt(g.descoberto)) + " sem garantia")
+    .concat(vai.map(g => esc(g.nome) + " passa do limite em " + diaBR(g.passaEm) + " só com o rendimento, sem aplicar mais nada"));
+  return '<div class="aviso"><b>FGC: limite de ' + LIMITE_TXT + ' por instituição</b><br>' + partes.join("<br>") +
+    (aba !== "vencimentos" ? '<div class="acoes"><button class="btn mini plain ir-fgc">Ver instituições</button></div>' : '') + '</div>';
+}
+
 // Conexoes do Open Finance: o que cada corretora respondeu na ultima sincronizacao e
 // ate quando vale o consentimento (renova-se no Meu Pluggy; aviso 30 dias antes).
 const STATUS_ITEM = { UPDATED: "atualizada", UPDATING: "atualizando", OUTDATED: "desatualizada",
@@ -5021,6 +5372,12 @@ function ligarAcoesVenc(el){
   el.querySelectorAll("#seg-curva button").forEach(b => b.onclick = () => gravarPrefVenc({ curva: b.dataset.c }));
   el.querySelectorAll("#seg-venc-visao button").forEach(b => b.onclick = () => gravarPrefVenc({ visao: b.dataset.v }));
   el.querySelectorAll("#seg-rend-ano button").forEach(b => b.onclick = () => { rendAno = b.dataset.a; render(); });
+  el.querySelectorAll(".irow").forEach(b => b.onclick = () => { instAberta = instAberta === b.dataset.g ? null : b.dataset.g; render(); });
+  el.querySelectorAll(".i-juntar").forEach(s => s.onchange = () => { if (s.value) juntarInst(s.dataset.g, s.value); });
+  el.querySelectorAll(".i-separar").forEach(b => b.onclick = () => {
+    instAberta = null; mudarJuntar({ [b.dataset.m]: "=" }, "Separado: limite próprio");
+  });
+  el.querySelectorAll(".i-auto").forEach(b => b.onclick = () => autoInst(b.dataset.g));
   if (q("v-ir")) q("v-ir").onchange = ev => gravarPrefVenc({ ir: +ev.target.value });
   if (q("v-selic")) q("v-selic").onchange = ev => {
     const v = parseNum(ev.target.value);
@@ -5177,6 +5534,20 @@ function abaVencRendimento(){
               {t:"Rendimento líquido",largura:17},{t:"Carteira bruta no fim do mês",largura:24},{t:"Títulos",largura:9}],
     linhas: r.meses.map(m => [T(rotulo(m.mes + "-01")), T({ passado: "passado", atual: "em curso", futuro: "projeção" }[m.situacao]),
       M(m.bruto, true), M(m.ateHoje), M(m.liquido), M(m.carteira), N(m.titulos)]) };
+}
+function abaVencInstituicoes(){
+  if (!estado.cdbs.length) return null;
+  const r = instAtual();
+  if (!r.grupos.length) return null;
+  return { nome: "Instituições (FGC)",
+    colunas: [{t:"Instituição",largura:30},{t:"Situação",largura:10},{t:"Bruto hoje",largura:16},{t:"% do limite",largura:11},
+              {t:"Folga até " + LIMITE_TXT,largura:18},{t:"Sem garantia",largura:14},{t:"Pico projetado",largura:16},
+              {t:"Dia do pico",largura:12},{t:"Passa do limite em",largura:16},{t:"Próximo vencimento",largura:17},
+              {t:"Libera",largura:15},{t:"Títulos",largura:9},{t:"Corretoras",largura:14},{t:"Emissores somados",largura:48}],
+    linhas: r.grupos.map(g => [T(g.nome), T(ST_INST[g.status]), M(g.hoje, true), P(g.uso), M(g.folga), M(g.descoberto),
+      M(g.pico.valor), T(diaBR(g.pico.dia)), T(g.passaEm !== null ? diaBR(g.passaEm) : ""), T(diaBR(g.prox.dia)),
+      M(g.prox.valor), N(g.titulos.length), T(g.corretoras.join(", ")),
+      T((g.conglomerado && g.membros.length > 1 ? "conglomerado: " : "") + g.membros.map(x => x.nome).join(" + "))]) };
 }
 function abaVencCalendario(){
   if (!estado.cdbs.length) return null;
