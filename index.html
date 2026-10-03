@@ -83,6 +83,7 @@ body.discreto .ponto{opacity:1}
 body.discreto nav button[data-tab="mes"],
 body.discreto nav button[data-tab="patrimonio"],
 body.discreto nav button[data-tab="vencimentos"],
+body.discreto nav button[data-tab="dividendos"],
 body.discreto nav button[data-tab="plano"]{display:none}
 main{padding:0 var(--pad) 128px;max-width:760px;margin:0 auto}
 /* no desktop o conteudo vira duas colunas: acaba o vazio da direita */
@@ -148,6 +149,9 @@ nav button.on .lb{display:inline}
 nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;
   stroke-linecap:round;stroke-linejoin:round}
 @media (max-width:359px){nav button{padding:9px 11px} nav button.on .lb{display:none}}
+/* com 7 abas o nome da aba ativa nao cabe em todo celular: ajustarNav() mede e,
+   so onde nao couber, a aba ativa fica so com o icone (destacada) */
+nav.compacta button.on .lb{display:none}
 
 /* ---------------- resumo: a trajetoria e o heroi ---------------- */
 .arco{margin:14px 0 0;position:relative}
@@ -455,6 +459,28 @@ table.plano td input{width:100%;min-width:82px;background:var(--raised);
 @keyframes pisca{0%{box-shadow:inset 0 0 0 2px var(--tif)}100%{box-shadow:inset 0 0 0 2px transparent}}
 @keyframes piscaCel{0%{border-color:var(--tif);background:var(--tif-g)}100%{border-color:transparent;background:transparent}}
 
+/* ---------------- dividendos ---------------- */
+/* pan-y: o dedo arrasta na horizontal para escolher o mes e a pagina ainda rola */
+#graf-div{touch-action:pan-y;outline:none;cursor:pointer}
+#graf-div:focus-visible{box-shadow:0 0 0 1px var(--line-2);border-radius:6px}
+.legenda .sw-ouro{background:var(--ouro);opacity:.85}
+.legenda .sw-prev{height:0;width:14px;border-top:2px solid var(--tif)}
+.div-anos{display:grid;gap:12px;margin-top:10px}
+.da{display:grid;grid-template-columns:40px 1fr auto;align-items:center;column-gap:12px}
+.da-ano{font-size:13px;color:var(--ink-2)}
+.da-barra{height:8px;border-radius:3px;background:var(--surface);overflow:hidden}
+.da-barra i{display:block;height:100%;border-radius:3px;background:var(--ouro);opacity:.75}
+.da.parcial .da-barra i{opacity:.35}
+.da-v{font-size:13.5px;text-align:right;font-variant-numeric:tabular-nums}
+.da-sub{grid-column:2/-1;font-size:11px;color:var(--ink-3);margin-top:3px}
+.da-sub:empty{display:none}
+.div-acum{margin-top:16px;font-size:13px;color:var(--ink-3);line-height:1.6}
+.div-acum b{color:var(--ink);font-weight:500}
+.div-nota{margin-top:6px;font-size:12px;color:var(--ink-3)}
+table.plano tr[data-comp]{cursor:pointer}
+table.plano tr.sel td,table.plano tr.sel td:first-child{background:var(--raised)}
+table.plano td.vaz{color:var(--ink-4)}
+
 /* ---------------- folha modal ---------------- */
 .sheet-bg{position:fixed;inset:0;background:rgba(4,6,9,.74);z-index:60;display:none;
   align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
@@ -717,6 +743,7 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
     <section id="s-mes"></section>
     <section id="s-patrimonio"></section>
     <section id="s-vencimentos"></section>
+    <section id="s-dividendos"></section>
     <section id="s-plano"></section>
     <section id="s-ajustes"></section>
   </main>
@@ -726,6 +753,7 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
     <button data-tab="mes"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Mês</span></button>
     <button data-tab="patrimonio"><svg viewBox="0 0 24 24"><path d="M3 7.5l9-4 9 4-9 4-9-4z"/><path d="M3 12.5l9 4 9-4"/><path d="M3 17.5l9 4 9-4"/></svg><span class="lb">Patrimônio</span></button>
     <button data-tab="vencimentos"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4 14v4.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V14"/></svg><span class="lb">Vencimentos</span></button>
+    <button data-tab="dividendos"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6.5" rx="7" ry="2.5"/><path d="M5 6.5v3.7c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6.5"/><path d="M5 10.2v3.7c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-3.7"/><path d="M5 13.9v3.6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-3.6"/></svg><span class="lb">Dividendos</span></button>
     <button data-tab="plano"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M9.5 9.5V20"/></svg><span class="lb">Plano</span></button>
     <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 7h8M17 7h3M4 12h3M12 12h8M4 17h10M19 17h1"/><circle cx="14.5" cy="7" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><circle cx="16.5" cy="17" r="2.2"/></svg><span class="lb">Ajustes</span></button>
   </nav>
@@ -2580,6 +2608,195 @@ window.SIM = (function () {
 })();
 /*</simulacao>*/
 
+/*<dividendos>*/
+// ============================================================
+// DIVIDENDOS -- funcoes puras, sem I/O e sem `estado`.
+// Testadas por tests/test_dividendos.html.
+//
+// O dado e o LANCAMENTO (fin_entries) da categoria de receita "Dividendos":
+// recebido do mes = soma dos lancamentos daquela competencia. Mes sem
+// lancamento e VAZIO (null), nao zero; lancamento de valor 0 e zero.
+// Competencia sempre "AAAA-MM-01". Arredonda so a soma do mes (2 casas,
+// como a coluna); razao nunca.
+// ============================================================
+window.DIV = (function () {
+  const norm = s => String(s === null || s === undefined ? "" : s).normalize("NFD")
+    .replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  const r2 = v => Math.round(v * 100) / 100;
+  function somaMes(c, n){
+    let a = +c.slice(0, 4), m = +c.slice(5, 7) + n;
+    while (m > 12){ m -= 12; a++; } while (m < 1){ m += 12; a--; }
+    return a + "-" + String(m).padStart(2, "0") + "-01";
+  }
+  const val = (rec, c) => rec[c] === undefined ? null : rec[c];
+  // variacao so com base POSITIVA: sobre zero ou sem base nao ha percentual
+  const razao = (a, b) => (a !== null && b !== null && b > 0) ? a / b - 1 : null;
+
+  function categoria(categorias){
+    return (categorias || []).find(c => c.tipo === "receita" && c.ativo !== false &&
+      norm(c.nome) === "dividendos") || null;
+  }
+  function recebidos(entries, catId){
+    const r = {};
+    for (const e of entries || []){
+      if (e.category_id !== catId) continue;
+      r[e.competencia] = (r[e.competencia] || 0) + (+e.valor);
+    }
+    for (const k in r) r[k] = r2(r[k]);
+    return r;
+  }
+  // do 1o mes com recebido ate o maior entre hoje e o ultimo recebido
+  function meses(rec, compHoje){
+    const ks = Object.keys(rec).sort();
+    if (!ks.length) return [compHoje];
+    const fim = ks[ks.length - 1] > compHoje ? ks[ks.length - 1] : compHoje;
+    const out = [];
+    for (let c = ks[0]; c <= fim; c = somaMes(c, 1)) out.push(c);
+    return out;
+  }
+  // soma dos 12 meses que terminam em c: so com o proprio mes lancado e a
+  // janela inteira dentro do historico (mes vazio no meio conta 0)
+  function soma12(rec, c, primeiro){
+    if (val(rec, c) === null || !primeiro || somaMes(c, -11) < primeiro) return null;
+    let s = 0;
+    for (let i = 0; i < 12; i++) s += val(rec, somaMes(c, -i)) || 0;
+    return s;
+  }
+  function linha(c, rec, previsto){
+    const primeiro = Object.keys(rec).sort()[0] || null;
+    const r = val(rec, c), p = previsto === undefined ? null : previsto;
+    const s12 = soma12(rec, c, primeiro);
+    return {
+      comp: c, recebido: r,
+      dMes: razao(r, val(rec, somaMes(c, -1))),
+      dAno: razao(r, val(rec, somaMes(c, -12))),
+      previsto: p,
+      dPlanoRS: (r !== null && p !== null) ? r - p : null,
+      dPlanoPct: razao(r, p),
+      soma12: s12, media12: s12 === null ? null : s12 / 12,
+      dSoma12: razao(s12, soma12(rec, somaMes(c, -12), primeiro)),
+    };
+  }
+  function anos(rec, compHoje){
+    const por = {};
+    for (const c of meses(rec, compHoje)){
+      const a = c.slice(0, 4);
+      const o = por[a] || (por[a] = { ano: a, total: 0, meses: 0, de: null, ate: null, ini: c, fim: c });
+      o.fim = c;
+      const v = val(rec, c);
+      if (v === null) continue;
+      o.total += v; o.meses++;
+      if (!o.de) o.de = c;
+      o.ate = c;
+    }
+    // parcial: o intervalo nao cobre jan-dez, ou e o ano corrente (em dezembro
+    // o intervalo vai de jan a dez, mas o mes ainda nao acabou)
+    return Object.keys(por).sort().map(a => {
+      const o = por[a];
+      return { ano: o.ano, total: r2(o.total), meses: o.meses, de: o.de, ate: o.ate,
+               parcial: o.ini.slice(5, 7) !== "01" || o.fim.slice(5, 7) !== "12" || a === compHoje.slice(0, 4) };
+    });
+  }
+  // do 1o mes ao ultimo lancado do ano mais recente, contra os mesmos meses
+  // do ano anterior -- so se o historico cobre janeiro do ano anterior
+  function acumulado(rec){
+    const ks = Object.keys(rec).sort();
+    if (!ks.length) return null;
+    const ult = ks[ks.length - 1], ano = ult.slice(0, 4), anoAnt = String(+ano - 1), mm = ult.slice(5, 7);
+    let total = 0, totalAnt = 0;
+    for (const k of ks){
+      if (k.slice(5, 7) > mm) continue;
+      if (k.slice(0, 4) === ano) total += rec[k];
+      else if (k.slice(0, 4) === anoAnt) totalAnt += rec[k];
+    }
+    const cobre = ks[0] <= anoAnt + "-01-01";
+    return { ano: ano, ate: ult, total: r2(total), totalAnt: cobre ? r2(totalAnt) : null,
+             d: cobre ? razao(total, totalAnt) : null };
+  }
+  function dataISO(x){
+    if (typeof x !== "string") return null;
+    const s = x.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    return m ? m[3] + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0") : null;
+  }
+  // Valor em reais como se digita no Brasil: "1.300" e mil e trezentos (o parseNum
+  // geral leria 1,3), "1.300,50", "1300,5"; e o americano "1,234.56" de CSV.
+  // Ponto so e decimal quando nao forma grupos de 3 ("1.5", "10.25").
+  function numero(x){
+    if (typeof x === "number") return isFinite(x) ? x : null;
+    if (typeof x !== "string") return null;
+    let s = x.replace(/[R$\s]/g, "");
+    if (!s) return null;
+    const pt = s.lastIndexOf(","), pp = s.lastIndexOf(".");
+    if (pt >= 0 && pp >= 0) s = pp > pt ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
+    else if (pt >= 0) s = s.replace(",", ".");
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+    const v = Number(s);
+    return isFinite(v) ? v : null;
+  }
+  // id ESTAVEL do total do mes (categoria + competencia), em formato de UUID:
+  // gravar o mesmo mes de novo -- resposta perdida e o usuario tenta outra vez,
+  // importacao repetida -- cai no MESMO registro (upsert por id) em vez de duplicar.
+  async function idDoMes(catId, comp){
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("dividendos|" + catId + "|" + comp));
+    const b = new Uint8Array(d).slice(0, 16);
+    b[6] = (b[6] & 15) | 80; b[8] = (b[8] & 63) | 128;          // versao 5, variante RFC 4122
+    const h = Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+    return h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20);
+  }
+  // A aba "Lancamento" da planilha: data pela Liquidacao (ou Movimentacao), valor
+  // pela coluna Valor. A coluna "Mes" NAO e usada: e formula.
+  function lerPlanilha(abas){
+    const ehLanc = a => norm(a.nome).startsWith("lancamento") ? 1 : 0;
+    const ordem = (abas || []).slice().sort((a, b) => ehLanc(b) - ehLanc(a));
+    for (const aba of ordem){
+      const L = aba.linhas || [];
+      for (let i = 0; i < Math.min(L.length, 30); i++){
+        const t = (L[i] || []).map(norm);
+        const iLiq = t.findIndex(x => x.startsWith("liquidacao"));
+        const iVal = t.findIndex(x => x.startsWith("valor"));
+        if (iLiq < 0 || iVal < 0) continue;
+        const iMov = t.findIndex(x => x.startsWith("movimentacao"));
+        const soma = {}, n = {};
+        let ignoradas = 0;
+        for (const l of L.slice(i + 1)){
+          if (!l || l.every(x => x === null || x === "")) continue;
+          let d = dataISO(l[iLiq]);
+          if (!d && iMov >= 0) d = dataISO(l[iMov]);
+          const v = numero(l[iVal]);
+          if (!d || v === null){ ignoradas++; continue; }
+          const c = d.slice(0, 7) + "-01";
+          soma[c] = (soma[c] || 0) + v; n[c] = (n[c] || 0) + 1;
+        }
+        return { ok: true, aba: aba.nome, ignoradas: ignoradas,
+                 meses: Object.keys(soma).sort().map(c => ({ comp: c, valor: r2(soma[c]), n: n[c] })) };
+      }
+    }
+    return { ok: false, faltando: ["Liquidação", "Valor"] };
+  }
+  // mes que ja tem QUALQUER lancamento fica como esta: importar de novo nao duplica
+  function planoImportacao(mesesPlanilha, rec){
+    const criar = [], mantidos = [], negativos = [];
+    for (const m of mesesPlanilha || []){
+      if (rec[m.comp] !== undefined) mantidos.push(m.comp);
+      else if (m.valor < 0) negativos.push(m.comp);
+      else criar.push({ comp: m.comp, valor: m.valor });
+    }
+    return { criar: criar, mantidos: mantidos, negativos: negativos };
+  }
+  // o que gravar ao sair da celula "Recebido" (2+ lancamentos: a lista decide)
+  function acaoCelula(lancs, v){
+    if (lancs.length > 1) return "lista";
+    if (v === null) return lancs.length ? "apagar" : "nada";
+    if (!lancs.length) return "criar";
+    return Math.abs(v - (+lancs[0].valor)) < 0.005 ? "nada" : "alterar";
+  }
+  return { categoria, recebidos, meses, linha, anos, acumulado, lerPlanilha, planoImportacao,
+           acaoCelula, numero, idDoMes, somaMes, norm };
+})();
+/*</dividendos>*/
+
 
 // ============================================================
 // CONFIGURACAO
@@ -2962,8 +3179,8 @@ async function gravarPrefs(){
 // NAVEGACAO
 // ============================================================
 let aba = "resumo";
-const ORDEM_ABAS = ["resumo","mes","patrimonio","vencimentos","plano","ajustes"];
-const ABAS_OCULTAS = ["mes","patrimonio","vencimentos","plano"];
+const ORDEM_ABAS = ["resumo","mes","patrimonio","vencimentos","dividendos","plano","ajustes"];
+const ABAS_OCULTAS = ["mes","patrimonio","vencimentos","dividendos","plano"];
 function irPara(nome){
   // guarda no ponto UNICO de navegacao: tocar num mes no Resumo, um atalho do
   // manifest ou um botao interno tambem chegam aqui, e nenhum deles pode furar
@@ -2990,6 +3207,19 @@ function irPara(nome){
     alvo.classList.add(dir);
   }
 }
+// Mede a barra: se o nome da aba ativa a faz passar da largura, so o icone.
+// Medir (e nao fixar um corte de largura de tela) deixa o nome onde ele cabe --
+// "Mes" cabe num celular em que "Vencimentos" nao cabe.
+// Os botoes ENCOLHEM (flex) antes de a barra transbordar: o corte aparece dentro
+// do botao ativo (o nome cortado), nao na barra -- por isso mede os dois.
+function ajustarNav(){
+  const n = document.querySelector("nav");
+  if (!n) return;
+  n.classList.remove("compacta");
+  const corta = n.scrollWidth > n.clientWidth + 1 ||
+    [...n.querySelectorAll("button")].some(b => b.scrollWidth > b.clientWidth + 1);
+  if (corta) n.classList.add("compacta");
+}
 function marcarDisfarce(){
   document.body.classList.toggle("discreto", disfarce);
   // campos de valor viram somente-leitura: sem isso daria para digitar um
@@ -3000,8 +3230,9 @@ function render(){
   const ch = document.getElementById("chip-mes");
   ch.innerHTML = '<b>' + rotulo(mesAtual) + '</b>';
   ({ resumo:renderResumo, mes:renderMes, patrimonio:renderPatrimonio, vencimentos:renderVencimentos,
-     plano:renderPlano, ajustes:renderAjustes })[aba]();
+     dividendos:renderDividendos, plano:renderPlano, ajustes:renderAjustes })[aba]();
   marcarDisfarce();
+  ajustarNav();
   ligarExcel();
   ligarAvisoConexao();
   // a Resumo e a porta de entrada: dali tambem a posicao se atualiza (e o erro aparece)
@@ -3021,10 +3252,12 @@ function ligarExcel(){
     else if (q === "mes")   exportarXLSX([abaMes], "Financas " + rotulo(mesAtual).replace("/","-"));
     else if (q === "patrimonio") exportarXLSX([abaPatrimonio, abaContasMes], "Financas patrimonio");
     else if (q === "plano") exportarXLSX([abaPlano], "Financas plano");
+    else if (q === "dividendos") exportarXLSX([abaDividendos], "Financas dividendos");
     else if (q === "vencimentos") exportarXLSX([abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencInstituicoes, abaVencCDBs],
                                                "Financas vencimentos");
     else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos,
-                      abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencInstituicoes, abaVencCDBs], "Financas completo");
+                      abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencInstituicoes, abaVencCDBs,
+                      abaDividendos], "Financas completo");
   });
 }
 const avisoTravado = () => dadosTravados
@@ -3543,13 +3776,15 @@ function folhaNota(info){
 // ============================================================
 // LANCAMENTOS
 // ============================================================
-function folhaLancamentos(catId){
-  const lista = (estado.entries[mesAtual]||[]).filter(e => !catId || e.category_id === catId)
+// comp (opcional): a aba Dividendos abre a lista de um mes que nao e o mesAtual
+function folhaLancamentos(catId, comp){
+  comp = comp || mesAtual;
+  const lista = (estado.entries[comp]||[]).filter(e => !catId || e.category_id === catId)
     .sort((a,b) => a.data < b.data ? 1 : -1);
   const cat = catId && estado.categorias.find(c => c.id === catId);
   const total = lista.reduce((a,e) => a + (+e.valor), 0);
   let h = "<h3>" + (cat ? esc(cat.nome) : "Lançamentos") + "</h3>" +
-    '<div class="sub">' + rotuloL(mesAtual) +
+    '<div class="sub">' + rotuloL(comp) +
       (lista.length ? " — " + lista.length + " lançamento" + (lista.length>1?"s":"") + ", " + fmt(total) : "") + '</div>';
   if (!lista.length){
     h += '<div class="vazio"><b>Nenhum lançamento neste mês.</b><br>Registre o primeiro abaixo.</div>';
@@ -3567,21 +3802,22 @@ function folhaLancamentos(catId){
        '<button class="btn plain" id="fechar">Fechar</button></div>';
   abrirFolha(h, () => {
     document.getElementById("fechar").onclick = fecharFolha;
-    document.getElementById("novo").onclick = () => folhaNovoLancamento(catId);
+    document.getElementById("novo").onclick = () => folhaNovoLancamento(catId, comp);
     document.querySelectorAll(".del").forEach(b => b.onclick = async () => {
       await apagar("fin_entries", b.dataset.id);
-      estado.entries[mesAtual] = (estado.entries[mesAtual]||[]).filter(x => x.id !== b.dataset.id);
-      folhaLancamentos(catId); render();
+      estado.entries[comp] = (estado.entries[comp]||[]).filter(x => x.id !== b.dataset.id);
+      folhaLancamentos(catId, comp); render();
     });
   });
 }
-function folhaNovoLancamento(catId){
+function folhaNovoLancamento(catId, comp){
+  comp = comp || mesAtual;
   const opts = estado.categorias.filter(c => c.ativo !== false)
     .map(c => '<option value="' + c.id + '"' + (c.id===catId?" selected":"") + '>' + esc(c.nome) + '</option>').join("");
   const contas = '<option value="">—</option>' + estado.contas
     .map(c => '<option value="' + c.id + '">' + esc(c.nome) + '</option>').join("");
   abrirFolha(
-    "<h3>Novo lançamento</h3><div class='sub'>Entra no apurado de " + rotuloL(mesAtual) + ".</div>" +
+    "<h3>Novo lançamento</h3><div class='sub'>Entra no apurado de " + rotuloL(comp) + ".</div>" +
     '<div class="f2"><label class="f">Data<input id="l-data" type="date" value="' + hojeISO() + '"></label>' +
     '<label class="f">Valor<input id="l-valor" inputmode="decimal" placeholder="0,00"></label></div>' +
     '<label class="f">Categoria<select id="l-cat">' + opts + '</select></label>' +
@@ -3590,18 +3826,18 @@ function folhaNovoLancamento(catId){
     '<div class="acoes"><button class="btn pri" id="ok">Salvar lançamento</button>' +
     '<button class="btn plain" id="cancel">Cancelar</button></div>',
     () => {
-      document.getElementById("cancel").onclick = () => folhaLancamentos(catId);
+      document.getElementById("cancel").onclick = () => folhaLancamentos(catId, comp);
       document.getElementById("ok").onclick = async () => {
         const v = parseNum(document.getElementById("l-valor").value);
         if (v === null || v < 0){ toast("Informe um valor"); return; }
         const r = await salvar("fin_entries", {
           data: document.getElementById("l-data").value || hojeISO(),
-          competencia: mesAtual,
+          competencia: comp,
           category_id: document.getElementById("l-cat").value,
           account_id: document.getElementById("l-conta").value || null,
           valor: v, descricao: document.getElementById("l-desc").value || null });
-        if (r && r[0]) (estado.entries[mesAtual] = estado.entries[mesAtual] || []).push(r[0]);
-        folhaLancamentos(catId); render(); toast("Lançamento salvo");
+        if (r && r[0]) (estado.entries[comp] = estado.entries[comp] || []).push(r[0]);
+        folhaLancamentos(catId, comp); render(); toast("Lançamento salvo");
       };
     });
 }
@@ -5586,6 +5822,417 @@ function abaVencMeses(){
 }
 
 // ============================================================
+// DIVIDENDOS
+// O recebido de cada mes e a soma dos lancamentos (fin_entries) da categoria
+// de receita "Dividendos" -- as contas sao do bloco puro DIV. Gravar e pelos
+// caminhos de sempre (salvar/patch/apagar), entao o modo discreto e a falta de
+// conexao travam aqui como no resto do app. O recebido aparece sozinho como
+// apurado de Dividendos na aba Mes.
+// ============================================================
+let divSel = null;          // mes escolhido: destaque, grafico e linha da tabela
+function ctxDiv(){
+  const cat = DIV.categoria(estado.categorias);
+  if (!cat) return null;
+  const rec = DIV.recebidos(Object.values(estado.entries).flat(), cat.id);
+  const hoje = compHoje();
+  const linhas = DIV.meses(rec, hoje).map(c => {
+    const m = mesProj(c);
+    return DIV.linha(c, rec, m ? (m.previsto[cat.id] || 0) : null);
+  });
+  const porComp = {};
+  for (const l of linhas) porComp[l.comp] = l;
+  return { cat: cat, rec: rec, hoje: hoje, linhas: linhas, porComp: porComp };
+}
+function renderDividendos(){
+  const el = document.getElementById("s-dividendos");
+  if (!estado.categorias.length){ el.innerHTML = avisoTravado() + semDados(); return; }
+  const x = ctxDiv();
+  if (!x){
+    el.innerHTML = avisoTravado() + '<div class="aviso">Crie a categoria de receita <b>Dividendos</b> em ' +
+      'Ajustes → Categorias para usar esta aba.</div>';
+    return;
+  }
+  if (!divSel || !x.porComp[divSel]){
+    const com = x.linhas.filter(l => l.recebido !== null);
+    divSel = com.length ? com[com.length - 1].comp : x.hoje;
+  }
+  // a tabela rola por dentro: a posicao sobrevive aos redesenhos (como no Plano)
+  const caixa = document.getElementById("div-tab");
+  const rolagem = caixa ? [caixa.scrollLeft, caixa.scrollTop] : null;
+  const tudo = estado.settings.divPeriodo === "tudo";
+  el.innerHTML = avisoTravado() +
+    '<div id="div-destaque">' + destaqueDiv(x) + '</div>' +
+    '<div class="hdr"><h2>Mês a mês</h2><span class="seg" id="seg-div-per">' +
+      '<button data-p="2a"' + (tudo ? '' : ' class="on"') + '>2 anos</button>' +
+      '<button data-p="tudo"' + (tudo ? ' class="on"' : '') + '>Tudo</button></span></div>' +
+    '<div class="grafwrap" id="graf-div"></div>' +
+    '<div class="hdr"><h2>Ano contra ano</h2></div><div class="rule"></div>' + blocoAnosDiv(x) +
+    '<div class="hdr"><h2>Tabela</h2><span class="aux">toque no recebido para lançar</span>' +
+      '<button class="btn mini plain xls" data-x="dividendos">Excel</button></div>' +
+    '<div class="tabwrap" id="div-tab">' + tabelaDiv(x) + '</div>' +
+    '<div class="acoes"><button class="btn" id="div-importar">Importar planilha</button></div>';
+  if (rolagem){ const t = document.getElementById("div-tab"); t.scrollLeft = rolagem[0]; t.scrollTop = rolagem[1]; }
+  desenharDiv();
+  ligarDiv(el);
+}
+function destaqueDiv(x){
+  const c = divSel, l = x.porComp[c];
+  const ant = DIV.somaMes(c, -1), anoAnt = DIV.somaMes(c, -12);
+  const pct = v => '<span class="' + (v >= 0 ? "pos" : "neg") + '">' + fmtpct(v) + '</span>';
+  // sem comparacao, diz o porque: mes nao lancado, base que falta ou base zero
+  const sem = t => '<span class="d3">·</span><small> ' + t + '</small>';
+  const fatos = [
+    ["Contra " + rotulo(ant), l.dMes !== null
+      ? pct(l.dMes) + '<small> ' + esc(fmt(x.rec[ant])) + '</small>'
+      : sem(l.recebido === null ? "mês sem lançamento" : x.rec[ant] === undefined ? "sem " + rotulo(ant) : "base zero")],
+    ["Contra " + rotulo(anoAnt), l.dAno !== null
+      ? pct(l.dAno) + '<small> ' + esc(fmt(x.rec[anoAnt])) + '</small>'
+      : sem(l.recebido === null ? "mês sem lançamento" : x.rec[anoAnt] === undefined ? "sem " + rotulo(anoAnt) : "base zero")],
+    ["Contra o plano", l.dPlanoRS !== null
+      ? '<span class="' + (l.dPlanoRS >= 0 ? "pos" : "neg") + '">' + esc(fmtsin(l.dPlanoRS)) + '</span><small> ' +
+        (l.dPlanoPct !== null ? fmtpct(l.dPlanoPct) + ' · ' : '') + 'previsto ' + esc(fmt(l.previsto)) + '</small>'
+      : sem(l.previsto === null ? "mês fora do plano" : "previsto " + esc(fmt(l.previsto)))],
+  ];
+  const topo = '<div class="hero"><div><div class="k-hero">recebido em ' + rotuloL(c) + '</div>' +
+    (l.recebido !== null
+      ? '<div class="val"><span class="cur">R$</span>' + esc(fmtn(l.recebido)) + '</div>'
+      : '<div class="val">—</div><div class="cap">ainda não lançado · toque no mês na tabela para lançar</div>') +
+    '</div></div>';
+  const doze = '<div class="hdr"><h2>Últimos 12 meses</h2>' + (l.soma12 !== null
+      ? '<span class="aux">' + rotulo(DIV.somaMes(c, -11)) + ' a ' + rotulo(c) + '</span></div><div class="fatos">' +
+        '<div class="fato"><div class="k">Soma</div><div class="v">' + esc(fmt(l.soma12)) + '</div></div>' +
+        '<div class="fato"><div class="k">Média por mês</div><div class="v">' + esc(fmt(l.media12)) + '</div></div>' +
+        '<div class="fato"><div class="k">Contra os 12 anteriores</div><div class="v">' +
+          (l.dSoma12 !== null ? pct(l.dSoma12) : sem("sem 24 meses de histórico")) + '</div></div></div>'
+      : '</div><div class="div-nota">' + (l.recebido === null ? "Escolha um mês lançado."
+          : "Precisa de 12 meses de histórico até " + rotulo(c) + ".") + '</div>');
+  return topo + '<div class="fatos">' + fatos.map(f =>
+    '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + '</div></div>').join("") + '</div>' + doze;
+}
+// Barras ouro = recebido; traco tiffany = previsto do plano (a convencao do app:
+// tiffany previsto, ouro apurado). Um eixo so: a variacao % fica no destaque e na
+// tabela, nunca numa segunda escala.
+function desenharDiv(){
+  const box = document.getElementById("graf-div");
+  const x = box && ctxDiv();
+  if (!x) return;
+  const tudo = estado.settings.divPeriodo === "tudo";
+  const ls = tudo ? x.linhas : x.linhas.slice(-24);
+  // largura MEDIDA: viewBox fixo esmagaria o texto (licao do grafico do Resumo)
+  const W = Math.max(280, Math.round(box.getBoundingClientRect().width) || 340);
+  const H = 196, PT = 14, PB = 24, base = H - PB;
+  const vals = ls.flatMap(l => [l.recebido, l.previsto]).filter(v => v !== null);
+  const mx = (vals.length ? Math.max.apply(null, vals) : 0) || 1;
+  const bw = W / ls.length, bar = Math.max(2, Math.min(22, bw - 2));     // 2px de folga entre barras
+  const y = v => PT + (1 - v / mx) * (base - PT);
+  let faixa = "", barras = "", prev = "", rot = "", alvos = "";
+  ls.forEach((l, i) => {
+    const cx = bw * i + bw / 2, sel = l.comp === divSel, mm = +l.comp.slice(5, 7);
+    if (sel) faixa = '<rect x="' + (bw * i).toFixed(1) + '" y="0" width="' + bw.toFixed(1) + '" height="' + base +
+      '" rx="3" fill="var(--raised)"/>';
+    if (l.recebido !== null && l.recebido > 0){
+      const yb = y(l.recebido);
+      barras += '<rect x="' + (cx - bar / 2).toFixed(1) + '" y="' + yb.toFixed(1) + '" width="' + bar.toFixed(1) +
+        '" height="' + Math.max(1, base - yb).toFixed(1) + '" rx="' + Math.min(3, bar / 2).toFixed(1) +
+        '" fill="var(--ouro)" opacity="' + (sel ? "1" : ".5") + '"/>';
+    }
+    if (l.previsto !== null && l.previsto > 0){
+      // na largura da barra (com a folga entre eles, cada traco e um mes) e com um
+      // anel da cor do fundo: o traco nunca some sobre a barra
+      const yp = y(l.previsto).toFixed(1), x0 = (cx - bar / 2).toFixed(1), x1 = (cx + bar / 2).toFixed(1);
+      prev += '<line x1="' + x0 + '" y1="' + yp + '" x2="' + x1 + '" y2="' + yp +
+                '" stroke="var(--bg)" stroke-width="4"/>' +
+              '<line x1="' + x0 + '" y1="' + yp + '" x2="' + x1 + '" y2="' + yp +
+                '" stroke="var(--tif)" stroke-width="2"/>';
+    }
+    // rotulos: janeiro leva o ano; nos 2 anos, abril, julho e outubro tambem
+    if (mm === 1 || (!tudo && (mm - 1) % 3 === 0)){
+      const anc = cx < 18 ? "start" : cx > W - 18 ? "end" : "middle";
+      const ax = anc === "start" ? cx - bar / 2 : anc === "end" ? cx + bar / 2 : cx;
+      rot += '<text x="' + ax.toFixed(1) + '" y="' + (H - 8) + '" text-anchor="' + anc + '" font-size="11" fill="' +
+        (sel ? "var(--ink)" : "var(--ink-3)") + '">' + (mm === 1 ? l.comp.slice(0, 4) : MESES[mm - 1]) + '</text>';
+    }
+    alvos += '<rect x="' + (bw * i).toFixed(1) + '" y="0" width="' + bw.toFixed(1) + '" height="' + H +
+      '" fill="transparent"><title>' + esc(rotulo(l.comp) + " — recebido " + (l.recebido === null ? "—" : fmt(l.recebido)) +
+      (l.previsto !== null ? " · previsto " + fmt(l.previsto) : "")) + '</title></rect>';
+  });
+  box.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" data-n="' + ls.length +
+      '" data-ini="' + ls[0].comp + '" role="img" aria-label="Dividendos recebidos por mês, em barras, e o previsto no plano, em traços">' +
+    faixa + '<line x1="0" y1="' + base + '" x2="' + W + '" y2="' + base + '" stroke="var(--line)"/>' +
+    barras + prev + rot + alvos + '</svg>' +
+    '<div class="legenda"><span><i class="sw-ouro"></i>recebido</span><span><i class="sw-prev"></i>previsto no plano</span>' +
+    '<span class="d3">toque ou arraste para escolher o mês</span></div>';
+}
+// escolher o mes: clique/toque, arrasto e setas. So o destaque, o grafico e a
+// marca da linha mudam -- a tabela nao e refeita (rolagem e celula aberta ficam).
+function ligarGrafDiv(){
+  const box = document.getElementById("graf-div");
+  if (!box) return;
+  box.tabIndex = 0;
+  const mesEm = ev => {
+    const svg = box.querySelector("svg");
+    if (!svg) return null;
+    const r = svg.getBoundingClientRect(), n = +svg.dataset.n;
+    const i = Math.floor((ev.clientX - r.left) / r.width * n);
+    return i >= 0 && i < n ? DIV.somaMes(svg.dataset.ini, i) : null;
+  };
+  let arrastando = false;
+  box.addEventListener("pointerdown", ev => { arrastando = true; const c = mesEm(ev); if (c) selecionarDiv(c); });
+  box.addEventListener("pointermove", ev => { if (!arrastando) return; const c = mesEm(ev); if (c) selecionarDiv(c); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(t => box.addEventListener(t, () => { arrastando = false; }));
+  box.addEventListener("keydown", ev => {
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    ev.preventDefault();
+    selecionarDiv(DIV.somaMes(divSel, ev.key === "ArrowLeft" ? -1 : 1));
+  });
+}
+function selecionarDiv(comp){
+  if (comp === divSel) return;
+  const x = ctxDiv();
+  if (!x || !x.porComp[comp]) return;
+  divSel = comp;
+  const d = document.getElementById("div-destaque");
+  if (d) d.innerHTML = destaqueDiv(x);
+  document.querySelectorAll("#div-tab tr[data-comp]").forEach(tr => tr.classList.toggle("sel", tr.dataset.comp === comp));
+  desenharDiv();
+}
+function blocoAnosDiv(x){
+  const as = DIV.anos(x.rec, x.hoje).filter(a => a.meses > 0);
+  if (!as.length) return '<div class="div-nota">Nenhum mês lançado ainda.</div>';
+  const mx = Math.max.apply(null, as.map(a => a.total)) || 1;
+  const faixa = a => a.de === a.ate ? MESES[+a.de.slice(5, 7) - 1]
+    : MESES[+a.de.slice(5, 7) - 1] + "–" + MESES[+a.ate.slice(5, 7) - 1];
+  let h = '<div class="div-anos">' + as.map(a =>
+    '<div class="da' + (a.parcial ? ' parcial' : '') + '"><span class="da-ano">' + a.ano + '</span>' +
+    '<span class="da-barra"><i style="width:' + Math.max(1, a.total / mx * 100).toFixed(1) + '%"></i></span>' +
+    '<span class="da-v">' + esc(fmt(a.total)) + '</span>' +
+    '<span class="da-sub">' + (a.parcial ? faixa(a) + ' · parcial' : a.meses < 12 ? a.meses + ' meses lançados' : '') +
+    '</span></div>').join("") + '</div>';
+  const ac = DIV.acumulado(x.rec);
+  if (ac){
+    const mm = +ac.ate.slice(5, 7), per = mm === 1 ? "jan" : "jan–" + MESES[mm - 1];
+    h += '<div class="div-acum">No ano, ' + per + '/' + ac.ano + ': <b>' + esc(fmt(ac.total)) + '</b>' +
+      (ac.totalAnt !== null ? ' · ' + per + '/' + (+ac.ano - 1) + ': ' + esc(fmt(ac.totalAnt)) +
+        (ac.d !== null ? ' · <span class="' + (ac.d >= 0 ? "pos" : "neg") + '">' + fmtpct(ac.d) + '</span>' : '') : '') +
+      '</div>';
+  }
+  return h;
+}
+// mais recente no topo: e o mes que se lanca e o que se quer ver
+function tabelaDiv(x){
+  const pct = v => v === null ? '<td class="z">·</td>' : '<td class="' + (v >= 0 ? "pos" : "neg") + '">' + fmtpct(v) + '</td>';
+  let h = '<table class="plano div-t"><thead><tr><th>Mês</th><th>Recebido</th><th>Δ mês ant.</th><th>Δ ano ant.</th>' +
+    '<th class="colsep">Previsto</th><th>Δ plano</th><th class="colsep">12 meses</th></tr></thead><tbody>';
+  let ano = "";
+  for (const l of x.linhas.slice().reverse()){
+    const a = l.comp.slice(0, 4);
+    if (a !== ano){ ano = a; h += '<tr class="sep"><td colspan="7"><span>' + a + '</span></td></tr>'; }
+    const cls = [l.comp === x.hoje ? "agora" : "", l.comp === divSel ? "sel" : ""].join(" ").trim();
+    h += '<tr data-comp="' + l.comp + '"' + (cls ? ' class="' + cls + '"' : '') + '><td>' + rotulo(l.comp) + '</td>' +
+      '<td class="ed ' + (l.recebido === null ? "vaz" : "forte") + '" data-comp="' + l.comp + '">' +
+        (l.recebido === null ? "—" : fmtn(l.recebido)) + '</td>' +
+      pct(l.dMes) + pct(l.dAno) +
+      '<td class="colsep' + (l.previsto === null ? ' z">·' : '">' + fmtn(l.previsto)) + '</td>' +
+      (l.dPlanoRS === null ? '<td class="z">·</td>'
+        : '<td class="' + (l.dPlanoRS >= 0 ? "pos" : "neg") + '">' + fmtsin(l.dPlanoRS) + '</td>') +
+      '<td class="colsep' + (l.soma12 === null ? ' z">·' : '">' + fmtn(l.soma12)) + '</td></tr>';
+  }
+  return h + '</tbody></table>';
+}
+// Redesenhar destroi e recria a tabela. Se o dedo ja abriu OUTRA celula (o blur
+// desta veio do toque naquela), redesenhar agora mataria o campo novo no meio do
+// toque -- foi o erro do saldo que "nao pegava" no celular. Entao adia: quem
+// fechar o campo aberto redesenha.
+let divPendente = false;
+// meses com gravacao a caminho: reabrir a celula antes da resposta leria a
+// memoria velha (criaria de novo, ou mostraria o valor que esta sendo apagado)
+const divGravando = new Set();
+// guarda o lancamento na memoria SEM duplicar o id (o id do mes e estavel: uma
+// segunda gravacao do mesmo mes devolve o mesmo registro)
+function guardarLancDiv(e){
+  const l = (estado.entries[e.competencia] || []).filter(x => x.id !== e.id);
+  l.push(e);
+  estado.entries[e.competencia] = l;
+}
+function redesenharDiv(compSalvo){
+  const a = document.activeElement;
+  if (a && a.tagName === "INPUT" && a.closest("#div-tab")){ divPendente = true; return; }
+  divPendente = false;
+  if (aba !== "dividendos") return;
+  render();
+  const alvo = compSalvo && document.querySelector('#div-tab td.ed[data-comp="' + compSalvo + '"]');
+  if (alvo){ alvo.classList.add("salvo"); setTimeout(() => alvo.classList.remove("salvo"), 800); }
+}
+// Lancar o mes na celula "Recebido" -- o mesmo gesto da tabela do Plano (Enter
+// grava, Esc cancela, sair do campo grava), mas Enter NAO pula de mes: lanca-se
+// um por vez. O que gravar sai de DIV.acaoCelula: 0 lancamento cria, 1 altera
+// ou apaga, 2+ abre a lista do mes (nao da para adivinhar qual mudar).
+function editarDiv(td){
+  if (td.querySelector("input")) return;
+  if (bloqueadoPeloDisfarce()) return;
+  if (dadosTravados){ toast("Sem conexão — nada será gravado"); return; }
+  const x = ctxDiv();
+  if (!x) return;
+  const comp = td.dataset.comp;
+  if (divGravando.has(comp)){ toast("Ainda gravando " + rotulo(comp) + "…"); return; }
+  const lancs = (estado.entries[comp] || []).filter(e => e.category_id === x.cat.id);
+  if (lancs.length > 1){ folhaLancamentos(x.cat.id, comp); return; }
+  const textoAntes = td.textContent, classeAntes = td.className;
+  td.classList.add("editando");
+  td.innerHTML = '<input inputmode="decimal" value="' + (lancs.length ? fmtn(+lancs[0].valor) : "") + '">';
+  const inp = td.querySelector("input");
+  inp.focus(); inp.select();
+  let feito = false;
+  const volta = () => {
+    td.className = classeAntes; td.textContent = textoAntes;
+    if (divPendente) setTimeout(redesenharDiv, 0);
+  };
+  const encerra = async gravar => {
+    if (feito) return; feito = true;
+    if (!gravar) return volta();
+    // DIV.numero e nao parseNum: "1.300" digitado e mil e trezentos, nao 1,30
+    const txt = inp.value.trim(), lido = txt === "" ? null : DIV.numero(txt);
+    if (txt !== "" && (lido === null || lido < 0)){ toast("Valor inválido"); return volta(); }
+    const v = lido === null ? null : Math.round(lido * 100) / 100;
+    const acao = DIV.acaoCelula(lancs, v);
+    if (acao === "nada") return volta();
+    // a celula mostra o novo valor ja; a memoria so muda DEPOIS do banco -- se
+    // falhar, o redesenho volta o valor antigo
+    td.className = classeAntes.replace(/\b(vaz|forte)\b/g, "").trim() + (v === null ? " vaz" : " forte");
+    td.textContent = v === null ? "—" : fmtn(v);
+    let gravou = false;
+    divGravando.add(comp);
+    try {
+      if (acao === "criar"){
+        // id estavel do mes + upsert: tentar de novo depois de uma resposta perdida
+        // cai no mesmo registro
+        const id = await DIV.idDoMes(x.cat.id, comp).catch(() => uuid());   // sem crypto.subtle: so http fora do localhost
+        const r = await salvar("fin_entries", { id: id, data: comp, competencia: comp,
+                                                category_id: x.cat.id, account_id: null, valor: v,
+                                                descricao: "Total do mês" }, "id");
+        if (r && r[0]){ guardarLancDiv(r[0]); gravou = true; }
+      } else if (acao === "alterar"){
+        // volta:true -- PATCH que nao acha a linha (apagada em outro aparelho) devolve
+        // 204 e passaria por gravado
+        const r = await patch("fin_entries", lancs[0].id, { valor: v }, { volta: true });
+        if (!r || !r.length) throw new Error("o lançamento não existe mais (apagado em outro aparelho?) — recarregue o app");
+        lancs[0].valor = v; gravou = true;
+      } else if (acao === "apagar"){
+        await apagar("fin_entries", lancs[0].id);
+        estado.entries[comp] = (estado.entries[comp] || []).filter(e => e.id !== lancs[0].id);
+        gravou = true;
+      }
+      if (gravou) tremer();
+    } catch(e){
+      if (acao !== "criar") toast("Não gravou: " + e.message);     // o salvar ja avisa sozinho
+    } finally {
+      divGravando.delete(comp);
+    }
+    setTimeout(() => redesenharDiv(gravou ? comp : null), 0);
+  };
+  inp.addEventListener("blur", () => encerra(true));
+  inp.addEventListener("keydown", ev => {
+    if (ev.key === "Enter" || ev.key === "Tab"){ ev.preventDefault(); encerra(true); }
+    else if (ev.key === "Escape"){ ev.preventDefault(); encerra(false); }
+  });
+}
+function ligarDiv(el){
+  el.querySelectorAll("#div-tab tr[data-comp]").forEach(tr => tr.onclick = () => selecionarDiv(tr.dataset.comp));
+  el.querySelectorAll("#div-tab td.ed").forEach(td => td.onclick = ev => {
+    ev.stopPropagation();
+    selecionarDiv(td.dataset.comp);
+    editarDiv(td);
+  });
+  el.querySelectorAll("#seg-div-per button").forEach(b => b.onclick = () => {
+    estado.settings.divPeriodo = b.dataset.p;
+    render(); gravarPrefs();
+  });
+  document.getElementById("div-importar").onclick = folhaImportarDiv;
+  ligarGrafDiv();
+}
+// Importar a planilha de dividendos (aba "Lancamento": Liquidacao + Valor),
+// somada por mes. Mes que ja tem lancamento no app fica como esta -- rodar de
+// novo nao duplica. Mostra o resumo e so grava depois de confirmar.
+function folhaImportarDiv(){
+  if (bloqueadoPeloDisfarce()) return;
+  abrirFolha(
+    '<h3>Importar planilha de dividendos</h3>' +
+    '<div class="sub">O app lê a aba <b>Lançamento</b> pelas colunas <b>Liquidação</b> (data) e <b>Valor</b>, soma por mês ' +
+      'e lança o total de cada mês. Mês que já tem valor aqui fica como está.</div>' +
+    '<div class="acoes"><label class="btn pri arq">Escolher arquivo' +
+      '<input type="file" id="div-arq" accept=".xlsx,.csv,.txt"></label>' +
+      '<button class="btn plain" id="div-imp-fechar">Fechar</button></div>' +
+    '<div id="div-imp-res"></div>',
+    () => {
+      document.getElementById("div-imp-fechar").onclick = fecharFolha;
+      document.getElementById("div-arq").onchange = ev => {
+        const f = ev.target.files && ev.target.files[0];
+        if (f) analisarDiv(f);
+      };
+    });
+}
+async function analisarDiv(arquivo){
+  const box = document.getElementById("div-imp-res");
+  if (!box) return;
+  box.innerHTML = '<div class="nota fria">Lendo ' + esc(arquivo.name) + '…</div>';
+  let abas;
+  try { abas = await XLSXLER.lerArquivo(arquivo); }
+  catch (e){ box.innerHTML = '<div class="aviso">Não consegui abrir o arquivo: ' + esc(e.message) + '</div>'; return; }
+  const x = ctxDiv();
+  if (!x){ box.innerHTML = '<div class="aviso">Falta a categoria de receita <b>Dividendos</b>.</div>'; return; }
+  const lido = DIV.lerPlanilha(abas);
+  if (!lido.ok){
+    box.innerHTML = '<div class="aviso">Não achei as colunas <b>' + esc(lido.faltando.join(", ")) + '</b> em ' +
+      esc(arquivo.name) + '. O nome da coluna pode variar, mas os títulos precisam estar na mesma linha.</div>';
+    return;
+  }
+  const p = DIV.planoImportacao(lido.meses, x.rec);
+  const soma = p.criar.reduce((s, m) => s + m.valor, 0);
+  const partes = [];
+  if (p.criar.length) partes.push('<b>' + plural(p.criar.length, "mês", "meses") + '</b> para lançar, de ' +
+    rotulo(p.criar[0].comp) + ' a ' + rotulo(p.criar[p.criar.length - 1].comp) + ' · total <b>' + esc(fmt(soma)) + '</b>');
+  if (p.mantidos.length) partes.push(plural(p.mantidos.length, "mês já tinha", "meses já tinham") +
+    ' valor no app e ' + (p.mantidos.length === 1 ? 'fica como está' : 'ficam como estão'));
+  if (p.negativos.length) partes.push(plural(p.negativos.length, "mês com total negativo fica", "meses com total negativo ficam") +
+    ' de fora (' + p.negativos.map(rotulo).join(", ") + ')');
+  if (lido.ignoradas) partes.push(plural(lido.ignoradas, "linha sem data ou sem valor foi ignorada", "linhas sem data ou sem valor foram ignoradas"));
+  if (!p.criar.length) partes.unshift("Nada novo para lançar");
+  box.innerHTML = '<div class="nota">Aba <b>' + esc(lido.aba) + '</b>: ' + partes.join('.<br>') + '.</div>' +
+    (p.criar.length ? '<div class="acoes"><button class="btn pri" id="div-imp-ok">Importar ' +
+      plural(p.criar.length, "mês", "meses") + '</button></div>' : '');
+  const ok = document.getElementById("div-imp-ok");
+  if (!ok) return;
+  ok.onclick = async () => {
+    if (dadosTravados){ toast("Sem conexão — nada foi gravado"); return; }
+    ok.disabled = true;
+    // id ESTAVEL de cada mes + upsert por id: clicar de novo depois de uma falha
+    // (ou importar outra vez antes de a resposta chegar) cai nos mesmos registros
+    const linhas = [];
+    for (const m of p.criar)
+      linhas.push({ id: await DIV.idDoMes(x.cat.id, m.comp).catch(() => uuid()), data: m.comp, competencia: m.comp,
+                    category_id: x.cat.id, account_id: null, valor: m.valor, descricao: "Importado da planilha" });
+    let r = null;
+    try { r = await salvar("fin_entries", linhas, "id"); } catch(e){ ok.disabled = false; return; }
+    if (!r){ ok.disabled = false; return; }
+    for (const e of r) guardarLancDiv(e);
+    divSel = null;                    // abre no ultimo mes lancado
+    fecharFolha(); render(); tremer();
+    toast(plural(r.length, "mês importado", "meses importados"));
+  };
+}
+// Excel: ordem crescente, como se espera numa planilha
+function abaDividendos(){
+  const x = ctxDiv();
+  if (!x) return null;
+  const ou = (v, f) => v === null ? null : f(v);
+  return { nome: "Dividendos",
+    colunas: [{t:"Mês",largura:12},{t:"Recebido",largura:16},{t:"Δ mês anterior",largura:15},
+              {t:"Δ ano anterior",largura:15},{t:"Previsto",largura:16},{t:"Δ plano",largura:15},{t:"12 meses",largura:17}],
+    linhas: x.linhas.map(l => [T(rotulo(l.comp)), ou(l.recebido, v => M(v, true)), ou(l.dMes, P), ou(l.dAno, P),
+                               ou(l.previsto, v => M(v)), ou(l.dPlanoRS, v => M(v)), ou(l.soma12, v => M(v))]) };
+}
+
+// ============================================================
 // PLANO
 // ============================================================
 function colunasPlano(modo){
@@ -7319,10 +7966,12 @@ window.addEventListener("resize", () => {
   ultimaLargura = window.innerWidth;
   clearTimeout(redimT);
   redimT = setTimeout(() => {
+    ajustarNav();
     if (!estado.categorias.length) return;
     if (aba === "resumo"){ desenharArco(); desenharCombo(anoSel); }
     if (aba === "patrimonio") desenharEvolucao();
     if (aba === "vencimentos"){ desenharBarrasVenc(); desenharBarrasRend(); }
+    if (aba === "dividendos") desenharDiv();
     if (aba === "plano" && simAberta) desenharSim();
   }, 180);
 });
@@ -7342,7 +7991,7 @@ marcarDisfarce();
 // atalhos do manifest (?ir=mes) e deep link
 function abaDaURL(){
   const q = new URLSearchParams(location.search).get("ir");
-  return ["resumo","mes","patrimonio","vencimentos","plano","ajustes"].includes(q) ? q : null;
+  return ORDEM_ABAS.includes(q) ? q : null;
 }
 
 // convite de instalacao: discreto, dispensavel, e a dispensa e lembrada

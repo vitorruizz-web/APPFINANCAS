@@ -1,0 +1,218 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste dos dividendos</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+// Testes do bloco <dividendos>, extraido do index.html.
+// SO DADO INVENTADO: o repositorio e publico.
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if (!cond) falhas++; return cond; }
+function perto(a, b, msg, tol){
+  tol = tol === undefined ? 1e-9 : tol;
+  ok(a !== null && a !== undefined && Math.abs(a - b) <= tol, `${msg} (obtido ${a}, esperado ${b})`);
+}
+const nulo = (a, msg) => ok(a === null, `${msg} (obtido ${a}, esperado null)`);
+const igual = (a, b, msg) => ok(JSON.stringify(a) === JSON.stringify(b),
+  `${msg} (obtido ${JSON.stringify(a)}, esperado ${JSON.stringify(b)})`);
+function fim(){
+  document.getElementById("out").textContent =
+    log.join("\n") + `\n\n=== ${falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)"} === (${log.length} asserções)`;
+}
+
+// 24 meses (2023-01 a 2024-12) com 100 + 10*i; 2023-06 sem lancamento e
+// 2024-02 lancado como ZERO.
+function serie(){
+  const rec = {};
+  for (let i = 0; i < 24; i++) rec[DIV.somaMes("2023-01-01", i)] = 100 + 10 * i;
+  delete rec["2023-06-01"];
+  rec["2024-02-01"] = 0;
+  return rec;
+}
+
+function casos(){
+  // ------------------------------------------------------------ categoria
+  const cats = [
+    { id: "z", nome: "Dividendos", tipo: "receita", ativo: false },
+    { id: "y", nome: "Dividendos", tipo: "despesa", ativo: true },
+    { id: "x", nome: "Dividendos extra", tipo: "receita", ativo: true },
+    { id: "d", nome: "Dividendos", tipo: "receita", ativo: true },
+  ];
+  ok(DIV.categoria(cats).id === "d", "1. categoria: receita ativa chamada Dividendos");
+  ok(DIV.categoria([{ id: "a", nome: "  DIVIDÊNDOS ", tipo: "receita" }]).id === "a",
+     "1. categoria: ignora acento, caixa e espaço (ativo ausente = ativa)");
+  nulo(DIV.categoria([]), "1. categoria: lista vazia");
+  nulo(DIV.categoria(undefined), "1. categoria: sem lista");
+
+  // ------------------------------------------------------------ recebidos
+  const r = DIV.recebidos([
+    { category_id: "d", competencia: "2025-01-01", valor: "0.1" },
+    { category_id: "d", competencia: "2025-01-01", valor: 0.2 },
+    { category_id: "o", competencia: "2025-01-01", valor: 50 },
+    { category_id: "d", competencia: "2025-03-01", valor: 0 },
+  ], "d");
+  ok(r["2025-01-01"] === 0.3, "2. recebidos: soma o mês e arredonda a 2 casas (0,1 + 0,2 = 0,3 exato)");
+  ok(r["2025-02-01"] === undefined, "2. recebidos: mês sem lançamento fica de fora");
+  ok(r["2025-03-01"] === 0, "2. recebidos: lançamento de valor 0 é zero, não vazio");
+  ok(Object.keys(r).length === 2, "2. recebidos: outra categoria não entra");
+
+  // ------------------------------------------------------------ meses
+  igual(DIV.meses({}, "2025-03-01"), ["2025-03-01"], "3. meses: sem recebido = só o mês corrente");
+  igual(DIV.meses({ "2024-11-01": 1, "2025-02-01": 2 }, "2025-03-01"),
+        ["2024-11-01", "2024-12-01", "2025-01-01", "2025-02-01", "2025-03-01"],
+        "3. meses: do 1o recebido até hoje, com os vazios do meio");
+  igual(DIV.meses({ "2025-01-01": 1, "2025-06-01": 2 }, "2025-03-01").length, 6,
+        "3. meses: recebido depois de hoje estende a lista até ele");
+
+  // ------------------------------------------------------------ linha
+  const rec = serie();
+  let l = DIV.linha("2024-05-01", rec, 400);
+  perto(l.recebido, 260, "4. linha mai/24: recebido");
+  perto(l.dMes, 260 / 250 - 1, "4. linha mai/24: contra o mês anterior");
+  perto(l.dAno, 260 / 140 - 1, "4. linha mai/24: contra mai/23");
+  perto(l.dPlanoRS, -140, "4. linha mai/24: contra o plano em R$");
+  perto(l.dPlanoPct, -0.35, "4. linha mai/24: contra o plano em %");
+  perto(l.soma12, 2080, "4. linha mai/24: 12 meses (jun/23 vazio e fev/24 zero contam 0)");
+  perto(l.media12, 2080 / 12, "4. linha mai/24: média mensal");
+  nulo(l.dSoma12, "4. linha mai/24: sem os 12 anteriores inteiros, sem variação");
+
+  l = DIV.linha("2024-03-01", rec, null);
+  nulo(l.dMes, "4. linha mar/24: mês anterior zero não dá percentual");
+  perto(l.dAno, 1, "4. linha mar/24: 240 contra 120 = +100%");
+  nulo(l.previsto, "4. linha mar/24: fora do plano");
+  nulo(l.dPlanoRS, "4. linha mar/24: sem previsto, sem Δ plano em R$");
+  nulo(l.dPlanoPct, "4. linha mar/24: sem previsto, sem Δ plano em %");
+
+  l = DIV.linha("2024-02-01", rec, 0);
+  perto(l.recebido, 0, "4. linha fev/24: zero lançado é zero");
+  perto(l.dMes, -1, "4. linha fev/24: zero contra 220 = −100%");
+  perto(l.dPlanoRS, 0, "4. linha fev/24: previsto zero, Δ em R$ = 0");
+  nulo(l.dPlanoPct, "4. linha fev/24: previsto zero não dá percentual");
+
+  l = DIV.linha("2023-06-01", rec, 50);
+  nulo(l.recebido, "4. linha jun/23: mês vazio");
+  nulo(l.dMes, "4. linha jun/23: vazio não compara");
+  nulo(l.dPlanoRS, "4. linha jun/23: vazio não compara com o plano");
+  nulo(l.soma12, "4. linha jun/23: vazio não tem 12 meses");
+  nulo(DIV.linha("2023-07-01", rec, 50).dMes, "4. linha jul/23: mês anterior vazio, sem variação");
+
+  l = DIV.linha("2023-12-01", rec);
+  perto(l.soma12, 1710, "4. linha dez/23: janela começa no 1o mês do histórico");
+  nulo(l.previsto, "4. linha dez/23: previsto omitido vira null");
+  nulo(DIV.linha("2023-11-01", rec).soma12, "4. linha nov/23: janela antes do histórico, sem 12 meses");
+  const buraco = serie(); delete buraco["2024-07-01"];
+  nulo(DIV.linha("2024-07-01", buraco).soma12, "4. linha jul/24 vazio: janela cabe, mas mês sem lançamento não tem 12 meses");
+  nulo(DIV.linha("2024-07-01", buraco).media12, "4. linha jul/24 vazio: nem média");
+  perto(DIV.linha("2024-12-01", rec).dSoma12, 3070 / 1710 - 1, "4. linha dez/24: 12 meses contra os 12 anteriores");
+
+  // ------------------------------------------------------------ anos
+  const as = DIV.anos(rec, "2025-02-01");
+  ok(as.length === 3, "5. anos: 2023, 2024 e 2025");
+  perto(as[0].total, 1710, "5. anos: total de 2023");
+  ok(as[0].meses === 11 && as[0].parcial === false, "5. anos: 2023 completo (jan–dez), 11 meses com valor");
+  perto(as[1].total, 3070, "5. anos: total de 2024");
+  ok(as[1].meses === 12 && !as[1].parcial, "5. anos: 2024 com 12 meses (o zero conta como lançado)");
+  ok(as[2].parcial && as[2].meses === 0 && as[2].de === null, "5. anos: 2025 corrente, parcial e sem valor");
+  const as2 = DIV.anos({ "2022-09-01": 10, "2022-12-01": 20, "2023-01-01": 5 }, "2023-03-01");
+  ok(as2[0].parcial && as2[0].de === "2022-09-01" && as2[0].ate === "2022-12-01",
+     "5. anos: 1o ano começa em setembro = parcial, set–dez");
+  perto(as2[0].total, 30, "5. anos: total do ano parcial");
+  ok(as2[1].parcial && as2[1].ate === "2023-01-01", "5. anos: ano corrente parcial");
+  const dez = DIV.anos(serie(), "2024-12-01");
+  ok(dez[1].ano === "2024" && dez[1].parcial, "5. anos: em dezembro o ano corrente ainda é parcial (o mês não acabou)");
+  ok(!dez[0].parcial, "5. anos: o ano anterior completo continua completo");
+
+  // ------------------------------------------------------------ acumulado
+  let ac = DIV.acumulado(rec);
+  ok(ac.ano === "2024" && ac.ate === "2024-12-01", "6. acumulado: até o último mês lançado");
+  perto(ac.total, 3070, "6. acumulado: total do ano");
+  perto(ac.totalAnt, 1710, "6. acumulado: mesmos meses do ano anterior");
+  perto(ac.d, 3070 / 1710 - 1, "6. acumulado: variação");
+  ac = DIV.acumulado({ "2024-01-01": 3, "2024-02-01": 5, "2024-03-01": 7, "2024-09-01": 10,
+                       "2025-01-01": 30, "2025-02-01": 40, "2025-03-01": 50 });
+  perto(ac.total, 120, "6. acumulado: jan–mar/25");
+  perto(ac.totalAnt, 15, "6. acumulado: jan–mar/24 (setembro fica de fora)");
+  perto(ac.d, 7, "6. acumulado: +700%");
+  ac = DIV.acumulado({ "2022-09-01": 10, "2022-12-01": 20, "2023-01-01": 5 });
+  ok(ac.totalAnt === null && ac.d === null, "6. acumulado: histórico não cobre janeiro do ano anterior, sem comparação");
+  perto(ac.total, 5, "6. acumulado: ainda dá o total do ano");
+  nulo(DIV.acumulado({}), "6. acumulado: sem recebido");
+
+  // ------------------------------------------------------------ lerPlanilha
+  const p = DIV.lerPlanilha([
+    { nome: "Resumo", linhas: [["Liquidação", "Valor"], ["2025-01-05", 999]] },
+    { nome: "Lançamento", linhas: [
+      [null, null, null, null, null],
+      ["Mês", "Movimentação", "Liquidação", "Lançamento", "Valor (R$)"],
+      ["2025-01-01", "2025-01-10", "2025-01-10", "DIV X", 10.5],
+      ["2025-01-01", "2025-01-20", "2025-01-21", "DIV Y", 4.25],
+      ["2025-02-01", "2025-02-03", null, "sem liquidação", 3],
+      ["2025-02-01", "2025-02-03", "2025-02-03", "sem valor", null],
+      [null, null, null, null, null],
+      ["x", "texto", "texto", "x", 5],
+      ["2025-03-01", "2025-03-01", "2025-03-01", null, 0.1],
+      ["2025-03-01", "2025-03-01", "2025-03-01", null, 0.2],
+    ] },
+  ]);
+  ok(p.ok && p.aba === "Lançamento", "7. planilha: a aba Lançamento vem antes de outra com as mesmas colunas");
+  igual(p.meses, [{ comp: "2025-01-01", valor: 14.75, n: 2 }, { comp: "2025-02-01", valor: 3, n: 1 },
+                  { comp: "2025-03-01", valor: 0.3, n: 2 }],
+        "7. planilha: soma por mês da Liquidação (cai para a Movimentação quando falta)");
+  ok(p.ignoradas === 2, "7. planilha: linha sem valor e linha de texto são ignoradas; linha em branco não conta");
+  const c = DIV.lerPlanilha([{ nome: "csv", linhas: [
+    ["Liquidação", "Valor (R$)"], ["05/01/2025", "1.234,56"], ["5/1/2025", "R$ 10,00"], ["31/01/2025", "abc"]] }]);
+  igual(c.meses, [{ comp: "2025-01-01", valor: 1244.56, n: 2 }], "7. planilha: CSV com data dd/mm/aaaa e número 1.234,56");
+  ok(c.ignoradas === 1, "7. planilha: CSV com valor ilegível ignorado");
+  igual(DIV.lerPlanilha([{ nome: "csv", linhas: [["Liquidação", "Valor"], ["05/01/2025", "1.234"],
+                                                    ["06/01/2025", "1,234.56"]] }]).meses,
+        [{ comp: "2025-01-01", valor: 2468.56, n: 2 }], "7. planilha: CSV com milhar sem centavos (1.234) e formato americano (1,234.56)");
+  ok(DIV.lerPlanilha([{ nome: "X", linhas: [["a", "b"], [1, 2]] }]).ok === false, "7. planilha: sem as colunas = não ok");
+  ok(DIV.lerPlanilha([]).ok === false, "7. planilha: sem abas = não ok");
+
+  // ------------------------------------------------------------ planoImportacao
+  const pi = DIV.planoImportacao([{ comp: "2025-01-01", valor: 10 }, { comp: "2025-02-01", valor: -1 },
+                                  { comp: "2025-03-01", valor: 0 }], { "2025-01-01": 5 });
+  igual(pi.criar, [{ comp: "2025-03-01", valor: 0 }], "8. importação: cria só o mês que não existe");
+  igual(pi.mantidos, ["2025-01-01"], "8. importação: mês com lançamento é mantido");
+  igual(pi.negativos, ["2025-02-01"], "8. importação: total negativo fica de fora");
+
+  // ------------------------------------------------------------ acaoCelula
+  ok(DIV.acaoCelula([], 10) === "criar", "9. célula: mês vazio + valor = criar");
+  ok(DIV.acaoCelula([], null) === "nada", "9. célula: mês vazio + campo apagado = nada");
+  ok(DIV.acaoCelula([{ valor: "10.00" }], 10.001) === "nada", "9. célula: mesmo valor = nada");
+  ok(DIV.acaoCelula([{ valor: 10 }], 12) === "alterar", "9. célula: um lançamento + valor novo = alterar");
+  ok(DIV.acaoCelula([{ valor: 10 }], 0) === "alterar", "9. célula: zero é valor, não apaga");
+  ok(DIV.acaoCelula([{ valor: 10 }], null) === "apagar", "9. célula: um lançamento + campo apagado = apagar");
+  ok(DIV.acaoCelula([{}, {}], 5) === "lista" && DIV.acaoCelula([{}, {}], null) === "lista",
+     "9. célula: dois lançamentos = abre a lista");
+
+  // ------------------------------------------------------------ numero (o que se digita na célula)
+  const casosNum = [["1.300", 1300], ["1.300,50", 1300.5], ["1300,5", 1300.5], ["1300", 1300], ["R$ 1.234,56", 1234.56],
+                    ["12.345.678", 12345678], ["1,234.56", 1234.56], ["0,99", 0.99], ["1.5", 1.5], ["10.25", 10.25],
+                    [" 7 ", 7], [42, 42]];
+  for (const [t, esp] of casosNum) perto(DIV.numero(t), esp, `10. número: "${t}"`);
+  for (const t of ["abc", "", "1,2,3", null, undefined, NaN]) nulo(DIV.numero(t), `10. número ilegível: ${JSON.stringify(t)}`);
+}
+
+// id estavel do "total do mes": async (crypto.subtle)
+async function casosAsync(){
+  const a = await DIV.idDoMes("cat-1", "2025-01-01"), b = await DIV.idDoMes("cat-1", "2025-01-01");
+  ok(a === b, "11. id do mês: o mesmo mês dá o mesmo id (gravar de novo cai no mesmo registro)");
+  ok(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(a), "11. id do mês: formato de UUID (" + a + ")");
+  ok(a !== await DIV.idDoMes("cat-1", "2025-02-01"), "11. id do mês: outro mês, outro id");
+  ok(a !== await DIV.idDoMes("cat-2", "2025-01-01"), "11. id do mês: outra categoria, outro id");
+}
+
+(async function(){
+  try {
+    const html = await (await fetch("../index.html?v=" + Date.now())).text();
+    const m = html.match(/\/\*<dividendos>\*\/([\s\S]*?)\/\*<\/dividendos>\*\//);
+    if (!ok(!!m, "bloco <dividendos> encontrado no index.html")) return fim();
+    (0, eval)(m[1]);
+    casos();
+    await casosAsync();
+  } catch (e){ ok(false, "erro: " + e.message + "\n" + e.stack); }
+  fim();
+})();
+</script>

@@ -32,12 +32,17 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CATS = [("cat1", "Pró-labore", "receita", "Trabalho", 1),
         ("cat2", "Rendimentos", "receita", "Investimentos", 2),
         ("cat3", "Apartamento", "despesa", "Moradia", 3),
-        ("cat4", "Viagens", "despesa", "Viagens", 4)]
+        ("cat4", "Viagens", "despesa", "Viagens", 4),
+        ("cat5", "Dividendos", "receita", "Investimentos", 5)]
 # categorias calculadas por regra depois do ultimo mes apurado
-CALCULADAS = {"cat2": "pct_saldo"}
+CALCULADAS = {"cat2": "pct_saldo", "cat5": "crescimento"}
 REGRAS = [("r-ren-1", "cat2", 0.009, "2026-09-01", "2026-12-01"),
           ("r-ren-2", "cat2", 0.0075, "2027-01-01", None)]
-PREVISTO = {"cat1": 21000.0, "cat2": 4200.0, "cat3": 6800.0, "cat4": 900.0}
+PREVISTO = {"cat1": 21000.0, "cat2": 4200.0, "cat3": 6800.0, "cat4": 900.0, "cat5": 1150.0}
+# Dividendos: cresce 0,4% ao mes depois do ultimo mes apurado
+REGRA_DIV = {"id": "r-div-1", "category_id": "cat5", "tipo": "crescimento", "valor": 1200.0,
+             "percentual": 0.004, "mes": None, "inicio": "2026-09-01", "fim": None,
+             "reajuste_pct": None, "reajuste_mes": None, "obs": "seed", "ativo": True}
 
 CONTAS = [("a1", "Conta corrente", "corrente", 1),
           ("a2", "CDB Itaú", "investimento", 2),
@@ -66,6 +71,23 @@ def competencias(ini, fim):
         mes += 1
         if mes > 12:
             mes, ano = 1, ano + 1
+    return out
+
+
+def dividendos():
+    """Lancamentos da aba Dividendos: 03/2024 a 09/2026, com 02/2025 sem
+    lancamento (mes vazio no meio) e 05/2026 em DOIS lancamentos (a celula
+    tem de abrir a lista em vez de editar)."""
+    out = []
+    for i, c in enumerate(competencias("2024-03", "2026-09")):
+        if c == "2025-02-01":
+            continue
+        v = round(700 + 17.31 * i + (90 if i % 3 == 2 else 0), 2)
+        partes = [round(v / 2, 2), round(v - round(v / 2, 2), 2)] if c == "2026-05-01" else [v]
+        for k, p in enumerate(partes):
+            out.append({"id": "e-div-%s-%d" % (c, k), "data": c, "competencia": c,
+                        "category_id": "cat5", "account_id": None, "valor": p,
+                        "descricao": "Total do mês" if len(partes) == 1 else "Parte %d" % (k + 1)})
     return out
 
 
@@ -106,8 +128,8 @@ def main():
         "fin_rules": [{"id": i, "category_id": cat, "tipo": "pct_saldo", "valor": None,
                        "percentual": pct, "mes": None, "inicio": ini, "fim": fim,
                        "reajuste_pct": None, "reajuste_mes": None, "obs": "seed", "ativo": True}
-                      for i, cat, pct, ini, fim in REGRAS],
-        "fin_entries": [],
+                      for i, cat, pct, ini, fim in REGRAS] + [REGRA_DIV],
+        "fin_entries": dividendos(),
         "fin_installments": [{"id": "i-sofa", "category_id": "cat3", "descricao": "Sofá da sala",
                               "valor": 450.0, "inicio": "2026-10-01", "parcelas": 10,
                               "obs": "Sofá da sala", "ativo": True}],

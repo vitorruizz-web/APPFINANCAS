@@ -194,6 +194,32 @@ este valor até o fim".
 
 O cálculo mora no bloco `/*<simulacao>*/` (função pura, `tests/test_simulacao.html`).
 
+## Dividendos
+
+Aba própria com o que entrou de dividendos em cada mês. **Não há tabela nova:** o
+recebido do mês é a soma dos lançamentos (`fin_entries`) da categoria de receita
+**Dividendos** — por isso ele aparece sozinho como apurado de Dividendos na aba Mês, e o
+previsto vem do plano (regras incluídas). Mês sem lançamento é vazio; lançamento 0 é zero.
+
+- **Destaque do mês escolhido:** contra o mês anterior, contra o mesmo mês do ano
+  anterior e contra o previsto no plano; últimos 12 meses (soma, média, variação contra
+  os 12 anteriores).
+- **Gráfico:** barras ouro = recebido, traço tiffany = previsto. Um eixo só — a variação %
+  fica no destaque e na tabela. Toque, arrasto ou setas escolhem o mês.
+- **Ano contra ano:** total de cada ano (ano parcial marcado) e o acumulado do ano contra
+  os mesmos meses do ano anterior.
+- **Tabela** (cabeçalho preso, mais recente no topo): a célula *Recebido* lança o mês.
+  Sem lançamento → cria um "Total do mês"; com um → altera ou apaga (campo vazio); com
+  dois ou mais → abre a lista do mês, porque não dá para adivinhar qual mudar.
+- **Importar planilha:** lê a aba *Lançamento* pelas colunas *Liquidação* e *Valor*, soma
+  por mês e mostra o resumo antes de gravar. Mês que já tem lançamento fica como está —
+  importar de novo não duplica.
+
+Com 7 abas, o nome da aba ativa não cabe em todo celular: `ajustarNav()` **mede** a barra
+e só onde não couber deixa a aba ativa com o ícone.
+
+O cálculo mora no bloco `/*<dividendos>*/` (função pura, `tests/test_dividendos.html`).
+
 ## Rodar os testes
 
 ```bash
@@ -201,6 +227,7 @@ python -m http.server 8765
 # abrir http://localhost:8765/tests/test_motor.html        -> "TUDO PASSOU"
 # abrir http://localhost:8765/tests/test_vencimentos.html  -> "TUDO PASSOU"
 # abrir http://localhost:8765/tests/test_simulacao.html    -> "TUDO PASSOU"
+# abrir http://localhost:8765/tests/test_dividendos.html   -> "TUDO PASSOU"
 # abrir http://localhost:8765/tests/test_pluggy_funcao.html -> "TUDO PASSOU" (a Edge Function com Deno e Pluggy falsos)
 ```
 
