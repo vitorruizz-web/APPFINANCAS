@@ -410,22 +410,37 @@ nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-wi
   stroke-linecap:round;stroke-linejoin:round}
 
 /* ---------------- tabela do plano ---------------- */
-.tabwrap{overflow-x:auto;max-width:100%;margin-top:10px;-webkit-overflow-scrolling:touch;
-  border:1px solid var(--line);border-radius:var(--r)}
+/* A caixa rola nas DUAS direcoes, como o "congelar paineis" do Excel. Com
+   overflow-x:auto ela ja era o contexto do sticky do cabecalho; mas, sem
+   altura maxima, nunca rolava na vertical -- quem rolava era a pagina, e os
+   titulos das colunas iam embora junto. A altura cabe entre a barra do topo
+   e a barra de abas. */
+.tabwrap{overflow:auto;max-width:100%;margin-top:10px;-webkit-overflow-scrolling:touch;
+  border:1px solid var(--line);border-radius:var(--r);
+  max-height:calc(100vh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height:calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  scroll-padding-top:34px}
 table.plano{border-collapse:collapse;font-size:12.5px;white-space:nowrap;width:100%}
 table.plano th,table.plano td{padding:7px 11px;text-align:right;border-bottom:1px solid var(--line)}
 table.plano th:first-child,table.plano td:first-child{
   text-align:left;position:sticky;left:0;background:var(--bg);z-index:1;
   border-right:1px solid var(--line);
 }
+/* com border-collapse a borda e da TABELA, nao da celula: ela nao acompanha o
+   cabecalho preso. A linha de baixo vem da sombra. */
 table.plano thead th{color:var(--ink-3);font-weight:500;font-size:11px;
-  background:var(--surface);position:sticky;top:0;z-index:2}
+  background:var(--surface);position:sticky;top:0;z-index:2;
+  border-bottom:0;box-shadow:inset 0 -1px 0 var(--line-2)}
 table.plano thead th:first-child{z-index:3;background:var(--surface)}
 table.plano thead th.rec{color:var(--tif)}
 table.plano thead th.des{color:var(--ink-3)}
 table.plano tr.sep td{background:var(--raised);color:var(--ink-3);font-size:11px;
   padding:5px 11px;letter-spacing:.04em}
+/* a celula do ano ocupa a linha inteira e rola junto; so o rotulo fica preso */
+table.plano tr.sep td span{position:sticky;left:11px}
 table.plano tr.agora td{background:var(--sand-g)}
+/* a 1a coluna e presa: com o fundo translucido, os numeros passariam por baixo dela */
+table.plano tr.agora td:first-child{background:linear-gradient(var(--sand-g),var(--sand-g)),var(--bg)}
 table.plano td.z{color:var(--ink-4)}
 table.plano td.forte{color:var(--ink)}
 table.plano .colsep{border-left:1px solid var(--line-2)}
@@ -5603,7 +5618,7 @@ function renderPlano(){
   let ano = "";
   for (const m of proj){
     const a = m.competencia.slice(0,4);
-    if (a !== ano){ ano = a; h += '<tr class="sep"><td colspan="' + nCols + '">' + a + '</td></tr>'; }
+    if (a !== ano){ ano = a; h += '<tr class="sep"><td colspan="' + nCols + '"><span>' + a + '</span></td></tr>'; }
     const d = m.diferenca;
     h += '<tr' + (m.competencia===hoje?' class="agora"':'') + '><td>' + rotulo(m.competencia) + '</td>' +
       cols.map(c => {
@@ -5624,6 +5639,11 @@ function renderPlano(){
   }
   h += '</tbody></table>';
 
+  // a tabela rola por dentro: sem guardar a posicao, todo redesenho (gravar uma
+  // celula, a sincronizacao em segundo plano) a devolveria para o primeiro mes
+  const caixa = document.getElementById("plano-tab");
+  const rolagem = caixa ? [caixa.scrollLeft, caixa.scrollTop] : null;
+
   el.innerHTML = avisoTravado() + blocoSimulacoes() +
     '<div class="hdr"><h2>Plano completo</h2>' +
       '<button class="btn mini plain xls" data-x="plano">Excel</button>' +
@@ -5632,7 +5652,7 @@ function renderPlano(){
           '<button data-m="' + k + '"' + (k===modo?' class="on"':'') + '>' +
           ({totais:"Totais",grupos:"Grupos",categorias:"Categorias"})[k] + '</button>').join("") +
       '</span></div>' +
-    '<div class="tabwrap">' + h + '</div>' +
+    '<div class="tabwrap" id="plano-tab">' + h + '</div>' +
     '<div class="hdr"><h2>Compromissos parcelados</h2><span class="aux">somam por cima do plano</span></div>' +
     '<div class="rule"></div>' + listaCompromissos() +
     '<div class="acoes"><button class="btn" id="novo-comp">Novo compromisso</button></div>' +
@@ -5641,6 +5661,7 @@ function renderPlano(){
     '<div class="acoes"><button class="btn" id="nova-regra">Nova regra</button>' +
     '<button class="btn plain" id="mais12">Estender 12 meses</button></div>';
 
+  if (rolagem){ const c = document.getElementById("plano-tab"); c.scrollLeft = rolagem[0]; c.scrollTop = rolagem[1]; }
   ligarEdicaoTabela(el);
   ligarSimulacoes(el);
   el.querySelectorAll("#seg-modo button").forEach(b => b.onclick = async () => {
@@ -5691,16 +5712,15 @@ function editarNaTabela(td){
     try {
       await definirPlano(comp, cat, v);
       tremer();
-      const rolagem = el2().scrollLeft, alto = window.scrollY;
+      // a posicao DENTRO da tabela o renderPlano guarda sozinho
+      const alto = window.scrollY;
       render();
-      const box = el2(); if (box) box.scrollLeft = rolagem;
       window.scrollTo(0, alto);
       const alvo = document.querySelector('td.ed[data-comp="' + comp + '"][data-cat="' + cat + '"]');
       if (alvo){ alvo.classList.add("salvo"); setTimeout(() => alvo.classList.remove("salvo"), 800); }
       if (seguir) abrirProxima(comp, cat);
     } catch(e){ td.textContent = textoAntes; }
   };
-  const el2 = () => document.querySelector("#s-plano .tabwrap");
   inp.addEventListener("blur", () => encerra(true, false));
   inp.addEventListener("keydown", ev => {
     if (ev.key === "Enter"){ ev.preventDefault(); encerra(true, true); }
