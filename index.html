@@ -23,7 +23,8 @@
 :root{
   --bg:#0A0D11; --surface:#11151A; --raised:#181D24; --sunken:#070A0D;
   --line:#1E252E; --line-2:#2A333F;
-  --ink:#E9ECF0; --ink-2:#98A3B0; --ink-3:#5E6874; --ink-4:#3D454F;
+  --ink:#E9ECF0; --ink-2:#9AA5B2; --ink-3:#75808D; --ink-4:#3D454F;
+  --panel:#12171D;
 
   --tif:#3ECFC8;   --tif-d:#17706B;  --tif-g:rgba(62,207,200,.10);
   --steel:#6E93C4;  --steel-d:#2B4463; --steel-g:rgba(110,147,196,.10);
@@ -31,7 +32,7 @@
   --ouro:#F0C24A;   --ouro-2:#F7DA8B;  --ouro-3:#C89A2E;
   --clay:#D2605C;   --clay-g:rgba(210,96,92,.10);
 
-  --pad:18px; --r:10px;
+  --pad:18px; --r:12px;
   --sans:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
 }
@@ -57,7 +58,8 @@ button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
 .serif{font-family:var(--serif);font-weight:400}
 .pos{color:var(--tif)} .neg{color:var(--clay)} .abr{color:var(--sand)}
 .d2{color:var(--ink-2)} .d3{color:var(--ink-3)}
-.t11{font-size:11px} .t12{font-size:12px} .t13{font-size:13px}
+/* piso de 12 px: nada menor que isso e texto para ler */
+.t11{font-size:12px} .t12{font-size:12px} .t13{font-size:13px}
 
 /* ---------------- moldura ---------------- */
 /* a altura do cabecalho e fixa (--top-h): o navegador de mes se prende logo
@@ -95,6 +97,8 @@ main{padding:0 var(--pad) calc(86px + env(safe-area-inset-bottom));max-width:760
   #s-resumo > .col-a{grid-column:1}
   #s-resumo > .col-b{grid-column:2}
   #s-resumo > .col-b .hdr:first-child{margin-top:20px}
+  /* Mes (Receitas | Saidas) e Contas (lista | grafico) em duas colunas */
+  .duas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 40px;align-items:start}
 }
 section{display:none} section.on{display:block}
 /* A troca de aba responde ao toque e diz a DIRECAO: vindo da direita ou da
@@ -117,14 +121,14 @@ nav button:active{transform:scale(.94)}
 
 .hdr{
   display:flex;align-items:baseline;justify-content:space-between;gap:10px;
-  margin:30px 0 12px;flex-wrap:wrap;
+  margin:28px 0 10px;flex-wrap:wrap;
 }
-/* o titulo de secao e um marco para o olho: na cor do texto, um degrau acima
+/* o titulo de secao e um marco para o olho: na cor do texto, dois degraus acima
    do corpo -- antes era menor e mais apagado que os numeros abaixo dele */
-.hdr h2{font-size:15px;font-weight:600;margin:0;color:var(--ink);letter-spacing:-.005em;
+.hdr h2{font-size:17px;font-weight:600;margin:0;color:var(--ink);letter-spacing:-.01em;
   white-space:nowrap;flex:none}
 .hdr .seg{margin-left:auto}
-.hdr .aux{font-size:11.5px;color:var(--ink-3)}
+.hdr .aux{font-size:12.5px;color:var(--ink-3)}
 .rule{height:1px;background:var(--line);margin:0 0 6px}
 
 /* ---------------- barra de destinos ----------------
@@ -144,7 +148,7 @@ body.nav-off nav{transform:translateY(110%);opacity:0}
 nav button{
   flex:1 1 0;max-width:124px;min-width:0;position:relative;
   display:flex;flex-direction:column;align-items:center;gap:3px;
-  padding:8px 2px 5px;border-radius:10px;font-size:11px;line-height:1.2;
+  padding:8px 2px 5px;border-radius:10px;font-size:11.5px;line-height:1.2;
   color:var(--ink-3);white-space:nowrap;
   transition:color .18s, background .18s;
 }
@@ -180,57 +184,43 @@ nav button.on svg{stroke-width:1.9}
 .arco{margin:14px 0 0;position:relative}
 .arco svg{display:block;width:100%;height:auto}
 .arco .marca{
-  position:absolute;bottom:4px;font-size:10.5px;color:var(--ink-3);
+  position:absolute;bottom:4px;font-size:11.5px;color:var(--ink-3);
   transform:translateX(-50%);white-space:nowrap;pointer-events:none;
   text-shadow:0 1px 3px var(--bg), 0 0 6px var(--bg);
 }
-.hero{padding:20px 0 0;display:grid;gap:20px}
+.hero{padding:22px 0 0;display:grid;gap:20px}
+/* um numero-heroi por pagina, serifado; tudo o mais e sans. Sem tabular-nums
+   aqui: digitos de largura igual deixam o "1" solto num numero grande. */
+.hero .k-hero{font-size:12.5px;color:var(--ink-2);margin-bottom:8px}
 .hero .val{
-  font-family:var(--serif);font-size:clamp(40px,12vw,58px);line-height:.92;
-  letter-spacing:-.018em;display:flex;align-items:baseline;gap:.1em;
+  font-family:var(--serif);font-size:clamp(40px,11vw,48px);line-height:.95;
+  letter-spacing:-.015em;display:flex;align-items:baseline;gap:.12em;font-variant-numeric:normal;
 }
-.hero .cur{font-size:.32em;color:var(--ink-3);letter-spacing:.03em}
-.hero .cap{color:var(--ink-3);font-size:12.5px;margin-top:10px;line-height:1.5}
-.hero .cap b{color:var(--ink-2);font-weight:500}
-/* os fatos se separam por FIO, nao por caixa: a estrutura carrega a informacao */
+.hero .cur{font-size:.36em;color:var(--ink-3);letter-spacing:.03em}
+.hero .cap{color:var(--ink-2);font-size:13.5px;margin-top:8px;line-height:1.5}
+.hero .cap b{color:var(--ink);font-weight:500}
+/* ---- painel de situacao ----
+   Os numeros que resumem a pagina ficam juntos, num unico quadro: tres ou
+   quatro caixas com rotulo, valor e um detalhe embaixo, e uma linha de pe para
+   o que e texto. E o mesmo componente em todas as abas. As bordas internas vem
+   de cada caixa (em cima e a esquerda) e as da primeira fila/coluna somem sob
+   o recorte do quadro. */
 .fatos{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  border-top:1px solid var(--line);
+  display:flex;flex-wrap:wrap;
+  margin-top:16px;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r);overflow:hidden;
 }
-.agora{
-  margin-top:18px;padding:15px 0 16px;
-  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
-}
-.agora .k{font-size:11.5px;color:var(--ink-3);margin-bottom:6px}
-.agora .v{font-size:22px;letter-spacing:-.015em;display:flex;align-items:baseline;
-  gap:9px;flex-wrap:wrap}
-.agora .v .pos,.agora .v .neg{font-size:15px;font-weight:600}
-.agora .v .d3{font-size:13px}
-.agora .sep{color:var(--ink-4)}
-.fatos.anos{border-top:0;grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
-.fatos.anos .fato{padding-top:2px}
-.fatos.anos .fato .v{font-size:14.5px}
-@media (max-width:520px){
-  .fatos.anos{grid-template-columns:repeat(3,1fr);gap:0}
-  /* :first-child precisa repetir o padding-top, senao herda os 14px da regra
-     geral de .fatos e o primeiro ano desalinha dos outros dois */
-  .fatos.anos .fato,
-  .fatos.anos .fato:first-child{border-top:0;padding:2px 0 0 12px}
-  .fatos.anos .fato{border-left:1px solid var(--line)}
-  .fatos.anos .fato:first-child{border-left:0;padding-left:0}
-  .fatos.anos .fato .v{font-size:13px}
-  .fatos.anos .fato .k{font-size:10.5px}
-}
-.fato{padding:14px 0 0;border-left:1px solid var(--line);padding-left:16px}
-.fato:first-child{border-left:0;padding-left:0}
-.fato .k{font-size:11px;color:var(--ink-3);margin-bottom:4px}
-.fato .v{font-size:15.5px;letter-spacing:-.01em}
-.fato .v small{font-size:12px;color:var(--ink-3);font-weight:400}
-@media (max-width:520px){
-  .fatos > .fato{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:12px}
-  .fatos > .fato:first-child{border-top:0;padding-top:14px}
-  .fatos{grid-template-columns:1fr;gap:12px}
-}
+/* cada caixa cresce para dividir a linha por igual; no celular cabem duas por
+   linha e a terceira, sozinha, ocupa a linha inteira */
+.fato{flex:1 1 150px;padding:13px 14px 12px;border-left:1px solid var(--line);border-top:1px solid var(--line);
+  margin:-1px 0 0 -1px;min-width:0}
+@media (min-width:1000px){ .fato{flex-basis:200px} }
+.fato .k{font-size:12px;color:var(--ink-3);margin-bottom:5px;line-height:1.3}
+.fato .v{font-size:16px;font-weight:500;letter-spacing:-.01em;line-height:1.3;overflow-wrap:anywhere}
+.fato .v small{display:block;font-size:12px;color:var(--ink-3);font-weight:400;margin-top:2px;letter-spacing:0}
+.fatos .pe{flex:1 1 100%;border-top:1px solid var(--line);padding:9px 14px;font-size:12.5px;
+  color:var(--ink-2);display:flex;gap:6px 16px;flex-wrap:wrap;line-height:1.5}
+.fatos .pe b{color:var(--ink);font-weight:500}
 
 .nota{
   margin:22px 0 0;padding:15px 16px;border-radius:var(--r);
@@ -241,17 +231,10 @@ nav button.on svg{stroke-width:1.9}
 .nota b{color:var(--ink);font-weight:600}
 .nota.fria{border-left-color:var(--steel)}
 
-.kpis{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
-  border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:20px}
-.kpi{background:var(--surface);padding:14px 15px}
-.kpi .k{font-size:11.5px;color:var(--ink-3);margin-bottom:5px}
-.kpi .v{font-size:16px}
-.kpi.wide{grid-column:1/-1}
-
 .grafwrap{margin:6px 0 4px}
 .grafwrap svg{width:100%;height:auto;display:block}
 .legenda{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px;
-  font-size:11px;color:var(--ink-3)}
+  font-size:12px;color:var(--ink-3)}
 .legenda span{display:inline-flex;align-items:center;gap:6px}
 .legenda i{width:12px;height:10px;border-radius:2px;display:inline-block}
 .legenda .sw-bar{background:var(--tif);opacity:.62}
@@ -314,77 +297,59 @@ nav button.on svg{stroke-width:1.9}
 .cb-trilha{height:6px;border-radius:3px;background:var(--sunken);overflow:hidden}
 .cb-fill{height:100%;border-radius:3px;min-width:3px}
 .cel.dupla{display:flex;flex-direction:column;align-items:flex-end;gap:1px;
-  line-height:1.25;font-size:13.5px;width:auto;padding:5px 0}
+  line-height:1.25;font-size:13.5px;width:auto;padding:5px 0;border:0;background:none}
 .cel.dupla b{font-weight:400}
 .legenda b{font-weight:500}
 
-/* --- a régua: 48 meses, valor EXATO, com a trilha embaixo --- */
-.regua{margin-top:2px}
-.ano{
-  display:flex;align-items:center;gap:12px;margin:24px 0 4px;
-  font-size:11.5px;color:var(--ink-3);letter-spacing:.04em;
-}
-.ano::after{content:"";flex:1;height:1px;background:var(--line)}
-.ano em{font-style:normal;color:var(--ink-4);letter-spacing:0}
-.mrow{
-  display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:baseline;
-  width:100%;padding:10px 6px;border-radius:7px;position:relative;
-  border-bottom:1px solid var(--line); transition:background .15s;
-}
-.mrow:last-child{border-bottom:0}
-.mrow:hover{background:var(--surface)}
-.mrow.agora{background:var(--sand-g);box-shadow:inset 2px 0 0 var(--sand)}
-.mrow .mes{font-size:11.5px;color:var(--ink-3)}
-.mrow.agora .mes{color:var(--sand)}
-.mrow .dif{font-size:12px;text-align:left}
-.mrow .num{font-size:14px;text-align:right;letter-spacing:-.01em}
-.mrow .num.aberto{color:var(--ink-2)}
-.trilha{
-  grid-column:1/-1;height:3px;margin:7px 0 0;border-radius:2px;
-  background:var(--line);position:relative;overflow:visible;
-}
-.trilha i{position:absolute;left:0;top:0;height:100%;border-radius:2px;display:block}
-.trilha .fill{background:var(--tif)}
-.trilha .fill.plano{background:var(--steel);opacity:.5}
-.trilha .tick{
-  position:absolute;top:-3px;width:2px;height:9px;border-radius:1px;
-  background:var(--steel);opacity:.95;
-}
+/* --- os 12 meses do ano: a mesma tabela do Plano, compacta, sem coluna presa --- */
+.regua{margin-top:6px}
+table.plano.compacta th,table.plano.compacta td{padding:9px 8px}
+table.plano.compacta th:first-child,table.plano.compacta td:first-child{position:static;background:none;border-right:0;color:var(--ink-2)}
+table.plano.compacta tr.agora td:first-child{background:var(--sand-g);color:var(--sand)}
+table.plano.compacta td small{display:block;font-size:11.5px;font-weight:400;opacity:.85}
+table.plano.compacta tr[data-comp]{cursor:pointer}
+table.plano.compacta tr[data-comp]:hover td{background:var(--surface)}
+table.plano.compacta tr[data-comp]:focus-visible{outline:2px solid var(--steel);outline-offset:-2px}
 
 /* ---------------- listas ---------------- */
+/* o grupo e uma faixa, com a soma a direita: antes era uma linha fina de 11 px
+   que o olho pulava */
 .grupo{
-  display:flex;align-items:center;gap:10px;margin:22px 0 2px;
-  font-size:11.5px;color:var(--ink-3);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 2px;
+  padding:7px 10px;border-radius:8px;background:var(--surface);
+  font-size:12.5px;font-weight:500;color:var(--ink-2);
 }
-.grupo::after{content:"";flex:1;height:1px;background:var(--line)}
-.grupo .soma{color:var(--ink-4);font-size:11px}
+.grupo .soma{color:var(--ink-3);font-size:12.5px;font-weight:400;margin-left:auto}
 
 .lrow{
-  display:grid;grid-template-columns:1fr auto 112px;gap:10px;align-items:center;
-  padding:7px 0;border-bottom:1px solid var(--line);
+  display:grid;grid-template-columns:1fr auto 120px;gap:10px;align-items:center;
+  padding:6px 0;border-bottom:1px solid var(--line);
 }
 .lrow:last-child{border-bottom:0}
 .lrow .nm{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   display:flex;align-items:center;gap:6px}
 .lrow button.nm:hover{color:var(--steel)}
-.lrow .nm .fx{color:var(--steel);font-size:11px}
-.lrow .rl{font-size:11.5px;color:var(--ink-3);text-align:right;white-space:nowrap}
+.lrow .nm .fx{color:var(--steel);font-size:12px;font-family:var(--serif);font-style:italic}
+.lrow .rl{font-size:12.5px;color:var(--ink-3);text-align:right;white-space:nowrap}
 .lrow .rl b{color:var(--tif);font-weight:500}
 .parc{
   grid-column:1/-1;display:flex;gap:8px;align-items:baseline;flex-wrap:nowrap;
-  font-size:11.5px;color:var(--ink-3);padding:0 0 5px 4px;
+  font-size:12px;color:var(--ink-3);padding:0 0 5px 4px;
 }
 .parc .pn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .parc em{font-style:normal;color:var(--sand);flex:none}
 .parc .pv{margin-left:auto;flex:none}
 
+/* o campo parece campo: caixa, borda, fundo afundado. Antes era texto solto e
+   nada dizia que dava para editar. Tracejado = valor que vem de regra. */
 .cel{
-  border:1px solid transparent;border-radius:6px;padding:5px 8px;text-align:right;
-  width:112px;background:transparent;font-size:14.5px;letter-spacing:-.01em;
+  border:1px solid var(--line-2);border-radius:8px;padding:9px 10px;text-align:right;
+  width:120px;background:var(--sunken);font-size:15px;letter-spacing:-.01em;
   transition:border-color .15s, background .15s;
 }
-.cel:hover{border-color:var(--line-2)}
-.cel:focus{border-color:var(--steel);background:var(--raised);outline:none}
+.cel:hover{border-color:var(--ink-4)}
+.cel:focus{border-color:var(--tif);background:var(--raised);outline:none}
+span.cel{border-color:transparent;background:none}
 /* No toque o campo tinha 33px de altura -- 11px abaixo do minimo de alvo, e
    errar o campo era rotina. Aqui ele ocupa a linha inteira; a borda so aparece
    no foco, entao visualmente nada muda. */
@@ -394,7 +359,7 @@ nav button.on svg{stroke-width:1.9}
   .lrow .nm{min-height:44px}
 }
 .cel.zero{color:var(--ink-4)}
-.cel.calc{color:var(--steel)}
+.cel.calc{color:var(--steel);border-style:dashed}
 
 .row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}
@@ -447,15 +412,31 @@ nav button.on svg{stroke-width:1.9}
 
 /* o navegador de mes fica preso abaixo do cabecalho: a lista do mes e longa e
    trocar de mes nao pode exigir voltar ao topo */
-.mnav{display:flex;align-items:center;gap:12px;margin:0 calc(-1 * var(--pad)) 2px;
-  padding:14px var(--pad) 10px;position:sticky;top:calc(var(--top-h) + env(safe-area-inset-top));
+.mnav{display:flex;align-items:center;gap:10px;margin:0 calc(-1 * var(--pad)) 2px;
+  padding:12px var(--pad) 10px;position:sticky;top:calc(var(--top-h) + env(safe-area-inset-top));
   z-index:30;background:rgba(10,13,17,.92);backdrop-filter:blur(12px) saturate(1.3)}
-.mnav .lbl{flex:1;text-align:center;font-size:16px;font-family:var(--serif);font-size:20px}
-.mnav button{width:38px;height:38px;border:1px solid var(--line-2);border-radius:50%;
+.mnav .seta{width:38px;height:38px;flex:none;border:1px solid var(--line-2);border-radius:50%;
   background:var(--surface);color:var(--ink-2);display:grid;place-items:center}
-.mnav button:hover{background:var(--raised);color:var(--ink)}
-.mnav svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;
+.mnav .seta:hover{background:var(--raised);color:var(--ink)}
+/* o nome do mes e um botao: abre a grade de meses (ir longe sem tocar oito vezes) */
+.mnav .mes{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;
+  font-family:var(--serif);font-size:22px;line-height:1.1;color:var(--ink);padding:5px 8px;border-radius:9px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mnav .mes:hover{background:var(--surface)}
+.mnav .mes svg{stroke:var(--ink-3)}
+.mnav .hoje{flex:none;font-size:12px;color:var(--ink-2);border:1px solid var(--line-2);border-radius:999px;
+  padding:5px 10px;background:var(--surface)}
+.mnav .hoje:hover{color:var(--ink);background:var(--raised)}
+.mnav svg{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round}
+/* a grade do seletor de mes */
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.mgrid button{padding:12px 0;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);
+  font-size:13.5px;color:var(--ink-2);text-align:center}
+.mgrid button:hover{background:var(--raised);color:var(--ink)}
+.mgrid button.on{background:var(--raised);color:var(--ink);border-color:var(--ink-3);font-weight:500}
+.mgrid button.hoje{box-shadow:inset 0 0 0 1px var(--sand)}
+.mgrid button[disabled]{opacity:.28;cursor:default}
 
 /* ---------------- tabela do plano ---------------- */
 /* A caixa rola nas DUAS direcoes, como o "congelar paineis" do Excel. Com
@@ -476,13 +457,13 @@ table.plano th:first-child,table.plano td:first-child{
 }
 /* com border-collapse a borda e da TABELA, nao da celula: ela nao acompanha o
    cabecalho preso. A linha de baixo vem da sombra. */
-table.plano thead th{color:var(--ink-3);font-weight:500;font-size:11px;
+table.plano thead th{color:var(--ink-3);font-weight:500;font-size:12px;
   background:var(--surface);position:sticky;top:0;z-index:2;
   border-bottom:0;box-shadow:inset 0 -1px 0 var(--line-2)}
 table.plano thead th:first-child{z-index:3;background:var(--surface)}
 table.plano thead th.rec{color:var(--tif)}
 table.plano thead th.des{color:var(--ink-3)}
-table.plano tr.sep td{background:var(--raised);color:var(--ink-3);font-size:11px;
+table.plano tr.sep td{background:var(--raised);color:var(--ink-3);font-size:12px;
   padding:5px 11px;letter-spacing:.04em}
 /* a celula do ano ocupa a linha inteira e rola junto; so o rotulo fica preso */
 table.plano tr.sep td span{position:sticky;left:11px}
@@ -516,7 +497,7 @@ table.plano td input{width:100%;min-width:82px;background:var(--raised);
 .da-barra i{display:block;height:100%;border-radius:3px;background:var(--ouro);opacity:.75}
 .da.parcial .da-barra i{opacity:.35}
 .da-v{font-size:13.5px;text-align:right;font-variant-numeric:tabular-nums}
-.da-sub{grid-column:2/-1;font-size:11px;color:var(--ink-3);margin-top:3px}
+.da-sub{grid-column:2/-1;font-size:12px;color:var(--ink-3);margin-top:3px}
 .da-sub:empty{display:none}
 .div-acum{margin-top:16px;font-size:13px;color:var(--ink-3);line-height:1.6}
 .div-acum b{color:var(--ink);font-weight:500}
@@ -531,10 +512,15 @@ table.plano td.vaz{color:var(--ink-4)}
 .sheet-bg.on{display:flex}
 .sheet{
   background:var(--surface);width:100%;max-width:560px;border-radius:18px 18px 0 0;
-  border:1px solid var(--line-2);border-bottom:0;padding:20px var(--pad);
-  padding-bottom:calc(22px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto;
+  border:1px solid var(--line-2);border-bottom:0;padding:12px var(--pad) 20px;
+  padding-bottom:calc(22px + env(safe-area-inset-bottom));max-height:90vh;overflow:auto;position:relative;
 }
-.sheet h3{margin:0 0 5px;font-size:19px;font-weight:600;letter-spacing:-.01em}
+/* alca e botao de fechar: a folha diz como se fecha (antes, so tocando fora) */
+.sheet::before{content:"";display:block;width:38px;height:4px;border-radius:2px;background:var(--line-2);margin:0 auto 14px}
+.sheet-x{position:absolute;right:12px;top:16px;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
+  color:var(--ink-2);background:var(--raised);font-size:20px;line-height:1}
+.sheet-x:hover{color:var(--ink)}
+.sheet h3{margin:0 0 5px;font-size:19px;font-weight:600;letter-spacing:-.01em;padding-right:44px}
 .sheet .sub{color:var(--ink-3);font-size:13px;margin-bottom:18px;line-height:1.5}
 label.f{display:block;margin:14px 0 0;font-size:12px;color:var(--ink-3)}
 label.f input,label.f select,label.f textarea{
@@ -563,7 +549,7 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{
 .lg-form label.f:first-of-type{margin-top:0}
 #login .btn{width:100%;margin-top:22px;padding:14px}
 .lg-erro{color:var(--clay);font-size:13px;margin-top:14px;min-height:19px}
-.lg-pe{color:var(--ink-4);font-size:11.5px;margin-top:22px;text-align:center}
+.lg-pe{color:var(--ink-4);font-size:12px;margin-top:22px;text-align:center}
 
 /* ---------------- convite de instalacao ---------------- */
 #instalar{
@@ -599,29 +585,28 @@ body.instalado{}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 /* ---------------- vencimentos ---------------- */
 .vpos{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 0;font-size:12px}
-.k-hero{font-size:11.5px;color:var(--ink-3);letter-spacing:.02em;margin-bottom:8px}
 .hero .val.v-vazio{font-size:clamp(28px,8vw,40px);line-height:1.05}
 /* o calendario: segunda a domingo; o dia com credito acende em tiffany, mais
    forte quanto maior o valor (--a vem do render, teto .45 para o texto) */
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
-.cal-sem{font-size:10.5px;color:var(--ink-3);text-align:center;padding:0 0 3px;letter-spacing:.02em}
+.cal-sem{font-size:11.5px;color:var(--ink-3);text-align:center;padding:0 0 3px;letter-spacing:.02em}
 .cal-d{min-height:50px;border-radius:8px;padding:5px 5px 6px;display:flex;flex-direction:column;
   justify-content:space-between;align-items:stretch;background:var(--surface);
   border:1px solid transparent;text-align:left;font:inherit;color:inherit}
 .cal-d.fora{background:none}
-.cal-d .n{font-size:11px;line-height:1;color:var(--ink-3)}
+.cal-d .n{font-size:12px;line-height:1;color:var(--ink-3)}
 .cal-d.nu .n{color:var(--ink-4)}
 .cal-d.tem{background:rgba(62,207,200,var(--a,.2));cursor:pointer;transition:border-color .15s}
 .cal-d.tem .n{color:var(--ink-2)}
 .cal-d.tem:hover{border-color:var(--tif-d)}
-.cal-d .v{font-size:11.5px;font-weight:600;color:var(--ink);text-align:center;white-space:nowrap;letter-spacing:-.01em}
+.cal-d .v{font-size:12px;font-weight:600;color:var(--ink);text-align:center;white-space:nowrap;letter-spacing:-.01em}
 .cal-d.hoje{border-color:var(--sand)}
 .cal-d.sel{border-color:var(--tif);box-shadow:inset 0 0 0 1px var(--tif)}
 .cal-d.pass{opacity:.5}
 .cal-tot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 0;
   font-size:13px;color:var(--ink-2);flex-wrap:wrap}
 .cal-tot b{color:var(--ink);font-weight:500}
-@media (max-width:380px){ .cal{gap:3px} .cal-d{min-height:46px;padding:4px 3px 5px} .cal-d .v{font-size:10.5px} }
+@media (max-width:380px){ .cal{gap:3px} .cal-d{min-height:46px;padding:4px 3px 5px} .cal-d .v{font-size:11.5px} }
 .grupo.gv .soma{order:2;color:var(--ink-2);font-size:12px}
 .grupo.gv::after{order:1}
 .grupo.d-pass{opacity:.55}
@@ -630,7 +615,7 @@ body.instalado{}
 .vrow:hover .vr-nm{color:var(--steel)}
 .vr-nm{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vr-v{font-size:14px;text-align:right;white-space:nowrap;letter-spacing:-.01em}
-.vr-sub{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vr-sub{font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vr-sub.r{text-align:right}
 .vr-sub em{font-style:normal;color:var(--sand)}
 .vr-sub b{font-weight:500}
@@ -667,7 +652,7 @@ body.instalado{}
 .sel{background:var(--bg);border:1px solid var(--line-2);border-radius:8px;padding:7px 10px;font-size:13.5px}
 /* as regras da planilha: a propria tela diz quais colunas manter */
 .cols{margin:16px 0 0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:6px 14px 12px}
-.cols-t{font-size:11px;color:var(--ink-3);letter-spacing:.03em;margin:10px 0 2px}
+.cols-t{font-size:12px;color:var(--ink-3);letter-spacing:.03em;margin:10px 0 2px}
 .col-r{display:grid;grid-template-columns:128px minmax(0,1fr);gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
 .col-r b{font-weight:600;color:var(--ink)}
 .col-r span{color:var(--ink-2)}
@@ -693,18 +678,17 @@ body.instalado{}
 .sim-top .btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
   stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-right:3px}
 .sim-top .tit{flex:1 1 150px;min-width:0}
-.sim-top .tit .k{font-size:10.5px;color:var(--sim);letter-spacing:.09em;text-transform:uppercase}
+.sim-top .tit .k{font-size:12px;color:var(--sim)}
 .sim-top .tit .n{font-family:var(--serif);font-size:25px;line-height:1.15;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* "nao salvo" e Salvar quebram JUNTOS, a direita (no celular o botao sozinho ia para a esquerda) */
 .sim-acoes{display:flex;align-items:center;gap:10px;margin-left:auto}
-.naosalvo{font-size:11.5px;color:var(--sand)}
+.naosalvo{font-size:12px;color:var(--sand)}
 /* amostra de linha: continua = plano, tracejada = simulacao */
 .key{display:inline-block;width:14px;height:0;border-top:2px solid var(--tif);vertical-align:middle;
   margin:-2px 6px 0 0}
 .key.s{border-top-style:dashed;border-top-color:var(--sim)}
-.sim-fim{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:6px}
-.sim-fim .v small{font-size:12px;color:inherit;opacity:.8}
+.sim-fim{margin-bottom:6px}
 table.plano td.sim-d{background:var(--sim-g);box-shadow:inset 0 -2px 0 var(--sim)}
 table.plano td.sim-c{background:rgba(141,122,240,.06)}
 table.plano.sim-anos td:first-child{color:var(--ink-2)}
@@ -719,7 +703,7 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
   background:var(--raised);border:1px solid var(--line-2);border-radius:8px;
   padding:8px 11px;font-size:12px;line-height:1.55;white-space:nowrap;box-shadow:0 8px 22px rgba(0,0,0,.45)}
 .gtip.on{display:block}
-.gtip .m{font-size:11px;color:var(--ink-3);margin-bottom:1px}
+.gtip .m{font-size:12px;color:var(--ink-3);margin-bottom:1px}
 .gtip .r{display:flex;align-items:center;gap:6px}
 .gtip .r .key{margin:0}
 .gtip .r b{font-weight:600;color:var(--ink)}
@@ -727,7 +711,7 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
 .gtip .r.d{margin-top:3px;padding-top:3px;border-top:1px solid var(--line)}
 .gtip .r.d b.pos{color:var(--tif)} .gtip .r.d b.neg{color:var(--clay)}
 .row.alt .nm{white-space:normal}
-.alt-aviso{display:block;font-size:11.5px;color:var(--sand);margin-top:3px}
+.alt-aviso{display:block;font-size:12px;color:var(--sand);margin-top:3px}
 .vazio.sim-vazio{padding:16px 0}
 .tipos{display:grid;gap:8px}
 .tipos button{display:block;text-align:left;border:1px solid var(--line-2);border-radius:var(--r);
@@ -740,26 +724,17 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
 .f-seg .seg button{flex:1;text-align:center}
 .btn[disabled]{opacity:.45;cursor:default;pointer-events:none}
 .regra-off{opacity:.45}
-@media (max-width:520px){
-  /* no celular os tres numeros do fim do ano continuam lado a lado */
-  .fatos.sim-fim{grid-template-columns:repeat(3,minmax(0,1fr));gap:0}
-  .fatos.sim-fim > .fato,.fatos.sim-fim > .fato:first-child{border-top:0;padding:12px 0 0 10px}
-  .fatos.sim-fim > .fato{border-left:1px solid var(--line)}
-  .fatos.sim-fim > .fato:first-child{border-left:0;padding-left:0}
-  .sim-fim .fato .v{font-size:13.5px}
-  .sim-fim .fato .k{font-size:10.5px}
-}
 /* ---------------- navegacao: acoes e rodape ---------------- */
 /* as acoes de uma pagina ficam no topo dela, logo abaixo do titulo -- nao
    depois de uma lista ou tabela longa */
 .acoes.topo{margin:12px 0 4px}
 /* cabecalho das colunas da aba Mes: a mesma grade da linha (.lrow) */
-.colhead{display:grid;grid-template-columns:1fr auto 112px;gap:10px;align-items:baseline;
-  padding:10px 0 2px;font-size:11px;color:var(--ink-3);letter-spacing:.02em}
+.colhead{display:grid;grid-template-columns:1fr auto 120px;gap:10px;align-items:baseline;
+  padding:10px 0 2px;font-size:12px;color:var(--ink-3);letter-spacing:.02em}
 .colhead span{text-align:right}
 .colhead span:first-child{text-align:left}
 .colhead .ed{padding-right:8px}
-.legenda-f{font-size:11.5px;color:var(--ink-3);margin-top:12px;line-height:1.55}
+.legenda-f{font-size:12px;color:var(--ink-3);margin-top:12px;line-height:1.55}
 .legenda-f .fx{color:var(--steel)}
 /* exportar: a ultima coisa da pagina, discreta e sempre no mesmo lugar */
 .rodape-aba{margin:30px 0 0;padding-top:12px;border-top:1px solid var(--line)}
@@ -2919,6 +2894,10 @@ const fmt  = v => vazio(v) ? "—" : BRL.format(dis(v));
 const fmtn = v => vazio(v) ? "—" : NUM.format(dis(v));
 const fmtsin = v => vazio(v) ? "—" : (v >= 0 ? "+" : "−") + NUM.format(Math.abs(dis(v)));
 const fmtpct = v => vazio(v) ? "—" : (v >= 0 ? "+" : "−") + (Math.abs(v)*100).toFixed(1).replace(".",",") + "%";
+// sem centavos: para os paineis de situacao, onde tres numeros dividem a linha
+const NUM0 = new Intl.NumberFormat("pt-BR",{maximumFractionDigits:0});
+const fmtn0   = v => vazio(v) ? "—" : NUM0.format(Math.round(dis(v)));
+const fmtsin0 = v => vazio(v) ? "—" : (v >= 0 ? "+" : "−") + NUM0.format(Math.round(Math.abs(dis(v))));
 function fmtk(v){
   if (vazio(v)) return "—";
   v = dis(v);
@@ -2987,6 +2966,7 @@ function defsOuro(id){
 const ICO = {
   ant:'<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
   prox:'<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  baixo:'<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
 };
 
 // ============================================================
@@ -3307,6 +3287,31 @@ window.ROTAS = (function(){
 })();
 /*</rotas>*/
 
+/*<seletor>*/
+// O seletor de mes: tocar no nome do mes abre uma grade de 12 meses por ano.
+// Funcoes puras (testadas em tests/test_rotas.html): quais anos ha no horizonte,
+// a grade de um ano e em que ano abrir; "hoje" so aparece quando ha para onde ir.
+window.SELETOR = (function(){
+  const anos = comps => Array.from(new Set(comps.map(c => c.slice(0, 4)))).sort();
+  function grade(comps, ano, atual, hoje){
+    const tem = new Set(comps), out = [];
+    for (let m = 1; m <= 12; m++){
+      const c = ano + "-" + String(m).padStart(2, "0") + "-01";
+      out.push({ comp:c, mes:m, dentro:tem.has(c), atual:c === atual, hoje:c === hoje });
+    }
+    return out;
+  }
+  function anoInicial(comps, atual, hoje){
+    const as = anos(comps);
+    if (as.includes(atual.slice(0, 4))) return atual.slice(0, 4);
+    if (as.includes(hoje.slice(0, 4))) return hoje.slice(0, 4);
+    return as[0] || hoje.slice(0, 4);
+  }
+  const mostraHoje = (comps, atual, hoje) => atual !== hoje && comps.includes(hoje);
+  return { anos:anos, grade:grade, anoInicial:anoInicial, mostraHoje:mostraHoje };
+})();
+/*</seletor>*/
+
 let aba = "resumo";
 const ORDEM_ABAS = ROTAS.ORDEM;
 const ABAS_OCULTAS = ROTAS.OCULTAS;
@@ -3493,16 +3498,16 @@ function renderResumo(){
   const d = ult ? ult.diferenca : null;
   const heroi =
     '<div class="hero"><div>' +
+      '<div class="k-hero">' + (ult ? 'Patrimônio apurado · ' + rotuloL(ult.competencia) : 'Ponto de partida') + '</div>' +
       '<div class="val"><span class="cur">R$</span>' +
         esc(fmtn(ult ? ult.realizado : (proj[0] ? proj[0].saldoInicial : 0))) + '</div>' +
       '<div class="cap">' + (ult
-        ? 'apurado em ' + rotuloL(ult.competencia) + ' — <b class="' + (d>=0?"pos":"neg") + '">' +
-          esc(fmtsin(d)) + '</b> ' + (d>=0 ? "acima" : "abaixo") + ' do plano, ' + fmtpct(ult.variacao)
-        : 'ponto de partida — nenhum mês apurado ainda') + '</div>' +
+        ? '<b class="' + (d>=0?"pos":"neg") + '">' + esc(fmtsin(d)) + '</b> ' + (d>=0 ? "acima" : "abaixo") +
+          ' do plano · ' + fmtpct(ult.variacao)
+        : 'nenhum mês apurado ainda') + '</div>' +
     '</div></div>' +
     '<div class="arco" id="arco"></div>' +
-    mesCorrente(ult) +
-    fatos(fechados, fim);
+    painelResumo(ult, fechados);
 
   el.innerHTML = avisoTravado() + avisoConexao() + avisoFGC() +
     '<div class="col-a">' + heroi + leitura() + '</div>' +
@@ -3512,62 +3517,56 @@ function renderResumo(){
           '<button data-a="' + a + '"' + (a===anoSel?' class="on"':'') + '>' + a + '</button>').join("") +
         '</span></div>' +
       '<div class="grafwrap" id="graf"></div>' +
-      '<div class="regua">' + listaAno(anoSel) + '</div>' +
+      tabelaAno(anoSel) +
       rodapeExcel("resumo") +
     '</div>';
 
   desenharArco();
   desenharCombo(anoSel);
   el.querySelectorAll("#seg-ano button").forEach(b => b.onclick = () => { anoSel = b.dataset.a; render(); });
-  el.querySelectorAll("[data-comp]").forEach(b => b.onclick = () => folhaMes(b.dataset.comp));
+  el.querySelectorAll("[data-comp]").forEach(b => {
+    b.onclick = () => folhaMes(b.dataset.comp);
+    b.onkeydown = ev => { if (ev.key === "Enter") folhaMes(b.dataset.comp); };
+  });
 }
 
-// Onde o mes de hoje deve terminar -- e quanto isso significa de crescimento
-// sobre o ultimo mes ja apurado. E a pergunta mais imediata de quem abre o app.
-function mesCorrente(ult){
+// O painel de situacao do Resumo: este mes (onde o plano o leva, ou onde fechou),
+// o fim de cada ano que falta e, no pe, quantos meses ja fecharam e o que ha a pagar.
+function painelResumo(ult, fechados){
   const hoje = compHoje();
   const m = mesProj(hoje);
-  if (!m) return "";
-  const base = ult && ult.competencia < hoje ? ult : null;
-  const passo = base ? m.previsao - base.realizado : null;
-  let detalhe = "";
-  if (!m.aberto){
-    const d = m.diferenca;
-    detalhe = '<span class="sep">·</span><span class="' + (d>=0?"pos":"neg") + '">' +
-      esc(fmtsin(d)) + '</span> <span class="d3">' + (d>=0?"acima":"abaixo") + ' do plano</span>';
-  } else if (passo !== null){
-    detalhe = '<span class="sep">·</span><span class="' + (passo>=0?"pos":"neg") + '">' +
-      esc(fmtsin(passo)) + '</span> <span class="d3">sobre ' + MESES_L[+base.competencia.split("-")[1]-1] + '</span>';
+  let tiles = "";
+  if (m){
+    const base = ult && ult.competencia < hoje ? ult : null;
+    let sub;
+    if (!m.aberto) sub = esc(fmtsin0(m.diferenca)) + (m.diferenca >= 0 ? " acima" : " abaixo") + " do plano";
+    else if (base) sub = esc(fmtsin0(m.previsao - base.realizado)) + " sobre " + rotulo(base.competencia);
+    else sub = "previsão do plano";
+    tiles += tile((m.aberto ? "Este mês · " : "Fechou · ") + rotulo(hoje),
+                  esc(fmtn0(m.aberto ? m.previsao : m.realizado)), sub);
   }
-  return '<div class="agora">' +
-    '<div class="k">' + (m.aberto ? "O plano prevê fechar " : "Fechou ") + rotuloL(hoje) + ' em</div>' +
-    '<div class="v">' + esc(fmt(m.aberto ? m.previsao : m.realizado)) + detalhe + '</div></div>';
-}
-
-function fatos(fechados, fim){
-  // um fim de ano por ano restante -- ver so 2028 escondia o caminho ate la
-  const anoHoje = compHoje().slice(0,4);
-  const fins = [];
-  for (const a of [...new Set(proj.map(m => m.competencia.slice(0,4)))]){
-    if (a < anoHoje) continue;
-    const doAno = proj.filter(m => m.competencia.slice(0,4) === a);
-    fins.push(doAno[doAno.length-1]);
-  }
-  const proj_ = fins.length
-    ? '<div class="hdr" style="margin-top:22px"><h2>Onde o plano termina cada ano</h2></div><div class="rule"></div>' +
-      '<div class="fatos anos">' + fins.map(m =>
-        '<div class="fato"><div class="k">' + rotulo(m.competencia) + '</div>' +
-        '<div class="v">' + esc(fmt(m.previsao)) + '</div></div>').join("") + '</div>'
-    : "";
-
+  tiles += tilesFimDeAno();
   const c = compromissos();
-  const linhas = [["Meses apurados", fechados.length, "<small> de " + proj.length + "</small>"]];
-  if (c) linhas.push(["A pagar até " + rotulo(c.ultimo),
-                      '<span class="abr">' + fmt(c.restante) + "</span>",
-                      "<small> em " + c.n + " compromisso" + (c.n>1?"s":"") + "</small>"]);
-  return proj_ + '<div class="fatos">' + linhas.map(l =>
-    '<div class="fato"><div class="k">' + l[0] + '</div>' +
-    '<div class="v">' + l[1] + l[2] + '</div></div>').join("") + '</div>';
+  const pe = '<div class="pe"><span><b>' + fechados.length + '</b> de ' + proj.length + ' meses apurados</span>' +
+    (c ? '<span><b class="abr">' + esc(fmt(c.restante)) + '</b> a pagar até ' + rotulo(c.ultimo) +
+         ' em ' + c.n + ' compromisso' + (c.n > 1 ? "s" : "") + '</span>' : "") + '</div>';
+  return '<div class="fatos">' + tiles + pe + '</div>';
+}
+// uma caixa do painel: rotulo, valor e um detalhe embaixo
+const tile = (k, v, s, cls) => '<div class="fato"><div class="k">' + k + '</div><div class="v' +
+  (cls ? " " + cls : "") + '">' + v + (s ? '<small>' + s + '</small>' : "") + '</div></div>';
+// onde o plano termina em cada ano que falta -- o Resumo e o Plano mostram o mesmo
+function tilesFimDeAno(){
+  const anoHoje = compHoje().slice(0,4);
+  let out = "";
+  for (const a of [...new Set(proj.map(x => x.competencia.slice(0,4)))]){
+    if (a < anoHoje) continue;
+    const doAno = proj.filter(x => x.competencia.slice(0,4) === a);
+    const f = doAno[doAno.length-1], ini = doAno[0].saldoInicial;
+    const fim = f.aberto ? f.previsao : f.realizado;
+    out += tile("Fim de " + a, esc(fmtn0(fim)), esc(fmtsin0(fim - ini)) + " no ano");
+  }
+  return out;
 }
 
 // O ARCO: os 48 meses em forma pura -- sem eixo, sem grade, sem rotulo.
@@ -3688,25 +3687,27 @@ function desenharCombo(ano){
 }
 
 
-function listaAno(ano){
+// Os 12 meses do ano em tabela compacta: previsto, apurado e a diferenca.
+// A linha abre a folha do mes (toque ou Enter).
+function tabelaAno(ano){
   const ms = proj.filter(m => m.competencia.slice(0,4) === ano);
   if (!ms.length) return "";
-  const ini = ms[0].saldoInicial, f = ms[ms.length-1];
-  const cresc = (f.aberto ? f.previsao : f.realizado) - ini;
-  let out = '<div class="ano">' + ano + ' <em>' + fmtsin(cresc) + ' no ano</em></div>';
   const hoje = compHoje();
+  let h = '<div class="regua"><table class="plano compacta"><thead><tr><th>' + ano +
+    '</th><th>previsto</th><th>apurado</th><th>Δ plano</th></tr></thead><tbody>';
   for (const m of ms){
     const d = m.diferenca;
-    out += '<button class="mrow' + (m.competencia===hoje?" agora":"") + '" data-comp="' + m.competencia + '">' +
-      '<span class="mes">' + MESES[+m.competencia.split("-")[1]-1] + '</span>' +
-      '<span class="dif ' + (m.aberto ? "d3" : (d>=0?"pos":"neg")) + '">' +
-        (m.aberto ? "em aberto" : fmtsin(d) + " · " + fmtpct(m.variacao)) + '</span>' +
-      '<span class="num' + (m.aberto?" aberto":"") + '">' + esc(fmtn(m.aberto ? m.previsao : m.realizado)) + '</span>' +
-    '</button>';
+    h += '<tr' + (m.competencia===hoje?' class="agora"':'') + ' data-comp="' + m.competencia + '" tabindex="0">' +
+      '<td>' + MESES[+m.competencia.split("-")[1]-1] + '</td>' +
+      '<td>' + esc(fmtn(m.previsao)) + '</td>' +
+      (m.aberto
+        ? '<td class="abr">em aberto</td><td class="z">·</td>'
+        : '<td class="forte">' + esc(fmtn(m.realizado)) + '</td>' +
+          '<td class="' + (d>=0?"pos":"neg") + '">' + esc(fmtsin(d)) + '<small>' + fmtpct(m.variacao) + '</small></td>') +
+      '</tr>';
   }
-  return out;
+  return h + '</tbody></table></div>';
 }
-
 
 function folhaMes(comp){
   const m = mesProj(comp);
@@ -3782,6 +3783,65 @@ function compromissos(){
 // ============================================================
 // MES
 // ============================================================
+// O painel do mes: previsao, apurado (ou o que falta para fechar) e o mes anterior;
+// no pe, a conta que chega a previsao.
+function painelMes(m, info){
+  const ant = mesProj(somaMes(mesAtual, -1));
+  const falta = CONTAS.faltando(estado.contas, saldosNum(), mesAtual);
+  const d = m.diferenca;
+  const apur = !m.aberto
+    ? tile("Apurado", esc(fmtn0(m.realizado)), esc(fmtsin0(d)) + " · " + fmtpct(m.variacao) + (d >= 0 ? " acima" : " abaixo"))
+    : tile("Apurado", "em aberto", falta.length
+        ? "falta" + (falta.length > 1 ? "m " : " ") + falta.length + " conta" + (falta.length > 1 ? "s" : "")
+        : "saldos em Carteira › Contas", "abr");
+  return '<div class="fatos">' +
+    tile("Previsão", esc(fmtn0(m.previsao)), "pelo plano") + apur +
+    (ant ? tile("Mês anterior", esc(fmtn0(ant.aberto ? ant.previsao : ant.realizado)),
+                rotulo(ant.competencia) + (ant.aberto ? " · previsto" : " · apurado"))
+         : tile("Mês anterior", "—", "fora do horizonte")) +
+    '<div class="pe"><span>saldo inicial <b>' + esc(fmt(m.saldoInicial)) + '</b>' +
+      (vazio(info.saldo_inicial_override) ? "" : ' <span class="d3">(âncora)</span>') + '</span>' +
+    '<span>receitas <b class="pos">' + esc(fmtn(m.receitas)) + '</b></span>' +
+    '<span>saídas <b class="neg">' + esc(fmtn(m.saidas)) + '</b></span></div></div>';
+}
+// O navegador de mes (Mes e Contas): setas, o nome do mes como botao que abre o
+// seletor, e "hoje" quando ha para onde voltar. p = prefixo dos ids (m, p).
+function mnavHTML(p){
+  const hoje = compHoje();
+  return '<div class="mnav"><button id="' + p + '-ant" class="seta" aria-label="Mês anterior">' + ICO.ant + '</button>' +
+    '<button id="' + p + '-sel" class="mes" aria-label="Escolher o mês">' + rotuloL(mesAtual) + ICO.baixo + '</button>' +
+    (SELETOR.mostraHoje(estado.competencias, mesAtual, hoje)
+      ? '<button id="' + p + '-hoje" class="hoje" aria-label="Voltar ao mês de hoje">hoje</button>' : '') +
+    '<button id="' + p + '-prox" class="seta" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
+}
+function ligarMnav(p){
+  const g = id => document.getElementById(p + "-" + id);
+  g("ant").onclick  = () => { mesAtual = somaMes(mesAtual, -1); render(); };
+  g("prox").onclick = () => { mesAtual = somaMes(mesAtual, 1); render(); };
+  g("sel").onclick  = folhaSeletorMes;
+  const h = g("hoje");
+  if (h) h.onclick = () => { mesAtual = compHoje(); render(); };
+}
+// A grade de meses: um ano por vez, so os meses do horizonte; o aberto na tela
+// fica marcado e o de hoje ganha um fio. A logica esta em SELETOR (testada).
+function folhaSeletorMes(){
+  const comps = estado.competencias, hoje = compHoje();
+  let ano = SELETOR.anoInicial(comps, mesAtual, hoje);
+  const anos = SELETOR.anos(comps);
+  const html = () => '<h3>Ir para o mês</h3>' +
+    '<span class="seg larga" id="sel-anos">' + anos.map(a =>
+      '<button data-a="' + a + '"' + (a === ano ? ' class="on"' : '') + '>' + a + '</button>').join("") + '</span>' +
+    '<div class="mgrid">' + SELETOR.grade(comps, ano, mesAtual, hoje).map(g =>
+      '<button data-c="' + g.comp + '"' + (g.dentro ? '' : ' disabled') +
+      ' class="' + (g.atual ? 'on ' : '') + (g.hoje ? 'hoje' : '') + '">' + MESES[g.mes - 1] + '</button>').join("") + '</div>';
+  const liga = () => {
+    const s = document.getElementById("sheet");
+    s.querySelectorAll("#sel-anos button").forEach(b => b.onclick = () => { ano = b.dataset.a; montarFolha(html()); liga(); });
+    s.querySelectorAll(".mgrid button").forEach(b => b.onclick = () => { mesAtual = b.dataset.c; fecharFolha(); render(); });
+  };
+  abrirFolha(html(), liga);
+}
+
 function renderMes(){
   const el = document.getElementById("s-mes");
   const m = mesProj(mesAtual);
@@ -3789,10 +3849,7 @@ function renderMes(){
   const real = realizadoCat(mesAtual);
   const info = estado.meses[mesAtual] || {};
 
-  let out = avisoTravado() +
-    '<div class="mnav"><button id="m-ant" aria-label="Mês anterior">' + ICO.ant + '</button>' +
-    '<span class="lbl">' + rotuloL(mesAtual) + '</span>' +
-    '<button id="m-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>' +
+  let out = avisoTravado() + mnavHTML("m") + painelMes(m, info) +
     // as acoes do mes ficam no topo, nao depois de duas listas e do quadro de totais
     '<div class="acoes topo">' +
       '<button class="btn mini" id="m-lanc">Lançamentos</button>' +
@@ -3801,11 +3858,13 @@ function renderMes(){
       '<button class="btn mini plain" id="m-ancora">' + (vazio(info.saldo_inicial_override)?"Reancorar":"Remover âncora") + '</button>' +
     '</div>';
 
+  // no desktop Receitas e Saidas ficam lado a lado (.duas); no celular, uma depois da outra
+  out += '<div class="duas">';
   for (const tipo of ["receita","despesa"]){
     const cats = estado.categorias.filter(c => c.tipo === tipo && c.ativo !== false);
     if (!cats.length) continue;
     const soma = tipo === "receita" ? m.receitas : m.saidas;
-    out += '<div class="hdr"><h2>' + (tipo==="receita"?"Receitas":"Saídas") + '</h2>' +
+    out += '<div class="col"><div class="hdr"><h2>' + (tipo==="receita"?"Receitas":"Saídas") + '</h2>' +
            '<span class="aux">' + fmt(soma) + '</span></div><div class="rule"></div>' +
            // as colunas tem nome: o apurado a esquerda do previsto, que se edita
            '<div class="colhead"><span>categoria</span><span>apurado</span><span class="ed">previsto</span></div>';
@@ -3833,27 +3892,17 @@ function renderMes(){
           '<span class="pv">' + esc(fmtn(x.valor)) + '</span></span>').join("") +
       '</div>';
     }
+    out += '</div>';
   }
+  out += '</div>';
 
-  const d = m.diferenca;
-  out += '<div class="tot">' +
-    '<div><span>Saldo inicial</span><span>' + esc(fmt(m.saldoInicial)) +
-      (vazio(info.saldo_inicial_override) ? "" : ' <span class="d3 t11">âncora</span>') + '</span></div>' +
-    '<div><span>Receitas</span><span class="pos">' + esc(fmt(m.receitas)) + '</span></div>' +
-    '<div><span>Saídas</span><span class="neg">' + esc(fmt(m.saidas)) + '</span></div>' +
-    '<div class="destaque"><span>Previsão</span><span>' + esc(fmt(m.previsao)) + '</span></div>' +
-    '<div><span>Apurado</span><span>' + (m.aberto ? '<span class="abr">em aberto</span>' : esc(fmt(m.realizado))) + '</span></div>' +
-    (m.aberto ? "" : '<div><span>Diferença</span><span class="' + (d>=0?"pos":"neg") + '">' +
-      esc(fmtsin(d)) + ' <span class="d3 t12">' + fmtpct(m.variacao) + '</span></span></div>') +
-  '</div>' +
-  (info.obs ? '<div class="nota fria">' + esc(info.obs) + '</div>' : "") +
+  out += (info.obs ? '<div class="nota fria">' + esc(info.obs) + '</div>' : "") +
   '<div class="legenda-f"><span class="fx">ƒ</span> = calculado por regra. Toque no nome de uma categoria ' +
     'para ver os lançamentos, repetir o valor até o fim ou criar um compromisso.</div>' +
   rodapeExcel("mes");
 
   el.innerHTML = out;
-  document.getElementById("m-ant").onclick  = () => { mesAtual = somaMes(mesAtual,-1); render(); };
-  document.getElementById("m-prox").onclick = () => { mesAtual = somaMes(mesAtual, 1); render(); };
+  ligarMnav("m");
   document.getElementById("m-ancora").onclick = () => acaoAncora(info);
   document.getElementById("m-nota").onclick = () => folhaNota(info);
   document.getElementById("m-lanc").onclick = () => folhaLancamentos(null);
@@ -4112,9 +4161,7 @@ function listaCompromissos(){
 function renderPatrimonio(){
   const el = document.getElementById("s-patrimonio");
   const ativas = estado.contas.filter(c => c.ativo !== false);
-  const nav = '<div class="mnav"><button id="p-ant" aria-label="Mês anterior">' + ICO.ant + '</button>' +
-    '<span class="lbl">' + rotuloL(mesAtual) + '</span>' +
-    '<button id="p-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
+  const nav = mnavHTML("p");
 
   if (!ativas.length){
     el.innerHTML = avisoTravado() + subnavCarteira("patrimonio") + nav +
@@ -4126,12 +4173,11 @@ function renderPatrimonio(){
   }
 
   const modo = estado.settings.patModo || "apontar";
-  el.innerHTML = avisoTravado() + subnavCarteira("patrimonio") + nav +
-    '<div class="hdr"><h2>' + (modo === "apontar" ? "Saldo por conta" : "Análise por conta") + '</h2>' +
-    '<span class="seg" id="seg-pat">' +
+  el.innerHTML = avisoTravado() + subnavCarteira("patrimonio") + nav + painelContas(ativas) +
+    '<span class="seg larga" id="seg-pat">' +
       [["apontar","Saldos"],["analise","Análise"]].map(k =>
         '<button data-m="' + k[0] + '"' + (k[0] === modo ? ' class="on"' : '') + '>' + k[1] + '</button>').join("") +
-    '</span></div><div class="rule"></div>' +
+    '</span>' +
     (modo === "apontar" ? blocoApontar(ativas) : blocoAnalise(ativas));
 
   if (modo === "apontar") desenharEvolucao(); else desenharAnalise();
@@ -4163,8 +4209,7 @@ function ligarArrasto(el){
 
 function ligarNavPat(el){
   ligarArrasto(el);
-  document.getElementById("p-ant").onclick  = () => { mesAtual = somaMes(mesAtual,-1); render(); };
-  document.getElementById("p-prox").onclick = () => { mesAtual = somaMes(mesAtual, 1); render(); };
+  ligarMnav("p");
   const nc = document.getElementById("nova-conta");
   if (nc) nc.onclick = () => folhaConta(null);
   el.querySelectorAll(".ed-conta").forEach(b =>
@@ -4217,19 +4262,49 @@ function ligarNavPat(el){
 }
 
 // ---------------------------------------------------------------- APONTAR
-function blocoApontar(ativas){
+// O painel das contas: o patrimonio do mes (ou o que falta para fecha-lo), a
+// previsao do plano e a diferenca. E o mesmo quadro nos modos Saldos e Analise.
+function painelContas(ativas){
   const saldos = saldosNum(), sal = saldos[mesAtual] || {};
   const m = mesProj(mesAtual), info = estado.meses[mesAtual] || {};
+  const noMes = ativas.filter(c => contaValeEm(c, mesAtual));
+  const falta = CONTAS.faltando(estado.contas, saldos, mesAtual);
+  const soma = noMes.reduce((a,c) => a + (+sal[c.id] || 0), 0);
+  const prev = tile("Previsão", esc(fmtn0(m ? m.previsao : null)), "pelo plano");
+  const dif = m && !m.aberto
+    ? tile("Contra o plano", esc(fmtsin0(m.diferenca)), fmtpct(m.variacao) + (m.diferenca >= 0 ? " · acima" : " · abaixo"),
+           m.diferenca >= 0 ? "pos" : "neg")
+    : tile("Contra o plano", "—", "mês em aberto");
+  if (!noMes.length){
+    // mes anterior ao inicio das contas: quem manda e o realizado da planilha
+    const semOv = vazio(info.realizado_override);
+    return '<div class="fatos">' +
+      tile("Apurado", semOv ? "—" : esc(fmtn0(info.realizado_override)), semOv ? "nenhuma conta vale neste mês" : "da planilha") +
+      prev + dif +
+      (semOv ? "" : '<div class="pe"><span>Este mês foi apurado antes de as contas existirem: o valor vem da planilha e continua valendo.</span></div>') +
+      '</div>';
+  }
+  if (falta.length){
+    return '<div class="fatos">' +
+      tile("Apurado", "em aberto", (noMes.length - falta.length) + " de " + noMes.length + " contas", "abr") + prev +
+      tile("Parcial até aqui", esc(fmtn0(soma)), "soma do que já há") +
+      '<div class="pe"><span>Falta <b>' + esc(falta.map(c => c.nome).join(", ")) +
+        '</b>. O mês só vira patrimônio apurado com todas as contas preenchidas.</span></div></div>';
+  }
+  return '<div class="fatos">' + tile("Apurado", esc(fmtn0(soma)), noMes.length + " de " + noMes.length + " contas") + prev + dif + '</div>';
+}
+function blocoApontar(ativas){
+  const saldos = saldosNum(), sal = saldos[mesAtual] || {};
   const noMes = ativas.filter(c => contaValeEm(c, mesAtual));
   const falta = CONTAS.faltando(estado.contas, saldos, mesAtual);
   const soma = noMes.reduce((a,c) => a + (+sal[c.id] || 0), 0);
   const cor = CONTAS.paleta(estado.contas);
   const tem = id => sal[id] !== undefined && sal[id] !== null;
 
-  let out = "";
+  let lista = '<div class="colhead"><span>conta</span><span>parte</span><span>saldo</span></div>';
   for (const c of ativas){
     const vale = contaValeEm(c, mesAtual);
-    out += '<div class="lrow">' +
+    lista += '<div class="lrow">' +
       '<button class="nm ed-conta" data-id="' + c.id + '">' +
         '<i class="pt" style="background:' + cor[c.id] + '"></i><span class="tx">' + esc(c.nome) + '</span></button>' +
       '<span class="rl">' + (vale
@@ -4242,46 +4317,21 @@ function blocoApontar(ativas){
         : '<span class="cel zero" style="text-align:right">—</span>') +
     '</div>';
   }
-
-  out += '<div class="tot">';
-  if (!noMes.length){
-    // Mes anterior ao inicio das contas: quem manda e o realizado da planilha.
-    out += '<div class="destaque"><span>Apurado</span><span>' + esc(fmt(info.realizado_override)) + '</span></div>' +
-      '<div><span>Previsão do mês</span><span>' + esc(fmt(m ? m.previsao : null)) + '</span></div>' +
-      '<div><span class="d3 t12" style="line-height:1.5">' + (vazio(info.realizado_override)
-        ? 'Nenhuma conta vale neste mês.'
-        : 'Este mês foi apurado antes de as contas existirem: o valor vem da planilha e continua valendo.') +
-      '</span><span></span></div>';
-  } else if (falta.length){
-    out += '<div><span>Contas preenchidas</span><span class="abr">' +
-        (noMes.length - falta.length) + ' de ' + noMes.length + '</span></div>' +
-      '<div><span>Parcial até aqui</span><span class="d2">' + esc(fmt(soma)) + '</span></div>' +
-      '<div><span class="d3 t12" style="line-height:1.5">Falta ' +
-        esc(falta.map(c => c.nome).join(", ")) + '. O mês só vira patrimônio apurado com todas as ' +
-        'contas preenchidas — somar parte delas registraria um patrimônio menor do que o real.' +
-      '</span><span></span></div>';
-  } else {
-    out += '<div class="destaque"><span>Patrimônio apurado</span><span>' + esc(fmt(soma)) + '</span></div>' +
-      '<div><span>Previsão do mês</span><span>' + esc(fmt(m ? m.previsao : null)) + '</span></div>';
-    out += (m && !m.aberto)
-      ? '<div><span>Diferença</span><span class="' + (m.diferenca>=0?"pos":"neg") + '">' +
-        esc(fmtsin(m.diferenca)) + ' <span class="d3 t12">' + fmtpct(m.variacao) + '</span></span></div>'
-      : '<div><span>Situação</span><span class="abr">em aberto</span></div>';
-  }
-  out += '</div>';
-
   const ant = somaMes(mesAtual, -1);
   const podeCopiar = falta.length && Object.keys(saldos[ant] || {}).length;
-  out += '<div class="acoes">' +
+  lista += '<div class="acoes">' +
     (podeCopiar ? '<button class="btn" id="p-copiar">Copiar de ' + rotulo(ant) + '</button>' : "") +
     '<button class="btn" id="nova-conta">Nova conta</button></div>';
 
+  let grafico = "";
   if (proj.filter(x => !x.aberto).length > 1){
-    out += '<div class="hdr"><h2>Evolução do patrimônio</h2><span class="aux">' +
+    grafico = '<div class="hdr"><h2>Evolução do patrimônio</h2><span class="aux">' +
       rotulo(proj[0].competencia) + ' → ' + rotulo(proj[proj.length-1].competencia) +
       '</span></div><div class="rule"></div><div class="grafwrap" id="evol"></div>';
   }
-  return out + rodapeExcel("patrimonio");
+  // no desktop a lista e o grafico ficam lado a lado
+  return '<div class="duas"><div class="col">' + lista + '</div><div class="col">' + grafico + '</div></div>' +
+    rodapeExcel("patrimonio");
 }
 
 // Traz os saldos do mes anterior para so editar o que mudou. Nao sobrescreve
@@ -5223,9 +5273,9 @@ function desenharBarrasVenc(){
   box.querySelectorAll("[data-mes]").forEach(r => r.onclick = () => { vencMes = r.dataset.mes; vencDia = null; render(); });
 }
 function navMesVenc(){
-  return '<div class="mnav"><button id="v-ant" aria-label="Mês anterior">' + ICO.ant + '</button>' +
-    '<span class="lbl">' + rotuloL(vencMes + "-01") + '</span>' +
-    '<button id="v-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
+  return '<div class="mnav"><button id="v-ant" class="seta" aria-label="Mês anterior">' + ICO.ant + '</button>' +
+    '<span class="mes">' + rotuloL(vencMes + "-01") + '</span>' +
+    '<button id="v-prox" class="seta" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
 }
 // Calendario do mes: segunda a domingo. Dia com credito mostra o valor e fica
 // mais aceso quanto maior o valor (a transparencia para em .45 para o texto
@@ -6522,7 +6572,9 @@ function tabelaPlano(){
   }
   h += '</tbody></table>';
 
-  return '<div class="hdr"><h2>Plano completo</h2>' +
+  const fins = tilesFimDeAno();
+  return (fins ? '<div class="fatos">' + fins + '</div>' : "") +
+    '<div class="hdr"><h2>Plano completo</h2>' +
       '<span class="aux">' + (modo === "categorias" ? "toque numa célula para editar" : "no modo Categorias as células se editam") + '</span></div>' +
     '<span class="seg larga" id="seg-modo">' +
       ['totais','grupos','categorias'].map(k =>
@@ -8078,11 +8130,17 @@ function exportarXLSX(quais, nomeArquivo){
 // FOLHA MODAL
 // ============================================================
 const folhaAberta = () => document.getElementById("sheet-bg").classList.contains("on");
+// o conteudo da folha sempre com o botao de fechar no canto (a alca vem do CSS)
+function montarFolha(html){
+  const s = document.getElementById("sheet");
+  s.innerHTML = '<button class="sheet-x" aria-label="Fechar">×</button>' + html;
+  s.querySelector(".sheet-x").onclick = () => { if (!simOcupado) fecharFolha(); };
+}
 function abrirFolha(html, depois){
   // a folha entra no historico: o Voltar do celular a fecha em vez de sair do
   // app (uma folha aberta por cima de outra so troca o conteudo)
   if (!folhaAberta()){ try { history.pushState({ aba: aba, folha: true }, ""); } catch(e){} }
-  document.getElementById("sheet").innerHTML = html;
+  montarFolha(html);
   document.getElementById("sheet-bg").classList.add("on");
   document.body.classList.add("nav-off");
   if (depois) depois();

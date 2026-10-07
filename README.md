@@ -22,6 +22,14 @@ Plano: Tabela · Compromissos · Regras · Simulações); a pílula `.seg` fica 
 alternar **dentro** de uma seção. A ação principal de cada página fica logo abaixo
 do título, e "Exportar esta aba para Excel" é sempre a última coisa da página.
 
+Toda página tem a mesma anatomia: contexto (sub-abas ou o navegador de mês) →
+**painel de situação** (`.fatos`: três ou quatro caixas com rótulo, valor sem centavos e
+um detalhe, mais uma linha de pé) → ações → seções → exportar. O nome do mês no
+navegador é um botão que abre a grade de meses (bloco `/*<seletor>*/`, `SELETOR`, testado
+em `tests/test_rotas.html`), e o chip "hoje" aparece quando o mês na tela não é o atual.
+Os campos editáveis têm caixa; tracejado é valor que vem de regra. Nenhum texto fica
+abaixo de 12 px.
+
 A lógica sem DOM está no bloco `/*<rotas>*/` (`ROTAS`, `tests/test_rotas.html`):
 qual destino acende para cada seção, o que `?ir=` abre (`?ir=carteira` e os atalhos
 antigos `?ir=patrimonio` / `?ir=vencimentos` continuam valendo) e o histórico em

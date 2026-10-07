@@ -110,6 +110,31 @@ function fim(){
   igual(ROTAS.aoVoltar({ folhaAberta:false, estado:{ aba:"mes" }, abaAtual:"resumo", disfarce:true }), { acao:"nada" },
         "disfarcado, Avancar nao abre aba oculta");
 
+  // --- o seletor de mes (bloco <seletor>): tocar no nome do mes abre uma grade de
+  //     12 meses por ano; "hoje" aparece quando o mes na tela nao e o de hoje
+  const ms = html.match(/\/\*<seletor>\*\/([\s\S]*?)\/\*<\/seletor>\*\//);
+  if (!ok(!!ms, "bloco <seletor> encontrado no index.html")) return fim();
+  (0, eval)(ms[1]);
+  if (!ok(!!window.SELETOR && typeof SELETOR.grade === "function", "SELETOR.grade existe")) return fim();
+  const comps = ["2026-01-01","2026-05-01","2026-10-01","2027-02-01"];
+  igual(SELETOR.anos(comps), ["2026","2027"], "anos do horizonte, sem repetir, em ordem");
+  igual(SELETOR.anos([]), [], "sem competencias, sem anos");
+  const g = SELETOR.grade(comps, "2026", "2026-05-01", "2026-10-01");
+  ok(g.length === 12, "a grade de um ano tem 12 meses");
+  igual(g[0].comp, "2026-01-01", "a grade comeca em janeiro");
+  igual(g.map(x => x.dentro), [true,false,false,false,true,false,false,false,false,true,false,false],
+        "dentro = o mes existe no horizonte do plano");
+  igual(g.filter(x => x.atual).map(x => x.mes), [5], "so o mes aberto na tela e o atual");
+  igual(g.filter(x => x.hoje).map(x => x.mes), [10], "so o mes de hoje e marcado como hoje");
+  igual(SELETOR.grade(comps, "2027", "2026-05-01", "2026-10-01").filter(x => x.atual || x.hoje).length, 0,
+        "em outro ano nada e atual nem hoje");
+  igual(SELETOR.anoInicial(comps, "2027-02-01", "2026-10-01"), "2027", "o seletor abre no ano do mes da tela");
+  igual(SELETOR.anoInicial(comps, "2031-01-01", "2026-10-01"), "2026", "mes da tela fora do horizonte: abre no ano de hoje");
+  igual(SELETOR.anoInicial(comps, "2031-01-01", "2035-01-01"), "2026", "nem a tela nem hoje no horizonte: abre no primeiro ano");
+  ok(SELETOR.mostraHoje(comps, "2026-05-01", "2026-10-01"), "fora do mes de hoje, o chip hoje aparece");
+  ok(!SELETOR.mostraHoje(comps, "2026-10-01", "2026-10-01"), "no mes de hoje, o chip nao aparece");
+  ok(!SELETOR.mostraHoje(comps, "2026-05-01", "2029-03-01"), "hoje fora do horizonte: sem chip (nao teria para onde ir)");
+
   fim();
 })().catch(e => { log.push("EXCECAO " + e.message + "\n" + e.stack); falhas++; fim(); });
 </script>
