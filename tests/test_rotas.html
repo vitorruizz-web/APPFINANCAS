@@ -1,0 +1,115 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste das rotas (barra de 5 destinos, historico e deep link)</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if(!cond) falhas++; return cond; }
+function igual(a, b, msg){ ok(JSON.stringify(a) === JSON.stringify(b), msg + " (obtido " + JSON.stringify(a) + ", esperado " + JSON.stringify(b) + ")"); }
+function fim(){
+  document.getElementById("out").textContent =
+    log.join("\n") + `\n\n=== ${falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)"} === (${log.length} asserções)`;
+}
+
+// O bloco <rotas> e a logica de navegacao SEM DOM: 5 destinos na barra, 7 secoes
+// por baixo (Carteira agrupa patrimonio, vencimentos e dividendos), o que a URL
+// abre, o que o botao Voltar faz e como cada troca de aba entra no historico.
+(async () => {
+  const v = "?v=" + Date.now();
+  const html = await (await fetch("../index.html" + v)).text();
+  const m = html.match(/\/\*<rotas>\*\/([\s\S]*?)\/\*<\/rotas>\*\//);
+  if (!ok(!!m, "bloco <rotas> encontrado no index.html")) return fim();
+  (0, eval)(m[1]);
+  if (!ok(!!window.ROTAS && typeof ROTAS.destinoDe === "function", "ROTAS.destinoDe existe")) return fim();
+
+  // --- a barra: 5 destinos, nome sempre visivel, nesta ordem
+  igual(ROTAS.DESTINOS.map(d => d.id), ["resumo","mes","carteira","plano","ajustes"], "a barra tem 5 destinos na ordem");
+  igual(ROTAS.DESTINOS.find(d => d.id === "carteira").abas, ["patrimonio","vencimentos","dividendos"],
+        "Carteira agrupa patrimonio, vencimentos e dividendos, nesta ordem");
+  igual(ROTAS.ORDEM, ["resumo","mes","patrimonio","vencimentos","dividendos","plano","ajustes"],
+        "a ordem das secoes segue a barra (e a direcao da animacao)");
+  igual(ROTAS.OCULTAS, ["mes","patrimonio","vencimentos","dividendos","plano"],
+        "disfarcado sobram Resumo e Ajustes");
+  for (const d of ROTAS.DESTINOS) ok(typeof d.nome === "string" && d.nome.length > 0, "destino " + d.id + " tem nome para a barra");
+
+  // --- de uma secao para o destino aceso na barra
+  igual(ROTAS.destinoDe("patrimonio"), "carteira", "patrimonio acende Carteira");
+  igual(ROTAS.destinoDe("vencimentos"), "carteira", "vencimentos acende Carteira");
+  igual(ROTAS.destinoDe("dividendos"), "carteira", "dividendos acende Carteira");
+  igual(ROTAS.destinoDe("mes"), "mes", "mes acende Mes");
+  igual(ROTAS.destinoDe("xyz"), null, "secao desconhecida nao acende nada");
+
+  // --- de um toque na barra (ou num nome de secao) para a secao que abre
+  igual(ROTAS.abaDoDestino("carteira", null), "patrimonio", "Carteira sem historico abre Contas (patrimonio)");
+  igual(ROTAS.abaDoDestino("carteira", "dividendos"), "dividendos", "Carteira reabre a ultima sub-aba usada");
+  igual(ROTAS.abaDoDestino("carteira", "mes"), "patrimonio", "ultima sub-aba de fora do grupo e ignorada");
+  igual(ROTAS.abaDoDestino("mes", "dividendos"), "mes", "destino simples ignora a ultima sub-aba");
+  igual(ROTAS.abaDoDestino("vencimentos", null), "vencimentos", "nome de secao passa direto (irPara continua aceitando os 7)");
+  igual(ROTAS.abaDoDestino("xyz", null), null, "destino desconhecido nao abre nada");
+
+  // --- modo discreto
+  ok(ROTAS.podeAbrir("resumo", true), "disfarcado, Resumo abre");
+  ok(ROTAS.podeAbrir("ajustes", true), "disfarcado, Ajustes abre");
+  ok(!ROTAS.podeAbrir("mes", true), "disfarcado, Mes nao abre");
+  ok(!ROTAS.podeAbrir("vencimentos", true), "disfarcado, Vencimentos nao abre");
+  ok(ROTAS.podeAbrir("mes", false), "sem disfarce, Mes abre");
+  ok(!ROTAS.podeAbrir("xyz", false), "secao desconhecida nunca abre");
+
+  // --- URL: atalhos do manifest, deep link e o que recarregar reabre
+  igual(ROTAS.abaDaURL("?ir=mes"), "mes", "?ir=mes abre Mes");
+  igual(ROTAS.abaDaURL("?ir=carteira"), "patrimonio", "?ir=carteira abre Contas");
+  igual(ROTAS.abaDaURL("?ir=vencimentos"), "vencimentos", "?ir=vencimentos (atalho antigo) continua abrindo Vencimentos");
+  igual(ROTAS.abaDaURL("?ir=patrimonio"), "patrimonio", "?ir=patrimonio (atalho antigo) continua abrindo Contas");
+  igual(ROTAS.abaDaURL("?x=1&ir=plano"), "plano", "ir no meio de outros parametros");
+  igual(ROTAS.abaDaURL("?ir=nada"), null, "ir desconhecido nao abre nada");
+  igual(ROTAS.abaDaURL(""), null, "sem query nao abre nada");
+  igual(ROTAS.urlDaAba("resumo"), "", "Resumo e a URL limpa");
+  igual(ROTAS.urlDaAba("mes"), "?ir=mes", "Mes vira ?ir=mes");
+  igual(ROTAS.urlDaAba("dividendos"), "?ir=dividendos", "a sub-aba da Carteira vai com o proprio nome (deep link preciso)");
+  igual(ROTAS.pilhaInicial("", false), ["resumo"], "abrir sem query: so a base");
+  igual(ROTAS.pilhaInicial("?ir=mes", false), ["resumo","mes"], "deep link: a base e depois a aba, para Voltar cair no Resumo");
+  igual(ROTAS.pilhaInicial("?ir=carteira", false), ["resumo","patrimonio"], "deep link do grupo abre a 1a sub-aba");
+  igual(ROTAS.pilhaInicial("?ir=resumo", false), ["resumo"], "?ir=resumo nao empilha o Resumo duas vezes");
+  igual(ROTAS.pilhaInicial("?ir=mes", true), ["resumo"], "disfarcado, o deep link para aba oculta fica na base");
+  igual(ROTAS.pilhaInicial("?ir=ajustes", true), ["resumo","ajustes"], "disfarcado, Ajustes por deep link abre");
+
+  // --- direcao da animacao
+  igual(ROTAS.direcao("resumo", "mes"), "vem-dir", "da esquerda para a direita na barra");
+  igual(ROTAS.direcao("plano", "mes"), "vem-esq", "da direita para a esquerda");
+  igual(ROTAS.direcao("patrimonio", "dividendos"), "vem-dir", "dentro da Carteira segue a ordem das sub-abas");
+
+  // --- historico: modelo "hub". A base e o Resumo; uma aba de fora empilha UMA
+  //     entrada; trocar entre abas de fora substitui; voltar ao Resumo desempilha.
+  igual(ROTAS.transicao("resumo", "mes", 0), { op:"push", nivel:1 }, "sair do Resumo empilha");
+  igual(ROTAS.transicao("mes", "plano", 1), { op:"replace", nivel:1 }, "trocar entre abas de fora substitui (Voltar continua indo ao Resumo)");
+  igual(ROTAS.transicao("patrimonio", "dividendos", 1), { op:"replace", nivel:1 }, "trocar de sub-aba da Carteira tambem substitui");
+  igual(ROTAS.transicao("mes", "resumo", 1), { op:"back", nivel:0 }, "voltar ao Resumo pela barra desempilha");
+  igual(ROTAS.transicao("mes", "resumo", 0), { op:"replace", nivel:0 }, "sem entrada empilhada, ir ao Resumo nunca chama back (sairia do app)");
+  igual(ROTAS.transicao("mes", "mes", 1), { op:"nada", nivel:1 }, "mesma aba: nada");
+  igual(ROTAS.nivelDe({ aba:"resumo" }), 0, "estado do Resumo e a base");
+  igual(ROTAS.nivelDe({ aba:"plano" }), 1, "estado de outra aba e nivel 1");
+  igual(ROTAS.nivelDe(null), 0, "sem estado = base");
+
+  // --- o botao Voltar (popstate): folha aberta fecha; senao vai para a aba do estado
+  igual(ROTAS.aoVoltar({ ignorar:true, folhaAberta:true, estado:{ aba:"mes" }, abaAtual:"mes" }), { acao:"ignorar" },
+        "o popstate que o proprio app provocou e ignorado");
+  igual(ROTAS.aoVoltar({ folhaAberta:true, simOcupado:false, estado:{ aba:"mes" }, abaAtual:"mes" }), { acao:"fechar-folha" },
+        "Voltar com folha aberta fecha a folha");
+  igual(ROTAS.aoVoltar({ folhaAberta:true, simOcupado:true, estado:{ aba:"plano" }, abaAtual:"plano" }), { acao:"repor-folha" },
+        "gravando uma simulacao, a folha nao fecha: o estado e reposto");
+  igual(ROTAS.aoVoltar({ folhaAberta:false, estado:{ aba:"resumo" }, abaAtual:"mes" }), { acao:"ir", aba:"resumo" },
+        "Voltar sem folha vai para a aba do estado");
+  igual(ROTAS.aoVoltar({ folhaAberta:false, estado:{ aba:"mes" }, abaAtual:"mes" }), { acao:"nada" },
+        "estado da mesma aba nao redesenha (nem rola para o topo)");
+  igual(ROTAS.aoVoltar({ folhaAberta:false, estado:{ aba:"plano", folha:true }, abaAtual:"plano" }), { acao:"nada" },
+        "entrada de folha velha (Avancar) na mesma aba nao faz nada");
+  igual(ROTAS.aoVoltar({ folhaAberta:false, estado:null, abaAtual:"mes" }), { acao:"nada" }, "sem estado: nada");
+  igual(ROTAS.aoVoltar({ folhaAberta:false, estado:{ aba:"xyz" }, abaAtual:"mes" }), { acao:"nada" }, "estado desconhecido: nada");
+  igual(ROTAS.aoVoltar({ folhaAberta:false, estado:{ aba:"mes" }, abaAtual:"resumo", disfarce:true }), { acao:"nada" },
+        "disfarcado, Avancar nao abre aba oculta");
+
+  fim();
+})().catch(e => { log.push("EXCECAO " + e.message + "\n" + e.stack); falhas++; fim(); });
+</script>

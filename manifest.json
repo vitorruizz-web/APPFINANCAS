@@ -46,8 +46,8 @@
       ]
     },
     {
-      "name": "Patrimônio",
-      "short_name": "Patrimônio",
+      "name": "Carteira",
+      "short_name": "Carteira",
       "url": "./?ir=patrimonio",
       "description": "Lançar o saldo das contas do mês",
       "icons": [

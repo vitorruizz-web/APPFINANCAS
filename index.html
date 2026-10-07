@@ -60,35 +60,36 @@ button{cursor:pointer;background:none;border:0;padding:0;text-align:inherit}
 .t11{font-size:11px} .t12{font-size:12px} .t13{font-size:13px}
 
 /* ---------------- moldura ---------------- */
+/* a altura do cabecalho e fixa (--top-h): o navegador de mes se prende logo
+   abaixo dele ao rolar, e precisa saber onde "abaixo" fica. --trilho e a
+   largura da barra quando ela vira trilho lateral, no desktop. */
+:root{--top-h:50px;--trilho:96px}
 .top{
   position:sticky; top:0; z-index:40; background:rgba(10,13,17,.9);
   backdrop-filter:saturate(1.4) blur(14px); border-bottom:1px solid var(--line);
   padding-top:env(safe-area-inset-top);
 }
-.top-in{display:flex;align-items:center;gap:12px;padding:12px var(--pad)}
+.top-in{display:flex;align-items:center;gap:12px;padding:0 var(--pad);height:var(--top-h)}
 .marca{font-family:var(--serif);font-size:22px;line-height:1;flex:1;letter-spacing:.005em}
-.pill{
-  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);
-  border-radius:999px;padding:5px 12px;font-size:12.5px;color:var(--ink-2);
-  background:var(--surface);
-}
-.pill b{color:var(--ink);font-weight:500}
+/* onde se esta: no celular a barra ja diz, entao so aparece no desktop, onde a
+   barra e um trilho a esquerda e o olho esta no topo */
+.top .onde{display:none;font-size:13px;color:var(--ink-3);white-space:nowrap}
 /* discreto para quem olha de fora, inequívoco para quem sabe:
    aceso = os números da tela não são os seus. */
 .ponto{width:5px;height:5px;border-radius:50%;background:var(--ink-4);
-  flex:none;margin-left:-4px;opacity:0;transition:opacity .2s}
+  flex:none;opacity:0;transition:opacity .2s}
 body.discreto .ponto{opacity:1}
 /* no modo discreto sobram Resumo e Ajustes: quem pega o aparelho nao chega
    nem no detalhe por categoria nem no saldo das contas */
 body.discreto nav button[data-tab="mes"],
-body.discreto nav button[data-tab="patrimonio"],
-body.discreto nav button[data-tab="vencimentos"],
-body.discreto nav button[data-tab="dividendos"],
+body.discreto nav button[data-tab="carteira"],
 body.discreto nav button[data-tab="plano"]{display:none}
-main{padding:0 var(--pad) 128px;max-width:760px;margin:0 auto}
+main{padding:0 var(--pad) calc(86px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
 /* no desktop o conteudo vira duas colunas: acaba o vazio da direita */
 @media (min-width:1000px){
-  main{max-width:1140px}
+  #app{padding-left:var(--trilho)}
+  .top .onde{display:block}
+  main{max-width:1140px;padding-bottom:48px}
   #s-resumo.on{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);
     gap:0 44px;align-items:start}
   #s-resumo > .col-a{grid-column:1}
@@ -118,40 +119,62 @@ nav button:active{transform:scale(.94)}
   display:flex;align-items:baseline;justify-content:space-between;gap:10px;
   margin:30px 0 12px;flex-wrap:wrap;
 }
-.hdr h2{font-size:13px;font-weight:600;margin:0;color:var(--ink-2);letter-spacing:.01em;
+/* o titulo de secao e um marco para o olho: na cor do texto, um degrau acima
+   do corpo -- antes era menor e mais apagado que os numeros abaixo dele */
+.hdr h2{font-size:15px;font-weight:600;margin:0;color:var(--ink);letter-spacing:-.005em;
   white-space:nowrap;flex:none}
 .hdr .seg{margin-left:auto}
 .hdr .aux{font-size:11.5px;color:var(--ink-3)}
 .rule{height:1px;background:var(--line);margin:0 0 6px}
 
-/* ---------------- barra inferior ---------------- */
+/* ---------------- barra de destinos ----------------
+   Cinco destinos, icone E nome em todos -- nao so no ativo. O ativo e dito pela
+   luminancia (texto claro, traco em cima), nao por cor: no app cada matiz
+   carrega UM significado, e "aba aberta" nao e um deles. A barra fica onde
+   esta ao rolar: navegacao que desaparece e navegacao que se procura. */
 nav{
-  position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom));
-  transform:translateX(-50%); z-index:50; display:flex; gap:2px; padding:5px;
-  background:rgba(24,29,36,.92); backdrop-filter:blur(16px) saturate(1.3);
-  border:1px solid var(--line-2); border-radius:999px; overflow:hidden;
-  box-shadow:0 10px 34px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.04) inset;
-  max-width:calc(100vw - 22px);
+  position:fixed; left:0; right:0; bottom:0; z-index:50;
+  display:flex; justify-content:center; gap:2px;
+  padding:4px 6px calc(6px + env(safe-area-inset-bottom));
+  background:rgba(10,13,17,.92); backdrop-filter:blur(16px) saturate(1.3);
+  border-top:1px solid var(--line);
   transition:transform .3s cubic-bezier(.4,0,.2,1), opacity .3s;
 }
-/* o transform faz DUAS coisas: centralizar e recolher.
-   sem repetir o translateX aqui, a barra pula para a direita ao sumir. */
-body.nav-off nav{transform:translateX(-50%) translateY(180%);opacity:0}
+body.nav-off nav{transform:translateY(110%);opacity:0}
 nav button{
-  padding:9px 13px;border-radius:999px;font-size:12.5px;color:var(--ink-3);
-  display:flex;align-items:center;gap:7px;white-space:nowrap;
+  flex:1 1 0;max-width:124px;min-width:0;position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:8px 2px 5px;border-radius:10px;font-size:11px;line-height:1.2;
+  color:var(--ink-3);white-space:nowrap;
   transition:color .18s, background .18s;
 }
+nav button .lb{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 nav button:hover{color:var(--ink-2)}
-nav button .lb{display:none}
-nav button.on{background:var(--raised);color:var(--ink)}
-nav button.on .lb{display:inline}
-nav svg{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;
+nav button.on{color:var(--ink)}
+nav button.on .lb{font-weight:500}
+/* o traco do ativo: 2px em cima, na cor do texto */
+nav button::before{content:"";position:absolute;left:50%;top:0;width:28px;height:2px;
+  border-radius:1px;background:var(--ink);transform:translateX(-50%) scaleX(0);
+  transition:transform .18s}
+nav button.on::before{transform:translateX(-50%) scaleX(1)}
+nav svg{width:22px;height:22px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;
   stroke-linecap:round;stroke-linejoin:round}
-@media (max-width:359px){nav button{padding:9px 11px} nav button.on .lb{display:none}}
-/* com 7 abas o nome da aba ativa nao cabe em todo celular: ajustarNav() mede e,
-   so onde nao couber, a aba ativa fica so com o icone (destacada) */
-nav.compacta button.on .lb{display:none}
+nav button.on svg{stroke-width:1.9}
+@media (prefers-reduced-motion:reduce){nav button::before{transition:none}}
+/* desktop: a mesma barra vira trilho a esquerda, com o mesmo markup */
+@media (min-width:1000px){
+  nav{
+    top:0;bottom:0;right:auto;width:var(--trilho);flex-direction:column;justify-content:flex-start;
+    gap:4px;padding:calc(var(--top-h) + 16px + env(safe-area-inset-top)) 10px 16px;
+    border-top:0;border-right:1px solid var(--line);
+  }
+  nav button{flex:none;max-width:none;width:100%;padding:10px 2px 8px}
+  nav button:hover{background:var(--surface)}
+  nav button.on{background:var(--raised)}
+  nav button::before{top:50%;left:0;width:2px;height:26px;transform:translateY(-50%) scaleY(0)}
+  nav button.on::before{transform:translateY(-50%) scaleY(1)}
+  body.nav-off nav{transform:none;opacity:1}
+}
 
 /* ---------------- resumo: a trajetoria e o heroi ---------------- */
 .arco{margin:14px 0 0;position:relative}
@@ -404,8 +427,29 @@ nav.compacta button.on .lb{display:none}
   border-radius:8px;padding:3px;gap:2px}
 .seg button{padding:6px 12px;border-radius:6px;font-size:12.5px;color:var(--ink-3)}
 .seg button.on{background:var(--raised);color:var(--ink)}
+/* a versao larga: quando as opcoes sao a escolha principal da pagina (a visao
+   de Vencimentos, o modo da tabela do Plano), o seletor ocupa a linha inteira
+   em vez de disputar espaco com o titulo e quebrar para a direita */
+.seg.larga{display:flex;width:100%;margin-top:10px}
+.seg.larga button{flex:1;text-align:center;padding:7px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-.mnav{display:flex;align-items:center;gap:12px;margin:22px 0 2px}
+/* ---------------- sub-abas ----------------
+   Segundo nivel da navegacao, sempre no topo da pagina e sempre com esta cara:
+   nome sublinhado. A pilula .seg fica para alternar DENTRO de uma secao. */
+.subnav{display:flex;gap:22px;border-bottom:1px solid var(--line);margin:2px 0 0;
+  overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.subnav::-webkit-scrollbar{display:none}
+.subnav button{flex:none;padding:13px 0 11px;margin-bottom:-1px;font-size:14px;color:var(--ink-3);
+  border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s}
+.subnav button:hover{color:var(--ink-2)}
+.subnav button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+@media (pointer:coarse){ .subnav button{padding:14px 0 12px} }
+
+/* o navegador de mes fica preso abaixo do cabecalho: a lista do mes e longa e
+   trocar de mes nao pode exigir voltar ao topo */
+.mnav{display:flex;align-items:center;gap:12px;margin:0 calc(-1 * var(--pad)) 2px;
+  padding:14px var(--pad) 10px;position:sticky;top:calc(var(--top-h) + env(safe-area-inset-top));
+  z-index:30;background:rgba(10,13,17,.92);backdrop-filter:blur(12px) saturate(1.3)}
 .mnav .lbl{flex:1;text-align:center;font-size:16px;font-family:var(--serif);font-size:20px}
 .mnav button{width:38px;height:38px;border:1px solid var(--line-2);border-radius:50%;
   background:var(--surface);color:var(--ink-2);display:grid;place-items:center}
@@ -537,7 +581,6 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{
 #instalar .tx b{color:var(--ink);font-weight:600;display:block;font-size:14px}
 #instalar .bts{display:flex;gap:6px;flex:none}
 body.instalado{}
-body.instalado nav{bottom:calc(20px + env(safe-area-inset-bottom))}
 
 /* ---------------- avisos ---------------- */
 .aviso{border:1px solid var(--sand);background:var(--sand-g);color:var(--sand);
@@ -706,6 +749,20 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
   .sim-fim .fato .v{font-size:13.5px}
   .sim-fim .fato .k{font-size:10.5px}
 }
+/* ---------------- navegacao: acoes e rodape ---------------- */
+/* as acoes de uma pagina ficam no topo dela, logo abaixo do titulo -- nao
+   depois de uma lista ou tabela longa */
+.acoes.topo{margin:12px 0 4px}
+/* cabecalho das colunas da aba Mes: a mesma grade da linha (.lrow) */
+.colhead{display:grid;grid-template-columns:1fr auto 112px;gap:10px;align-items:baseline;
+  padding:10px 0 2px;font-size:11px;color:var(--ink-3);letter-spacing:.02em}
+.colhead span{text-align:right}
+.colhead span:first-child{text-align:left}
+.colhead .ed{padding-right:8px}
+.legenda-f{font-size:11.5px;color:var(--ink-3);margin-top:12px;line-height:1.55}
+.legenda-f .fx{color:var(--steel)}
+/* exportar: a ultima coisa da pagina, discreta e sempre no mesmo lugar */
+.rodape-aba{margin:30px 0 0;padding-top:12px;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -734,7 +791,7 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
 <div id="app" style="display:none">
   <header class="top"><div class="top-in">
     <span class="marca">Finanças</span>
-    <button class="pill" id="chip-mes"></button>
+    <span class="onde" id="onde"></span>
     <span class="ponto" id="ponto-dis" aria-hidden="true"></span>
   </div></header>
 
@@ -748,12 +805,12 @@ table.plano.sim-anos td:first-child{color:var(--ink-2)}
     <section id="s-ajustes"></section>
   </main>
 
-  <nav>
+  <!-- cinco destinos (ROTAS.DESTINOS). Carteira agrupa Contas, Vencimentos e
+       Dividendos, que continuam secoes proprias por baixo (s-patrimonio etc.) -->
+  <nav aria-label="Seções do app">
     <button data-tab="resumo" class="on"><svg viewBox="0 0 24 24"><path d="M3 16.5l5.5-6 4 3.5L20 6"/><path d="M15 6h5v5"/></svg><span class="lb">Resumo</span></button>
     <button data-tab="mes"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="lb">Mês</span></button>
-    <button data-tab="patrimonio"><svg viewBox="0 0 24 24"><path d="M3 7.5l9-4 9 4-9 4-9-4z"/><path d="M3 12.5l9 4 9-4"/><path d="M3 17.5l9 4 9-4"/></svg><span class="lb">Patrimônio</span></button>
-    <button data-tab="vencimentos"><svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="M7.5 9.5L12 14l4.5-4.5"/><path d="M4 14v4.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V14"/></svg><span class="lb">Vencimentos</span></button>
-    <button data-tab="dividendos"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="6.5" rx="7" ry="2.5"/><path d="M5 6.5v3.7c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6.5"/><path d="M5 10.2v3.7c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-3.7"/><path d="M5 13.9v3.6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-3.6"/></svg><span class="lb">Dividendos</span></button>
+    <button data-tab="carteira"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2.5"/><path d="M3 11h18"/><circle cx="16.5" cy="15.5" r="1.2"/></svg><span class="lb">Carteira</span></button>
     <button data-tab="plano"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M9.5 9.5V20"/></svg><span class="lb">Plano</span></button>
     <button data-tab="ajustes"><svg viewBox="0 0 24 24"><path d="M4 7h8M17 7h3M4 12h3M12 12h8M4 17h10M19 17h1"/><circle cx="14.5" cy="7" r="2.2"/><circle cx="9.5" cy="12" r="2.2"/><circle cx="16.5" cy="17" r="2.2"/></svg><span class="lb">Ajustes</span></button>
   </nav>
@@ -3187,48 +3244,162 @@ async function gravarPrefs(){
 // ============================================================
 // NAVEGACAO
 // ============================================================
+/*<rotas>*/
+// ============================================================
+// ROTAS -- a navegacao sem DOM. Cinco destinos na barra; sete secoes por
+// baixo (Carteira agrupa patrimonio, vencimentos e dividendos). Daqui saem:
+// qual destino acende para uma secao, qual secao abre ao tocar num destino,
+// o que a URL (?ir=) abre, como cada troca entra no historico e o que o
+// botao Voltar faz. Testado em tests/test_rotas.html.
+// ============================================================
+window.ROTAS = (function(){
+  const DESTINOS = [
+    { id:"resumo",   nome:"Resumo",   abas:["resumo"] },
+    { id:"mes",      nome:"Mês",      abas:["mes"] },
+    { id:"carteira", nome:"Carteira", abas:["patrimonio","vencimentos","dividendos"] },
+    { id:"plano",    nome:"Plano",    abas:["plano"] },
+    { id:"ajustes",  nome:"Ajustes",  abas:["ajustes"] },
+  ];
+  const ORDEM = [];
+  for (const d of DESTINOS) for (const a of d.abas) ORDEM.push(a);
+  // disfarcado sobram Resumo e Ajustes: quem pega o aparelho nao chega nem no
+  // detalhe por categoria nem no saldo das contas
+  const OCULTAS = ORDEM.filter(a => a !== "resumo" && a !== "ajustes");
+
+  const destinoDe = aba => { const d = DESTINOS.find(x => x.abas.includes(aba)); return d ? d.id : null; };
+  // "carteira" reabre a ultima sub-aba usada (se for do grupo); nome de secao passa direto
+  function abaDoDestino(destino, ultima){
+    const d = DESTINOS.find(x => x.id === destino);
+    if (d) return d.abas.includes(ultima) ? ultima : d.abas[0];
+    return ORDEM.includes(destino) ? destino : null;
+  }
+  const podeAbrir = (aba, disfarce) => ORDEM.includes(aba) && !(disfarce && OCULTAS.includes(aba));
+  function abaDaURL(search){
+    const ir = new URLSearchParams(search || "").get("ir");
+    return ir ? abaDoDestino(ir, null) : null;
+  }
+  const urlDaAba = aba => aba === "resumo" ? "" : "?ir=" + aba;
+  // o que empilhar ao abrir: a base (Resumo) e, por deep link, a aba pedida por
+  // cima -- assim Voltar cai no Resumo em vez de sair do app
+  function pilhaInicial(search, disfarce){
+    const a = abaDaURL(search);
+    return a && a !== "resumo" && podeAbrir(a, disfarce) ? ["resumo", a] : ["resumo"];
+  }
+  const direcao = (de, para) => ORDEM.indexOf(para) > ORDEM.indexOf(de) ? "vem-dir" : "vem-esq";
+  // historico em modelo "hub": o Resumo e a base; sair dele empilha UMA entrada,
+  // trocar entre abas de fora substitui, voltar ao Resumo pela barra desempilha.
+  function transicao(de, para, nivel){
+    if (de === para) return { op:"nada", nivel:nivel };
+    if (para === "resumo") return nivel > 0 ? { op:"back", nivel:0 } : { op:"replace", nivel:0 };
+    return nivel > 0 ? { op:"replace", nivel:1 } : { op:"push", nivel:1 };
+  }
+  const nivelDe = estado => estado && estado.aba && estado.aba !== "resumo" ? 1 : 0;
+  function aoVoltar(c){
+    if (c.ignorar) return { acao:"ignorar" };
+    if (c.folhaAberta) return { acao: c.simOcupado ? "repor-folha" : "fechar-folha" };
+    const alvo = c.estado && c.estado.aba;
+    if (alvo && alvo !== c.abaAtual && podeAbrir(alvo, !!c.disfarce)) return { acao:"ir", aba:alvo };
+    return { acao:"nada" };
+  }
+  return { DESTINOS:DESTINOS, ORDEM:ORDEM, OCULTAS:OCULTAS, destinoDe:destinoDe, abaDoDestino:abaDoDestino,
+           podeAbrir:podeAbrir, abaDaURL:abaDaURL, urlDaAba:urlDaAba, pilhaInicial:pilhaInicial,
+           direcao:direcao, transicao:transicao, nivelDe:nivelDe, aoVoltar:aoVoltar };
+})();
+/*</rotas>*/
+
 let aba = "resumo";
-const ORDEM_ABAS = ["resumo","mes","patrimonio","vencimentos","dividendos","plano","ajustes"];
-const ABAS_OCULTAS = ["mes","patrimonio","vencimentos","dividendos","plano"];
-function irPara(nome){
-  // guarda no ponto UNICO de navegacao: tocar num mes no Resumo, um atalho do
-  // manifest ou um botao interno tambem chegam aqui, e nenhum deles pode furar
-  // o disfarce
-  if (disfarce && ABAS_OCULTAS.includes(nome)){
+const ORDEM_ABAS = ROTAS.ORDEM;
+const ABAS_OCULTAS = ROTAS.OCULTAS;
+// ---- navegacao: a barra, o historico e a URL. A logica (sem DOM) esta em
+//      ROTAS e e testada; aqui fica so o que toca a tela e o history.
+let nivelHist = 0;                 // 0 = na base (Resumo); 1 = uma aba empilhada por cima
+let ultimaCarteira = "patrimonio"; // a sub-aba que o destino Carteira reabre
+let ignorarPop = false, popPendente = null;
+function irPara(nome, opts){
+  opts = opts || {};
+  // "nome" pode ser um destino da barra ("carteira") ou uma das 7 secoes.
+  // Este e o ponto UNICO de navegacao: tocar num mes no Resumo, um atalho do
+  // manifest, um botao interno ou o Voltar tambem chegam aqui, e nenhum deles
+  // pode furar o disfarce
+  const alvo = ROTAS.abaDoDestino(nome, ultimaCarteira);
+  if (!alvo) return;
+  if (disfarce && ABAS_OCULTAS.includes(alvo)){
     toast("Modo discreto: recalibre o índice local em Ajustes para abrir esta aba");
     return;
   }
-  const de = ORDEM_ABAS.indexOf(aba), para = ORDEM_ABAS.indexOf(nome);
-  const dir = para > de ? "vem-dir" : "vem-esq";
-  aba = nome;
-  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === nome));
+  const de = aba;
+  if (ROTAS.destinoDe(alvo) === "carteira") ultimaCarteira = alvo;
+  aba = alvo;
   document.querySelectorAll("main section").forEach(x => {
     x.classList.remove("vem-dir","vem-esq");
-    x.classList.toggle("on", x.id === "s-"+nome);
+    x.classList.toggle("on", x.id === "s-"+alvo);
   });
   window.scrollTo(0,0);
   render();
-  if (de !== para && de >= 0){
-    const alvo = document.getElementById("s-"+nome);
+  if (de !== alvo){
+    const s = document.getElementById("s-"+alvo);
     // reinicia a animacao: sem o reflow, trocar de aba duas vezes seguidas
     // para a mesma direcao nao re-dispara
-    void alvo.offsetWidth;
-    alvo.classList.add(dir);
+    void s.offsetWidth;
+    s.classList.add(ROTAS.direcao(de, alvo));
   }
+  if (!opts.semHistorico) registrarTroca(de, alvo);
 }
-// Mede a barra: se o nome da aba ativa a faz passar da largura, so o icone.
-// Medir (e nao fixar um corte de largura de tela) deixa o nome onde ele cabe --
-// "Mes" cabe num celular em que "Vencimentos" nao cabe.
-// Os botoes ENCOLHEM (flex) antes de a barra transbordar: o corte aparece dentro
-// do botao ativo (o nome cortado), nao na barra -- por isso mede os dois.
-function ajustarNav(){
-  const n = document.querySelector("nav");
-  if (!n) return;
-  n.classList.remove("compacta");
-  const corta = n.scrollWidth > n.clientWidth + 1 ||
-    [...n.querySelectorAll("button")].some(b => b.scrollWidth > b.clientWidth + 1);
-  if (corta) n.classList.add("compacta");
+// Cada troca de aba entra no historico em modelo "hub" (ROTAS.transicao): o
+// Voltar do celular volta ao Resumo em vez de sair do app, e a URL diz onde se
+// esta -- recarregar reabre a mesma aba.
+function registrarTroca(de, para){
+  const t = ROTAS.transicao(de, para, nivelHist);
+  nivelHist = t.nivel;
+  const est = { aba: para }, url = location.pathname + ROTAS.urlDaAba(para);
+  try {
+    if (t.op === "push") history.pushState(est, "", url);
+    else if (t.op === "replace") history.replaceState(est, "", url);
+    else if (t.op === "back") voltarNoHistorico();
+  } catch(e){}
 }
+// history.back() que o PROPRIO app pede: o popstate que vem em seguida nao e o
+// usuario, e e ignorado. O prazo cobre o caso de ele nao vir.
+function voltarNoHistorico(){
+  return new Promise(res => {
+    ignorarPop = true;
+    const pronto = () => { if (popPendente === pronto){ popPendente = null; ignorarPop = false; res(); } };
+    popPendente = pronto;
+    setTimeout(pronto, 500);
+    history.back();
+  });
+}
+const SUB_ABAS = { patrimonio:"Contas", vencimentos:"Vencimentos", dividendos:"Dividendos" };
+function marcarBarra(){
+  const d = ROTAS.destinoDe(aba);
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === d));
+  const onde = document.getElementById("onde"), dest = ROTAS.DESTINOS.find(x => x.id === d);
+  if (onde) onde.textContent = dest ? dest.nome + (SUB_ABAS[aba] && SUB_ABAS[aba] !== dest.nome ? " · " + SUB_ABAS[aba] : "") : "";
+}
+// O botao Voltar (e o Avancar): folha aberta fecha; senao vai para a aba do estado.
+window.addEventListener("popstate", ev => {
+  const r = ROTAS.aoVoltar({ ignorar: ignorarPop, folhaAberta: folhaAberta(), simOcupado: simOcupado,
+                             estado: ev.state, abaAtual: aba, disfarce: disfarce });
+  if (r.acao === "ignorar"){ ignorarPop = false; if (popPendente) popPendente(); return; }
+  if (r.acao === "fechar-folha"){ fecharFolhaDOM(); return; }
+  if (r.acao === "repor-folha"){ try { history.pushState({ aba: aba, folha: true }, ""); } catch(e){} return; }
+  if (r.acao === "ir"){ nivelHist = ROTAS.nivelDe(ev.state); irPara(r.aba, { semHistorico: true }); }
+});
+// Segundo nivel da navegacao (ver .subnav no CSS): data-ir troca de secao (ligado
+// em render), data-sub troca de visao dentro da mesma secao (quem renderiza liga).
+function subnav(itens, ativa, attr, nome){
+  return '<div class="subnav" role="tablist" aria-label="' + esc(nome || "") + '">' + itens.map(i =>
+    '<button role="tab" data-' + attr + '="' + i[0] + '" aria-selected="' + (i[0] === ativa) + '"' +
+    (i[0] === ativa ? ' class="on"' : '') + '>' + esc(i[1]) + '</button>').join("") + '</div>';
+}
+const subnavCarteira = ativa =>
+  subnav([["patrimonio","Contas"],["vencimentos","Vencimentos"],["dividendos","Dividendos"]], ativa, "ir", "Carteira");
+function ligarSubnav(){
+  document.querySelectorAll("main section.on .subnav button[data-ir]").forEach(b => b.onclick = () => irPara(b.dataset.ir));
+}
+// exportar e a ultima coisa de cada pagina, sempre com a mesma cara e no mesmo lugar
+const rodapeExcel = x =>
+  '<div class="rodape-aba"><button class="btn mini plain xls" data-x="' + x + '">Exportar esta aba para Excel</button></div>';
 function marcarDisfarce(){
   document.body.classList.toggle("discreto", disfarce);
   // campos de valor viram somente-leitura: sem isso daria para digitar um
@@ -3236,12 +3407,11 @@ function marcarDisfarce(){
   document.querySelectorAll(".cel").forEach(i => { if (i.tagName === "INPUT") i.readOnly = disfarce; });
 }
 function render(){
-  const ch = document.getElementById("chip-mes");
-  ch.innerHTML = '<b>' + rotulo(mesAtual) + '</b>';
   ({ resumo:renderResumo, mes:renderMes, patrimonio:renderPatrimonio, vencimentos:renderVencimentos,
      dividendos:renderDividendos, plano:renderPlano, ajustes:renderAjustes })[aba]();
   marcarDisfarce();
-  ajustarNav();
+  marcarBarra();
+  ligarSubnav();
   ligarExcel();
   ligarAvisoConexao();
   // a Resumo e a porta de entrada: dali tambem a posicao se atualiza (e o erro aparece)
@@ -3338,12 +3508,12 @@ function renderResumo(){
     '<div class="col-a">' + heroi + leitura() + '</div>' +
     '<div class="col-b">' +
       '<div class="hdr"><h2>Mês a mês</h2>' +
-        '<button class="btn mini plain xls" data-x="resumo">Excel</button>' +
         '<span class="seg" id="seg-ano">' + anos.map(a =>
           '<button data-a="' + a + '"' + (a===anoSel?' class="on"':'') + '>' + a + '</button>').join("") +
         '</span></div>' +
       '<div class="grafwrap" id="graf"></div>' +
       '<div class="regua">' + listaAno(anoSel) + '</div>' +
+      rodapeExcel("resumo") +
     '</div>';
 
   desenharArco();
@@ -3562,7 +3732,7 @@ function folhaMes(comp){
     '<button class="btn plain" id="fechar">Fechar</button></div>',
     () => {
       document.getElementById("fechar").onclick = fecharFolha;
-      document.getElementById("abrir").onclick = () => { fecharFolha(); mesAtual = comp; irPara("mes"); };
+      document.getElementById("abrir").onclick = () => fecharFolha().then(() => { mesAtual = comp; irPara("mes"); });
     });
 }
 
@@ -3622,14 +3792,23 @@ function renderMes(){
   let out = avisoTravado() +
     '<div class="mnav"><button id="m-ant" aria-label="Mês anterior">' + ICO.ant + '</button>' +
     '<span class="lbl">' + rotuloL(mesAtual) + '</span>' +
-    '<button id="m-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
+    '<button id="m-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>' +
+    // as acoes do mes ficam no topo, nao depois de duas listas e do quadro de totais
+    '<div class="acoes topo">' +
+      '<button class="btn mini" id="m-lanc">Lançamentos</button>' +
+      '<button class="btn mini" id="m-comp">Novo compromisso</button>' +
+      '<button class="btn mini plain" id="m-nota">' + (info.obs?"Editar nota":"Anotar o mês") + '</button>' +
+      '<button class="btn mini plain" id="m-ancora">' + (vazio(info.saldo_inicial_override)?"Reancorar":"Remover âncora") + '</button>' +
+    '</div>';
 
   for (const tipo of ["receita","despesa"]){
     const cats = estado.categorias.filter(c => c.tipo === tipo && c.ativo !== false);
     if (!cats.length) continue;
     const soma = tipo === "receita" ? m.receitas : m.saidas;
     out += '<div class="hdr"><h2>' + (tipo==="receita"?"Receitas":"Saídas") + '</h2>' +
-           '<span class="aux">' + fmt(soma) + '</span></div><div class="rule"></div>';
+           '<span class="aux">' + fmt(soma) + '</span></div><div class="rule"></div>' +
+           // as colunas tem nome: o apurado a esquerda do previsto, que se edita
+           '<div class="colhead"><span>categoria</span><span>apurado</span><span class="ed">previsto</span></div>';
     let grupo = "";
     for (const c of cats){
       if (c.grupo !== grupo){
@@ -3668,13 +3847,9 @@ function renderMes(){
       esc(fmtsin(d)) + ' <span class="d3 t12">' + fmtpct(m.variacao) + '</span></span></div>') +
   '</div>' +
   (info.obs ? '<div class="nota fria">' + esc(info.obs) + '</div>' : "") +
-  '<div class="acoes">' +
-    '<button class="btn mini" id="m-comp">Novo compromisso</button>' +
-    '<button class="btn mini" id="m-ancora">' + (vazio(info.saldo_inicial_override)?"Reancorar":"Remover âncora") + '</button>' +
-    '<button class="btn mini plain" id="m-nota">' + (info.obs?"Editar nota":"Anotar o mês") + '</button>' +
-    '<button class="btn mini plain" id="m-lanc">Lançamentos</button>' +
-    '<button class="btn mini plain xls" data-x="mes">Excel</button>' +
-  '</div>';
+  '<div class="legenda-f"><span class="fx">ƒ</span> = calculado por regra. Toque no nome de uma categoria ' +
+    'para ver os lançamentos, repetir o valor até o fim ou criar um compromisso.</div>' +
+  rodapeExcel("mes");
 
   el.innerHTML = out;
   document.getElementById("m-ant").onclick  = () => { mesAtual = somaMes(mesAtual,-1); render(); };
@@ -3942,7 +4117,7 @@ function renderPatrimonio(){
     '<button id="p-prox" aria-label="Próximo mês">' + ICO.prox + '</button></div>';
 
   if (!ativas.length){
-    el.innerHTML = avisoTravado() + nav +
+    el.innerHTML = avisoTravado() + subnavCarteira("patrimonio") + nav +
       '<div class="vazio"><b>Nenhuma conta cadastrada.</b><br>' +
       'Cadastre suas contas e o app soma o patrimônio sozinho —<br>sem reescrever os meses que já estão apurados.</div>' +
       '<div class="acoes"><button class="btn pri" id="nova-conta">Cadastrar conta</button></div>';
@@ -3951,10 +4126,10 @@ function renderPatrimonio(){
   }
 
   const modo = estado.settings.patModo || "apontar";
-  el.innerHTML = avisoTravado() + nav +
+  el.innerHTML = avisoTravado() + subnavCarteira("patrimonio") + nav +
     '<div class="hdr"><h2>' + (modo === "apontar" ? "Saldo por conta" : "Análise por conta") + '</h2>' +
     '<span class="seg" id="seg-pat">' +
-      [["apontar","Apontar"],["analise","Análise"]].map(k =>
+      [["apontar","Saldos"],["analise","Análise"]].map(k =>
         '<button data-m="' + k[0] + '"' + (k[0] === modo ? ' class="on"' : '') + '>' + k[1] + '</button>').join("") +
     '</span></div><div class="rule"></div>' +
     (modo === "apontar" ? blocoApontar(ativas) : blocoAnalise(ativas));
@@ -4099,15 +4274,14 @@ function blocoApontar(ativas){
   const podeCopiar = falta.length && Object.keys(saldos[ant] || {}).length;
   out += '<div class="acoes">' +
     (podeCopiar ? '<button class="btn" id="p-copiar">Copiar de ' + rotulo(ant) + '</button>' : "") +
-    '<button class="btn" id="nova-conta">Nova conta</button>' +
-    '<button class="btn plain xls" data-x="patrimonio">Excel</button></div>';
+    '<button class="btn" id="nova-conta">Nova conta</button></div>';
 
   if (proj.filter(x => !x.aberto).length > 1){
     out += '<div class="hdr"><h2>Evolução do patrimônio</h2><span class="aux">' +
       rotulo(proj[0].competencia) + ' → ' + rotulo(proj[proj.length-1].competencia) +
       '</span></div><div class="rule"></div><div class="grafwrap" id="evol"></div>';
   }
-  return out;
+  return out + rodapeExcel("patrimonio");
 }
 
 // Traz os saldos do mes anterior para so editar o que mudou. Nao sobrescreve
@@ -4222,7 +4396,7 @@ function blocoAnalise(ativas){
     : '<div class="vazio t13">Com três meses apurados dá para comparar a trajetória ' +
       'de cada conta lado a lado.</div>';
 
-  out += '<div class="acoes"><button class="btn plain xls" data-x="patrimonio">Excel</button></div>';
+  out += rodapeExcel("patrimonio");
   return out;
 }
 
@@ -4926,7 +5100,7 @@ function renderVencimentos(){
   const el = document.getElementById("s-vencimentos");
   ligarArrastoVenc(el);
   if (!estado.cdbs.length){
-    el.innerHTML = avisoTravado() + (cdbsIndisponivel
+    el.innerHTML = avisoTravado() + subnavCarteira("vencimentos") + (cdbsIndisponivel
       ? '<div class="aviso">A tabela <b>fin_cdbs</b> ainda não existe no banco — rode <b>db/006_cdbs.sql</b> no Supabase.</div>' : "") +
       (avisoConexao() || (sincInfo && sincInfo.erro && !sincronizando
         ? '<div class="aviso">Open Finance: ' + esc(sincInfo.erro) + '.</div>' : "")) +
@@ -4941,15 +5115,14 @@ function renderVencimentos(){
     vencMes = VENC.iso(prox ? prox.dia : hoje).slice(0, 7);
   }
   const visao = ["rend", "inst"].includes(prefVenc().visao) ? prefVenc().visao : "cal";
-  el.innerHTML = avisoTravado() + avisoConexao() + linhaPosicao() + segVisaoVenc(visao) +
+  el.innerHTML = avisoTravado() + subnavCarteira("vencimentos") + avisoConexao() + linhaPosicao() + segVisaoVenc(visao) +
     (visao === "rend" ? blocoRendimento(hoje) : visao === "inst" ? blocoInstituicoes() :
       heroiVenc(ag, hoje) +
-      '<div class="hdr"><h2>Quanto cai por mês</h2>' +
-        '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' + segAnosVenc(ag) + '</div>' +
+      '<div class="hdr"><h2>Quanto cai por mês</h2>' + segAnosVenc(ag) + '</div>' +
       '<div class="grafwrap" id="graf-venc"></div>' +
       navMesVenc() + calendarioVenc(ag, hoje) + resumoMesVenc(ag) +
       '<div class="vlista">' + listaVenc(ag, hoje) + '</div>') +
-    premissasVenc() + conexoesVenc();
+    premissasVenc() + conexoesVenc() + rodapeExcel("vencimentos");
   if (visao === "rend") desenharBarrasRend(); else if (visao === "cal") desenharBarrasVenc();
   ligarAcoesVenc(el);
   talvezSincronizar();
@@ -5207,7 +5380,7 @@ function rendimentoAtual(){
 const historicoVenc = () => (prefVenc().historico) || (sincInfo && sincInfo.historico) || null;
 const mesParcial = (m, h) => !!(h && h.completoDesde && m.mes < h.completoDesde && m.situacao !== "futuro");
 function segVisaoVenc(visao){
-  return '<div class="vvisao"><span class="seg" id="seg-venc-visao">' +
+  return '<div class="vvisao"><span class="seg larga" id="seg-venc-visao">' +
     [["cal", "Calendário"], ["rend", "Rendimento"], ["inst", "Instituições"]].map(k =>
       '<button data-v="' + k[0] + '"' + (k[0] === visao ? ' class="on"' : '') + '>' + k[1] + '</button>').join("") + '</span></div>';
 }
@@ -5330,7 +5503,6 @@ function blocoRendimento(hoje){
       '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
     blocoTaxaMedia() +
     '<div class="hdr"><h2>Quanto rendeu por mês</h2>' +
-      '<button class="btn mini plain xls" data-x="vencimentos">Excel</button>' +
       (anos.length > 1 ? '<span class="seg" id="seg-rend-ano">' + anos.map(a =>
         '<button data-a="' + a + '"' + (a === rendAno ? ' class="on"' : '') + '>' + a + '</button>').join("") + '</span>' : '') +
     '</div>' +
@@ -5459,7 +5631,7 @@ function blocoInstituicoes(){
       '<div class="cap">' + cap + '</div></div></div>' +
     '<div class="fatos">' + fatos.map(f =>
       '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
-    '<div class="hdr"><h2>Por instituição</h2><button class="btn mini plain xls" data-x="vencimentos">Excel</button></div>' +
+    '<div class="hdr"><h2>Por instituição</h2></div>' +
     '<div class="legenda"><span><i class="sw-if"></i>hoje</span><span><i class="sw-ip"></i>até o pico, sem reaplicar</span>' +
       '<span><i class="sw-il"></i>limite de ' + LIMITE_TXT + '</span></div>' +
     r.grupos.map(g => linhaInst(g, escala, r)).join("") +
@@ -5857,7 +6029,7 @@ function renderDividendos(){
   if (!estado.categorias.length){ el.innerHTML = avisoTravado() + semDados(); return; }
   const x = ctxDiv();
   if (!x){
-    el.innerHTML = avisoTravado() + '<div class="aviso">Crie a categoria de receita <b>Dividendos</b> em ' +
+    el.innerHTML = avisoTravado() + subnavCarteira("dividendos") + '<div class="aviso">Crie a categoria de receita <b>Dividendos</b> em ' +
       'Ajustes → Categorias para usar esta aba.</div>';
     return;
   }
@@ -5869,17 +6041,17 @@ function renderDividendos(){
   const caixa = document.getElementById("div-tab");
   const rolagem = caixa ? [caixa.scrollLeft, caixa.scrollTop] : null;
   const tudo = estado.settings.divPeriodo === "tudo";
-  el.innerHTML = avisoTravado() +
+  el.innerHTML = avisoTravado() + subnavCarteira("dividendos") +
     '<div id="div-destaque">' + destaqueDiv(x) + '</div>' +
     '<div class="hdr"><h2>Mês a mês</h2><span class="seg" id="seg-div-per">' +
       '<button data-p="2a"' + (tudo ? '' : ' class="on"') + '>2 anos</button>' +
       '<button data-p="tudo"' + (tudo ? ' class="on"' : '') + '>Tudo</button></span></div>' +
     '<div class="grafwrap" id="graf-div"></div>' +
     '<div class="hdr"><h2>Ano contra ano</h2></div><div class="rule"></div>' + blocoAnosDiv(x) +
-    '<div class="hdr"><h2>Tabela</h2><span class="aux">toque no recebido para lançar</span>' +
-      '<button class="btn mini plain xls" data-x="dividendos">Excel</button></div>' +
+    '<div class="hdr"><h2>Tabela</h2><span class="aux">toque no recebido para lançar</span></div>' +
     '<div class="tabwrap" id="div-tab">' + tabelaDiv(x) + '</div>' +
-    '<div class="acoes"><button class="btn" id="div-importar">Importar planilha</button></div>';
+    '<div class="acoes"><button class="btn" id="div-importar">Importar planilha</button></div>' +
+    rodapeExcel("dividendos");
   if (rolagem){ const t = document.getElementById("div-tab"); t.scrollLeft = rolagem[0]; t.scrollTop = rolagem[1]; }
   desenharDiv();
   ligarDiv(el);
@@ -6258,10 +6430,67 @@ function colunasPlano(modo){
   }
   return out;
 }
+// A aba Plano tem quatro visoes (sub-abas): a tabela, os compromissos
+// parcelados, as regras e as simulacoes. So em memoria: cada sessao comeca
+// na tabela, que e o que se abre para olhar.
+let planoAba = "tabela";
 function renderPlano(){
   const el = document.getElementById("s-plano");
   if (!estado.categorias.length){ el.innerHTML = avisoTravado() + semDados(); return; }
   if (simAberta) return renderSimulacao(el);
+  const sub = subnav([["tabela","Tabela"],["compromissos","Compromissos"],["regras","Regras"],["simulacoes","Simulações"]],
+                     planoAba, "sub", "Plano");
+  let corpo;
+  if (planoAba === "compromissos"){
+    corpo = '<div class="hdr"><h2>Compromissos parcelados</h2><span class="aux">somam por cima do plano</span></div>' +
+      '<div class="rule"></div>' +
+      '<div class="acoes topo"><button class="btn" id="novo-comp">Novo compromisso</button></div>' + listaCompromissos();
+  } else if (planoAba === "regras"){
+    corpo = '<div class="hdr"><h2>Regras</h2><span class="aux">preenchem os meses sem valor</span></div>' +
+      '<div class="rule"></div>' +
+      '<div class="acoes topo"><button class="btn" id="nova-regra">Nova regra</button></div>' + listaRegras();
+  } else if (planoAba === "simulacoes"){
+    corpo = blocoSimulacoes();
+  } else {
+    corpo = tabelaPlano();
+  }
+
+  // a tabela rola por dentro: sem guardar a posicao, todo redesenho (gravar uma
+  // celula, a sincronizacao em segundo plano) a devolveria para o primeiro mes
+  const caixa = document.getElementById("plano-tab");
+  const rolagem = caixa ? [caixa.scrollLeft, caixa.scrollTop] : null;
+  el.innerHTML = avisoTravado() + sub + corpo;
+  const c = document.getElementById("plano-tab");
+  if (rolagem && c){ c.scrollLeft = rolagem[0]; c.scrollTop = rolagem[1]; }
+
+  el.querySelectorAll(".subnav button[data-sub]").forEach(b => b.onclick = () => {
+    planoAba = b.dataset.sub; render(); window.scrollTo(0, 0);
+  });
+  // cada visao liga so o que renderizou
+  const liga = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
+  if (planoAba === "tabela"){
+    ligarEdicaoTabela(el);
+    el.querySelectorAll("#seg-modo button").forEach(b => b.onclick = async () => {
+      estado.settings.planoModo = b.dataset.m;
+      render(); gravarPrefs();
+    });
+    liga("mais12", async () => {
+      estado.settings.mesesExtra = (estado.settings.mesesExtra||0) + 12;
+      horizonte(); reprojetar(); render(); gravarPrefs(); toast("Horizonte estendido");
+    });
+  }
+  if (planoAba === "simulacoes") ligarSimulacoes(el);
+  liga("novo-comp", () => folhaCompromisso(null));
+  el.querySelectorAll(".ed-comp").forEach(b =>
+    b.onclick = () => folhaCompromisso(estado.parcelas.find(p => p.id === b.dataset.id)));
+  liga("nova-regra", () => folhaRegra(null));
+  el.querySelectorAll(".ed-regra").forEach(b =>
+    b.onclick = () => folhaRegra(estado.regras.find(r => r.id === b.dataset.id)));
+}
+// A tabela do plano: um mes por linha; nas colunas os totais, os grupos ou as
+// categorias (so este ultimo modo e editavel: um grupo soma varias categorias
+// e nao daria para saber em qual delas gravar).
+function tabelaPlano(){
   const modo = estado.settings.planoModo || "grupos";
   const cols = colunasPlano(modo);
   const hoje = compHoje();
@@ -6279,8 +6508,6 @@ function renderPlano(){
     h += '<tr' + (m.competencia===hoje?' class="agora"':'') + '><td>' + rotulo(m.competencia) + '</td>' +
       cols.map(c => {
         const v = c.ids.reduce((s,id) => s + (m.previsto[id]||0), 0);
-        // so o modo Categorias e editavel: um grupo e soma de varias categorias,
-        // nao daria para saber em qual delas gravar.
         const edit = modo === "categorias";
         return '<td class="' + (v?"":"z") + (edit?" ed":"") + '"' +
           (edit ? ' data-comp="' + m.competencia + '" data-cat="' + c.ids[0] + '"' : "") +
@@ -6295,45 +6522,16 @@ function renderPlano(){
   }
   h += '</tbody></table>';
 
-  // a tabela rola por dentro: sem guardar a posicao, todo redesenho (gravar uma
-  // celula, a sincronizacao em segundo plano) a devolveria para o primeiro mes
-  const caixa = document.getElementById("plano-tab");
-  const rolagem = caixa ? [caixa.scrollLeft, caixa.scrollTop] : null;
-
-  el.innerHTML = avisoTravado() + blocoSimulacoes() +
-    '<div class="hdr"><h2>Plano completo</h2>' +
-      '<button class="btn mini plain xls" data-x="plano">Excel</button>' +
-      '<span class="seg" id="seg-modo">' +
-        ['totais','grupos','categorias'].map(k =>
-          '<button data-m="' + k + '"' + (k===modo?' class="on"':'') + '>' +
-          ({totais:"Totais",grupos:"Grupos",categorias:"Categorias"})[k] + '</button>').join("") +
-      '</span></div>' +
+  return '<div class="hdr"><h2>Plano completo</h2>' +
+      '<span class="aux">' + (modo === "categorias" ? "toque numa célula para editar" : "no modo Categorias as células se editam") + '</span></div>' +
+    '<span class="seg larga" id="seg-modo">' +
+      ['totais','grupos','categorias'].map(k =>
+        '<button data-m="' + k + '"' + (k===modo?' class="on"':'') + '>' +
+        ({totais:"Totais",grupos:"Grupos",categorias:"Categorias"})[k] + '</button>').join("") +
+    '</span>' +
     '<div class="tabwrap" id="plano-tab">' + h + '</div>' +
-    '<div class="hdr"><h2>Compromissos parcelados</h2><span class="aux">somam por cima do plano</span></div>' +
-    '<div class="rule"></div>' + listaCompromissos() +
-    '<div class="acoes"><button class="btn" id="novo-comp">Novo compromisso</button></div>' +
-    '<div class="hdr"><h2>Regras</h2><span class="aux">preenchem os meses sem valor</span></div>' +
-    '<div class="rule"></div>' + listaRegras() +
-    '<div class="acoes"><button class="btn" id="nova-regra">Nova regra</button>' +
-    '<button class="btn plain" id="mais12">Estender 12 meses</button></div>';
-
-  if (rolagem){ const c = document.getElementById("plano-tab"); c.scrollLeft = rolagem[0]; c.scrollTop = rolagem[1]; }
-  ligarEdicaoTabela(el);
-  ligarSimulacoes(el);
-  el.querySelectorAll("#seg-modo button").forEach(b => b.onclick = async () => {
-    estado.settings.planoModo = b.dataset.m;
-    render(); gravarPrefs();
-  });
-  document.getElementById("novo-comp").onclick = () => folhaCompromisso(null);
-  el.querySelectorAll(".ed-comp").forEach(b =>
-    b.onclick = () => folhaCompromisso(estado.parcelas.find(p => p.id === b.dataset.id)));
-  document.getElementById("nova-regra").onclick = () => folhaRegra(null);
-  el.querySelectorAll(".ed-regra").forEach(b =>
-    b.onclick = () => folhaRegra(estado.regras.find(r => r.id === b.dataset.id)));
-  document.getElementById("mais12").onclick = async () => {
-    estado.settings.mesesExtra = (estado.settings.mesesExtra||0) + 12;
-    horizonte(); reprojetar(); render(); gravarPrefs(); toast("Horizonte estendido");
-  };
+    '<div class="acoes"><button class="btn plain" id="mais12">Estender o plano em 12 meses</button></div>' +
+    rodapeExcel("plano");
 }
 
 // Edicao direta na tabela do plano: clicar na celula, digitar, Enter.
@@ -6594,12 +6792,14 @@ function blocoSimulacoes(){
   if (!rows) rows = '<div class="vazio sim-vazio"><b>Nenhuma simulação.</b><br>Teste um gasto grande, um financiamento ou um ' +
     'reajuste<br>e veja onde cada ano termina — o plano não muda.</div>';
   return '<div class="hdr"><h2>Simulações</h2><span class="aux">“e se…” sem mexer no plano</span></div><div class="rule"></div>' +
+    '<div class="acoes topo"><button class="btn" id="sim-nova">Nova simulação</button></div>' +
     (simIndisponivel ? '<div class="nota fria" style="margin:0 0 8px">Para <b>guardar</b> simulações falta aplicar a ' +
       'migração 008 no Supabase. Dá para simular, mas não para guardar.</div>' : "") +
-    rows + '<div class="acoes"><button class="btn" id="sim-nova">Nova simulação</button></div>';
+    rows;
 }
 function ligarSimulacoes(el){
-  el.querySelector("#sim-nova").onclick = () => abrirSim(null);
+  const nv = el.querySelector("#sim-nova");
+  if (nv) nv.onclick = () => abrirSim(null);
   el.querySelectorAll("[data-sim]").forEach(b => b.onclick = () =>
     abrirSim(estado.simulacoes.find(s => s.id === b.dataset.sim)));
   el.querySelectorAll("[data-ras-abrir]").forEach(b => b.onclick = () => abrirRascunho(lerRascunho(b.dataset.rasAbrir || null)));
@@ -7877,15 +8077,27 @@ function exportarXLSX(quais, nomeArquivo){
 // ============================================================
 // FOLHA MODAL
 // ============================================================
+const folhaAberta = () => document.getElementById("sheet-bg").classList.contains("on");
 function abrirFolha(html, depois){
+  // a folha entra no historico: o Voltar do celular a fecha em vez de sair do
+  // app (uma folha aberta por cima de outra so troca o conteudo)
+  if (!folhaAberta()){ try { history.pushState({ aba: aba, folha: true }, ""); } catch(e){} }
   document.getElementById("sheet").innerHTML = html;
   document.getElementById("sheet-bg").classList.add("on");
   document.body.classList.add("nav-off");
   if (depois) depois();
 }
-function fecharFolha(){
+function fecharFolhaDOM(){
   document.getElementById("sheet-bg").classList.remove("on");
   document.body.classList.remove("nav-off");
+}
+// Devolve uma promessa: quem precisa navegar DEPOIS de fechar (o "Abrir o mes"
+// da folha do Resumo) espera a entrada da folha sair do historico -- senao a
+// troca de aba empilharia por cima dela.
+function fecharFolha(){
+  fecharFolhaDOM();
+  if (!(history.state && history.state.folha)) return Promise.resolve();
+  return voltarNoHistorico();
 }
 document.getElementById("sheet-bg").addEventListener("click", ev => {
   // no meio de uma gravacao da simulacao a folha fica: fechar deixaria mexer no app
@@ -7899,7 +8111,6 @@ document.addEventListener("keydown", ev => {
 // ENTRADA
 // ============================================================
 document.querySelectorAll("nav button").forEach(b => b.onclick = () => irPara(b.dataset.tab));
-document.getElementById("chip-mes").onclick = () => irPara("mes");
 
 // O cadastro esta DESLIGADO no painel do Supabase (existe uma conta so),
 // entao nao ha caminho de signup aqui: ele so poderia falhar.
@@ -7947,24 +8158,13 @@ async function iniciar(){
   mesAtual = estado.competencias.includes(hoje) ? hoje
            : (estado.competencias[estado.competencias.length-1] || hoje);
   reprojetar();
-  const alvo = abaDaURL();
-  if (alvo && alvo !== "resumo" && !(disfarce && ABAS_OCULTAS.includes(alvo))) irPara(alvo);
-  else render();
+  // a base do historico e sempre o Resumo; um deep link (?ir=, atalho do
+  // manifest) empilha a aba pedida por cima, para o Voltar cair no Resumo
+  const pilha = ROTAS.pilhaInicial(location.search, disfarce);
+  try { history.replaceState({ aba: "resumo" }, "", location.pathname); } catch(e){}
+  nivelHist = 0;
+  if (pilha.length > 1) irPara(pilha[1]); else render();
 }
-
-// esconder a barra ao rolar — limitador por relógio, NAO rAF
-// (rAF nao dispara em aba de fundo nem no Browser pane)
-let ultY = 0, ultT = 0;
-window.addEventListener("scroll", () => {
-  const t = Date.now();
-  if (t - ultT < 120) return;
-  ultT = t;
-  const y = window.scrollY;
-  if (Math.abs(y-ultY) > 26 && !document.getElementById("sheet-bg").classList.contains("on")){
-    document.body.classList.toggle("nav-off", y > ultY && y > 130);
-    ultY = y;
-  }
-}, { passive:true });
 
 // Redesenhar so quando a LARGURA muda. O navegador dispara resize tambem
 // quando a barra de rolagem aparece/some (mudanca so de altura) -- e cada
@@ -7975,7 +8175,6 @@ window.addEventListener("resize", () => {
   ultimaLargura = window.innerWidth;
   clearTimeout(redimT);
   redimT = setTimeout(() => {
-    ajustarNav();
     if (!estado.categorias.length) return;
     if (aba === "resumo"){ desenharArco(); desenharCombo(anoSel); }
     if (aba === "patrimonio") desenharEvolucao();
@@ -7996,12 +8195,6 @@ if (instalado) document.body.classList.add("instalado");
 function tremer(ms){ try { if (navigator.vibrate) navigator.vibrate(ms || 8); } catch(e){} }
 // estado inicial: sempre discreto
 marcarDisfarce();
-
-// atalhos do manifest (?ir=mes) e deep link
-function abaDaURL(){
-  const q = new URLSearchParams(location.search).get("ir");
-  return ORDEM_ABAS.includes(q) ? q : null;
-}
 
 // convite de instalacao: discreto, dispensavel, e a dispensa e lembrada
 let promptInstalar = null;

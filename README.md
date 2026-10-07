@@ -10,6 +10,26 @@ realizado ao lado do previsto.
 - **Agregações por conta:** o bloco `/*<contas>*/` — composição, variação e série
   empilhada, testadas no mesmo arquivo
 
+## Navegação
+
+Cinco destinos na barra — Resumo · Mês · Carteira · Plano · Ajustes —, todos com o
+nome visível; no desktop (≥ 1000 px) a barra vira um trilho à esquerda, com o mesmo
+markup. **Carteira** agrupa Contas (saldo por conta e análise), Vencimentos e
+Dividendos, que continuam seções próprias por baixo (`s-patrimonio`, `s-vencimentos`,
+`s-dividendos`); o destino reabre a última sub-aba usada. O segundo nível é sempre
+uma linha de sub-abas sublinhadas no topo da página (`.subnav` — na Carteira e no
+Plano: Tabela · Compromissos · Regras · Simulações); a pílula `.seg` fica só para
+alternar **dentro** de uma seção. A ação principal de cada página fica logo abaixo
+do título, e "Exportar esta aba para Excel" é sempre a última coisa da página.
+
+A lógica sem DOM está no bloco `/*<rotas>*/` (`ROTAS`, `tests/test_rotas.html`):
+qual destino acende para cada seção, o que `?ir=` abre (`?ir=carteira` e os atalhos
+antigos `?ir=patrimonio` / `?ir=vencimentos` continuam valendo) e o histórico em
+modelo "hub": sair do Resumo empilha **uma** entrada, trocar entre abas substitui, e o
+Voltar do celular fecha a folha aberta ou volta ao Resumo em vez de sair do app. A
+URL acompanha a aba, então recarregar reabre onde se estava. No modo discreto a barra
+mostra só Resumo e Ajustes.
+
 ## Apuração por conta
 
 Até **08/2026** o realizado vem da planilha (`fin_months.realizado_override`), e o
