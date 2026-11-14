@@ -221,6 +221,11 @@ nav button.on svg{stroke-width:1.9}
 .fatos .pe{flex:1 1 100%;border-top:1px solid var(--line);padding:9px 14px;font-size:12.5px;
   color:var(--ink-2);display:flex;gap:6px 16px;flex-wrap:wrap;line-height:1.5}
 .fatos .pe b{color:var(--ink);font-weight:500}
+/* o "saldo inicial" do painel do Mes abre a folha do inicio do mes; o padding com
+   margem negativa aumenta a area de toque sem mexer na altura da linha */
+.fatos .pe .lnk{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:left;
+  padding:10px 0;margin:-10px 0;text-decoration:underline dotted var(--ink-3);text-underline-offset:4px}
+.fatos .pe .lnk:hover{color:var(--ink)}
 
 .nota{
   margin:22px 0 0;padding:15px 16px;border-radius:var(--r);
@@ -941,6 +946,78 @@ window.MOTOR = (function () {
            parcelasDoMes: parcelasDoMes, mesN: mesN };
 })();
 /*</motor>*/
+
+/*<inicio>*/
+// ============================================================
+// INICIO DO MES -- o saldo com que um mes comeca, quando o usuario o fixa
+// (fin_months.saldo_inicial_override). Puro, depende so de MOTOR.
+// Testado por tests/test_inicio.html (dado inventado).
+//
+// Fixar o inicio de um mes refaz a previsao dele e a dos seguintes ate o
+// proximo mes que tambem tenha inicio fixado: dali em diante a cadeia ja
+// parte de outro valor e nada muda.
+// ============================================================
+window.INICIO = (function () {
+
+  // zero e um inicio valido: so null/undefined contam como "nao fixado",
+  // a mesma regra do MOTOR
+  function fixado(info) {
+    return !!info && info.saldo_inicial_override !== null && info.saldo_inicial_override !== undefined;
+  }
+
+  function proximoFixado(meses, competencias, comp) {
+    for (const c of competencias) if (c > comp && fixado(meses && meses[c])) return c;
+    return null;
+  }
+
+  // O que muda se `comp` passar a comecar com `valor` (null = voltar a
+  // encadear na previsao do mes anterior). Nao altera `d`.
+  function efeito(d, comp, valor) {
+    const i = d.competencias.indexOf(comp);
+    if (i < 0) return null;
+    const meses = Object.assign({}, d.meses);
+    meses[comp] = Object.assign({}, meses[comp],
+      { saldo_inicial_override: (valor === undefined ? null : valor) });
+    const antes = MOTOR.projetar(d);
+    const depois = MOTOR.projetar(Object.assign({}, d, { meses: meses }));
+    const prox = proximoFixado(d.meses, d.competencias, comp);
+    const j = prox ? d.competencias.indexOf(prox) - 1 : d.competencias.length - 1;
+    return {
+      mes: {
+        antes:  { saldoInicial: antes[i].saldoInicial,  previsao: antes[i].previsao },
+        depois: { saldoInicial: depois[i].saldoInicial, previsao: depois[i].previsao },
+      },
+      ate: { comp: d.competencias[j], antes: antes[j].previsao, depois: depois[j].previsao },
+      proxFixado: prox,
+    };
+  }
+
+  // Sobra mensal alem do plano: quanto o patrimonio real cresceu acima do que
+  // o plano previa para o mes (receitas - saidas), partindo do apurado do mes
+  // anterior. Nao depende do inicio fixado: a conta antiga (a diferenca do mes
+  // ancorado) so valia quando a ancora era o proprio apurado do mes anterior.
+  function sobras(proj) {
+    const out = [];
+    for (let k = 1; k < proj.length; k++) {
+      const m = proj[k], a = proj[k - 1];
+      if (m.aberto || a.aberto) continue;
+      out.push(m.realizado - a.realizado - (m.receitas - m.saidas));
+    }
+    return out;
+  }
+
+  // O campo do inicio so aceita numero: digitos, ponto, virgula, sinal e "R$".
+  // O parseNum do app le o comeco do texto de proposito ("10%" = 10), e aqui
+  // isso gravaria um valor que a pessoa nao digitou ("12abc" = 12, "200 mil" = 200).
+  function textoNumerico(t) {
+    const s = String(t === null || t === undefined ? "" : t).replace(/R\$|\s/g, "");
+    return /^-?[\d.,]+$/.test(s) && /\d/.test(s);
+  }
+
+  return { fixado: fixado, proximoFixado: proximoFixado, efeito: efeito, sobras: sobras,
+           textoNumerico: textoNumerico };
+})();
+/*</inicio>*/
 
 /*<contas>*/
 // ============================================================
@@ -3206,10 +3283,14 @@ async function limparPlano(comp, catId){
   delete estado.plano[comp][catId];
   reprojetar();
 }
+// Devolve se gravou de fato: no modo discreto ou sem conexao o salvar devolve
+// null (e ja avisou) -- quem chama nao pode dizer "gravado" nesse caso.
 async function definirMes(comp, campos){
   const r = await salvar("fin_months", Object.assign({competencia:comp}, campos), "user_id,competencia");
-  if (r && r[0]) estado.meses[comp] = r[0];
+  const gravou = !!(r && r[0]);
+  if (gravou) estado.meses[comp] = r[0];
   reprojetar();
+  return gravou;
 }
 async function definirSaldo(comp, contaId, saldo){
   const r = await salvar("fin_balances", { competencia:comp, account_id:contaId, saldo:saldo },
@@ -3737,19 +3818,10 @@ function folhaMes(comp){
     });
 }
 
-// Sobra mensal além do plano. Onde há âncora o acumulado zera, então a sobra
-// daquele mês é a própria diferença.
-function sobrasMensais(){
-  const out = [];
-  for (let i = 1; i < proj.length; i++){
-    const m = proj[i], ant = proj[i-1];
-    if (m.aberto || ant.aberto) continue;
-    const info = estado.meses[m.competencia] || {};
-    const ancorado = !vazio(info.saldo_inicial_override);
-    out.push(ancorado ? m.diferenca : m.diferenca - ant.diferenca);
-  }
-  return out;
-}
+// Sobra mensal além do plano: quanto o patrimônio real cresceu acima do que o
+// plano previa para o mês, partindo do apurado do mês anterior. Não depende do
+// início fixado (com início livre, a diferença do mês fixado não é a sobra).
+function sobrasMensais(){ return INICIO.sobras(proj); }
 function leitura(){
   const s = sobrasMensais();
   if (s.length < 3) return "";
@@ -3799,8 +3871,10 @@ function painelMes(m, info){
     (ant ? tile("Mês anterior", esc(fmtn0(ant.aberto ? ant.previsao : ant.realizado)),
                 rotulo(ant.competencia) + (ant.aberto ? " · previsto" : " · apurado"))
          : tile("Mês anterior", "—", "fora do horizonte")) +
-    '<div class="pe"><span>saldo inicial <b>' + esc(fmt(m.saldoInicial)) + '</b>' +
-      (vazio(info.saldo_inicial_override) ? "" : ' <span class="d3">(âncora)</span>') + '</span>' +
+    // o saldo inicial abre a folha do inicio do mes, a mesma do botao "Inicio do mes"
+    '<div class="pe"><button class="lnk" id="m-ini" title="Mudar o início do mês">saldo inicial <b>' +
+      esc(fmt(m.saldoInicial)) + '</b>' +
+      (vazio(info.saldo_inicial_override) ? "" : ' <span class="d3">(fixado)</span>') + '</button>' +
     '<span>receitas <b class="pos">' + esc(fmtn(m.receitas)) + '</b></span>' +
     '<span>saídas <b class="neg">' + esc(fmtn(m.saidas)) + '</b></span></div></div>';
 }
@@ -3855,7 +3929,7 @@ function renderMes(){
       '<button class="btn mini" id="m-lanc">Lançamentos</button>' +
       '<button class="btn mini" id="m-comp">Novo compromisso</button>' +
       '<button class="btn mini plain" id="m-nota">' + (info.obs?"Editar nota":"Anotar o mês") + '</button>' +
-      '<button class="btn mini plain" id="m-ancora">' + (vazio(info.saldo_inicial_override)?"Reancorar":"Remover âncora") + '</button>' +
+      '<button class="btn mini plain" id="m-inicio">Início do mês</button>' +
     '</div>';
 
   // no desktop Receitas e Saidas ficam lado a lado (.duas); no celular, uma depois da outra
@@ -3903,7 +3977,8 @@ function renderMes(){
 
   el.innerHTML = out;
   ligarMnav("m");
-  document.getElementById("m-ancora").onclick = () => acaoAncora(info);
+  document.getElementById("m-inicio").onclick = () => folhaInicio();
+  document.getElementById("m-ini").onclick = () => folhaInicio();
   document.getElementById("m-nota").onclick = () => folhaNota(info);
   document.getElementById("m-lanc").onclick = () => folhaLancamentos(null);
   document.getElementById("m-comp").onclick = () => folhaCompromisso(null);
@@ -3966,28 +4041,109 @@ async function repetirValor(catId, valor){
   reprojetar(); render();
   toast(cat.nome + " = " + fmtn(valor) + " em " + daqui.length + " meses");
 }
-async function acaoAncora(info){
-  if (!vazio(info.saldo_inicial_override)){
-    await definirMes(mesAtual, { saldo_inicial_override:null }); toast("Âncora removida"); render(); return;
-  }
-  const ant = mesProj(somaMes(mesAtual,-1));
-  if (!ant || ant.aberto){ toast("O mês anterior ainda não foi apurado"); return; }
-  const m = mesProj(mesAtual);
+// O inicio do mes: com quanto o mes comeca. Fixar um valor refaz a previsao
+// deste mes e a dos seguintes, ate o proximo mes que tambem tenha inicio
+// fixado; "Voltar a encadear" devolve o inicio a previsao do mes anterior. A
+// previa sai de INICIO.efeito -- a mesma conta do motor, sem gravar nada.
+function folhaInicio(){
+  if (bloqueadoPeloDisfarce()) return;          // o valor na tela e falso: nem abre
+  const comp = mesAtual, m = mesProj(comp);
+  if (!m) return;
+  const info = estado.meses[comp] || {};
+  const fixado = INICIO.fixado(info);
+  const primeiro = estado.competencias[0] === comp;   // nao tem mes anterior para encadear
+  const ant = primeiro ? null : mesProj(somaMes(comp, -1));
+  const apurado = (ant && !ant.aberto) ? ant.realizado : null;
+  // o valor sem arredondar enquanto o campo mostrar o texto dele: o inicio de
+  // hoje (com centavos so na tela) ou o apurado do atalho
+  let exato = m.saldoInicial;
+  let ocupado = false;
+
+  const origem = fixado ? ", um valor fixado"
+    : (ant ? ", que vem da previsão de " + rotulo(ant.competencia) : "");
   abrirFolha(
-    "<h3>Reancorar no apurado</h3>" +
-    '<div class="sub">O saldo inicial de ' + rotuloL(mesAtual) + ' passa a ser o patrimônio real de ' +
-      rotulo(ant.competencia) + '. Toda a projeção à frente se ajusta.</div>' +
-    '<div class="tot" style="margin-top:0">' +
-      '<div><span>Hoje</span><span>' + esc(fmt(m.saldoInicial)) + '</span></div>' +
-      '<div><span>Passa a ser</span><span class="pos">' + esc(fmt(ant.realizado)) + '</span></div></div>' +
-    '<div class="acoes"><button class="btn pri" id="ok">Reancorar</button>' +
-    '<button class="btn plain" id="cancel">Cancelar</button></div>',
+    "<h3>Início de " + rotuloL(comp) + "</h3>" +
+    '<div class="sub">Hoje o mês começa com <b>' + esc(fmt(m.saldoInicial)) + '</b>' + origem + '. ' +
+      'Mude o valor e a previsão deste mês e a dos seguintes se refazem a partir dele.</div>' +
+    '<label class="f">Começa com<input id="i-valor" inputmode="decimal" value="' + esc(fmtn(m.saldoInicial)) + '"></label>' +
+    (apurado !== null
+      ? '<button class="btn mini plain" id="i-apurado" style="margin-top:8px">Usar o apurado de ' +
+        rotulo(ant.competencia) + ' (' + esc(fmt(apurado)) + ')</button>' : '') +
+    '<div id="i-previa"></div>' +
+    '<div class="acoes"><button class="btn pri" id="i-ok">Salvar início</button>' +
+      (fixado && !primeiro ? '<button class="btn plain" id="i-solta">Voltar a encadear</button>' : '') +
+      '<button class="btn plain" id="i-cancel">Cancelar</button></div>',
     () => {
-      document.getElementById("cancel").onclick = fecharFolha;
-      document.getElementById("ok").onclick = async () => {
-        await definirMes(mesAtual, { saldo_inicial_override: ant.realizado });
-        fecharFolha(); toast("Reancorado"); render();
+      const inp = document.getElementById("i-valor");
+      const lido = () => {
+        if (exato !== null && inp.value === fmtn(exato)) return exato;
+        exato = null;
+        if (!INICIO.textoNumerico(inp.value)) return null;
+        const v = parseNum(inp.value);
+        return Number.isFinite(v) ? v : null;   // "1e999" nem chega aqui; Infinity gravaria null
       };
+      const previa = () => {
+        const el = document.getElementById("i-previa");
+        const v = lido();
+        if (v === null){
+          el.innerHTML = '<div class="nota fria" style="margin-top:18px">Digite o valor com que o mês começa.</div>';
+          return;
+        }
+        // a menos de meio centavo do inicio de hoje e o proprio inicio de hoje:
+        // a previa mostra os valores atuais, sem seta
+        const igual = Math.abs(v - m.saldoInicial) < 0.005;
+        const ef = INICIO.efeito(dadosMotor(), comp, igual ? m.saldoInicial : v);
+        if (!ef){ el.innerHTML = ""; return; }
+        const linha = (rot, a, b) => (Math.abs(b - a) < 0.005)
+          ? '<div><span>' + rot + '</span><span>' + esc(fmt(a)) + '</span></div>'
+          : '<div><span>' + rot + '</span><span>' + esc(fmt(a)) + ' → <b class="' + (b > a ? "pos" : "neg") + '">' +
+            esc(fmt(b)) + '</b></span></div>';
+        // o valor lido vem primeiro: um numero mal digitado aparece aqui antes de gravar
+        let h = '<div class="tot">' + linha("Começa com", ef.mes.antes.saldoInicial, ef.mes.depois.saldoInicial) +
+          linha("Previsão de " + rotulo(comp), ef.mes.antes.previsao, ef.mes.depois.previsao);
+        if (ef.ate.comp !== comp)
+          h += linha(rotulo(ef.ate.comp) + (ef.proxFixado ? "" : " · fim do plano"), ef.ate.antes, ef.ate.depois);
+        h += '</div>';
+        if (ef.proxFixado)
+          h += '<div class="nota fria" style="margin-top:14px">' + rotuloL(ef.proxFixado) +
+            ' também tem início fixado, então a mudança vale ' +
+            (ef.ate.comp === comp ? 'só para ' + rotulo(comp) : 'até ' + rotulo(ef.ate.comp)) +
+            '. Para ela seguir adiante, abra ' + rotulo(ef.proxFixado) + ' e use “Voltar a encadear”.</div>';
+        el.innerHTML = h;
+      };
+      const travar = sim => document.querySelectorAll("#sheet .acoes button, #i-apurado")
+        .forEach(b => { b.disabled = sim; });
+      // so fecha e avisa se gravou: no modo discreto, sem conexao ou com erro o
+      // salvar ja avisou e a folha fica aberta com o valor digitado
+      const gravar = async (valor, msg) => {
+        if (ocupado) return;
+        ocupado = true; travar(true);
+        try {
+          if (!(await definirMes(comp, { saldo_inicial_override: valor }))) return;
+          fecharFolha(); render(); toast(msg); tremer();
+        } catch(e){ /* o salvar ja mostrou "Não gravou" */ }
+        finally { ocupado = false; travar(false); }
+      };
+      const salvarInicio = () => {
+        const v = lido();
+        if (v === null){ toast("Digite o valor com que o mês começa"); return; }
+        if (Math.abs(v - m.saldoInicial) < 0.005){ fecharFolha(); toast("Nada mudou"); return; }
+        gravar(v, "Início de " + rotulo(comp) + " = " + fmt(v));
+      };
+
+      inp.addEventListener("input", previa);
+      inp.addEventListener("focus", () => inp.select());
+      inp.addEventListener("keydown", ev => { if (ev.key === "Enter"){ ev.preventDefault(); salvarInicio(); } });
+      document.getElementById("i-ok").onclick = salvarInicio;
+      document.getElementById("i-cancel").onclick = fecharFolha;
+      const solta = document.getElementById("i-solta");
+      if (solta) solta.onclick = () =>
+        gravar(null, "Início de " + rotulo(comp) + " volta a vir da previsão de " + rotulo(ant.competencia));
+      const ap = document.getElementById("i-apurado");
+      if (ap) ap.onclick = () => { exato = apurado; inp.value = fmtn(apurado); previa(); };
+      previa();
+      // no celular o teclado cobriria a previa: o foco automatico fica so no desktop
+      if (matchMedia("(pointer:fine)").matches) inp.focus();
     });
 }
 function folhaNota(info){

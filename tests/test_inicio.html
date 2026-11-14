@@ -1,0 +1,191 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste do inicio do mes</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+// Testa o bloco /*<inicio>*/ do index.html (INICIO): a previa do efeito de
+// fixar o saldo inicial de um mes, o proximo mes fixado e a sobra mensal.
+// So dado INVENTADO -- o repositorio e publico. (Os valores foram escolhidos
+// para nao coincidir com nenhum valor da planilha real.)
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if(!cond) falhas++; return cond; }
+function perto(a, b, msg){
+  ok(typeof a === "number" && Math.abs(a - b) < 0.01, `${msg} (obtido ${a}, esperado ${b})`);
+}
+function igual(a, b, msg){
+  ok(JSON.stringify(a) === JSON.stringify(b), `${msg} (obtido ${JSON.stringify(a)}, esperado ${JSON.stringify(b)})`);
+}
+function lista(a, b, msg){
+  ok(Array.isArray(a) && a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 0.01),
+     `${msg} (obtido ${JSON.stringify(a)}, esperado ${JSON.stringify(b)})`);
+}
+function fim(){
+  document.getElementById("out").textContent =
+    log.join("\n") + `\n\n=== ${falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)"} === (${log.length} asserções)`;
+}
+
+// Base inventada: 12 meses de 2026, receita 9.300 e despesa 3.100 por regra
+// fixa (sobra 6.200 por mes), janeiro comecando em 100.000. Mes k: inicio
+// 100.000 + 6.200(k-1) e previsao 100.000 + 6.200k.
+function base(){
+  const competencias = [];
+  for (let m = 1; m <= 12; m++) competencias.push("2026-" + String(m).padStart(2, "0") + "-01");
+  return {
+    categorias: [{ id: "rec", nome: "Receita fixa", tipo: "receita" }, { id: "desp", nome: "Despesa fixa", tipo: "despesa" }],
+    regras: [
+      { category_id: "rec",  tipo: "fixo", valor: 9300, inicio: "2026-01-01", fim: null, ativo: true },
+      { category_id: "desp", tipo: "fixo", valor: 3100, inicio: "2026-01-01", fim: null, ativo: true },
+    ],
+    plano: {}, parcelas: [], balances: {},
+    meses: { "2026-01-01": { saldo_inicial_override: 100000 } },
+    competencias,
+  };
+}
+
+(async () => {
+  // cache-buster: sem ele o navegador serve a copia anterior do index.html
+  const v = "?v=" + Date.now();
+  const html = await (await fetch("../index.html" + v)).text();
+  const mm = html.match(/\/\*<motor>\*\/([\s\S]*?)\/\*<\/motor>\*\//);
+  if (!ok(!!mm, "bloco <motor> encontrado no index.html")) return fim();
+  (0, eval)(mm[1]);
+  const mi = html.match(/\/\*<inicio>\*\/([\s\S]*?)\/\*<\/inicio>\*\//);
+  if (!ok(!!mi, "bloco <inicio> encontrado no index.html")) return fim();
+  (0, eval)(mi[1]);
+  if (!ok(!!window.INICIO && typeof INICIO.efeito === "function", "INICIO.efeito existe")) return fim();
+
+  // --- 1. fixado e proximoFixado
+  ok(INICIO.fixado({ saldo_inicial_override: 0 }) === true, "1. início fixado em zero conta como fixado");
+  ok(INICIO.fixado({ saldo_inicial_override: null }) === false, "1. override null não é fixado");
+  ok(INICIO.fixado(undefined) === false, "1. mês sem linha não é fixado");
+  {
+    const d = base();
+    d.meses["2026-06-01"] = { saldo_inicial_override: 50000 };
+    d.meses["2026-08-01"] = { saldo_inicial_override: null };
+    igual(INICIO.proximoFixado(d.meses, d.competencias, "2026-02-01"), "2026-06-01", "1. de fev, o próximo fixado é jun");
+    igual(INICIO.proximoFixado(d.meses, d.competencias, "2026-06-01"), null, "1. de jun, nenhum à frente (o null de ago não conta)");
+    d.meses["2026-09-01"] = { saldo_inicial_override: 0 };
+    igual(INICIO.proximoFixado(d.meses, d.competencias, "2026-06-01"), "2026-09-01", "1. zero em set conta como fixado");
+  }
+
+  // --- 2. efeito sem outro mes fixado a frente
+  {
+    const ef = INICIO.efeito(base(), "2026-04-01", 200000);
+    perto(ef.mes.antes.saldoInicial, 118600, "2. abr começava com 118.600");
+    perto(ef.mes.antes.previsao, 124800, "2. previsão de abr antes");
+    perto(ef.mes.depois.saldoInicial, 200000, "2. abr passa a começar com 200.000");
+    perto(ef.mes.depois.previsao, 206200, "2. previsão de abr depois");
+    igual(ef.ate.comp, "2026-12-01", "2. a mudança chega ao fim do horizonte");
+    perto(ef.ate.antes, 174400, "2. dez antes");
+    perto(ef.ate.depois, 255800, "2. dez depois");
+    igual(ef.proxFixado, null, "2. sem mês fixado à frente");
+  }
+
+  // --- 3. outro mes fixado a frente segura a cadeia
+  {
+    const d = base();
+    d.meses["2026-06-01"] = { saldo_inicial_override: 50000 };
+    const ef = INICIO.efeito(d, "2026-04-01", 200000);
+    igual(ef.ate.comp, "2026-05-01", "3. a mudança vai até mai (jun está fixado)");
+    perto(ef.ate.antes, 131000, "3. mai antes");
+    perto(ef.ate.depois, 212400, "3. mai depois");
+    igual(ef.proxFixado, "2026-06-01", "3. jun é o próximo fixado");
+    const d2 = base();
+    d2.meses["2026-06-01"] = { saldo_inicial_override: 50000 };
+    d2.meses["2026-04-01"] = { saldo_inicial_override: 200000 };
+    const pa = MOTOR.projetar(d), pd = MOTOR.projetar(d2);
+    ok(pa.slice(5).every((m, i) => Math.abs(m.previsao - pd[5 + i].previsao) < 0.01), "3. de jun a dez nada muda");
+  }
+  {
+    const d = base();
+    d.meses["2026-05-01"] = { saldo_inicial_override: 50000 };
+    const ef = INICIO.efeito(d, "2026-04-01", 200000);
+    igual(ef.ate.comp, "2026-04-01", "3. mai fixado: a mudança fica só em abr");
+    perto(ef.ate.depois, 206200, "3. ... e o 'até' é a própria previsão de abr");
+  }
+
+  // --- 4. voltar a encadear
+  {
+    const d = base();
+    d.meses["2026-04-01"] = { saldo_inicial_override: 200000 };
+    const ef = INICIO.efeito(d, "2026-04-01", null);
+    perto(ef.mes.antes.saldoInicial, 200000, "4. abr estava fixado em 200.000");
+    perto(ef.mes.depois.saldoInicial, 118600, "4. voltar a encadear: abr começa na previsão de mar");
+  }
+
+  // --- 5. pureza
+  {
+    const d = base();
+    d.meses["2026-06-01"] = { saldo_inicial_override: 50000 };
+    const antes = JSON.stringify(d);
+    INICIO.efeito(d, "2026-04-01", 200000);
+    INICIO.efeito(d, "2026-06-01", null);
+    ok(JSON.stringify(d) === antes, "5. efeito não altera os dados que recebe");
+  }
+
+  // --- 6. regra de % do saldo inicial: a diferenca tambem rende
+  {
+    const d = base();
+    d.categorias.push({ id: "ren", nome: "Rendimentos", tipo: "receita" });
+    d.regras.push({ category_id: "ren", tipo: "pct_saldo", percentual: 0.01, inicio: "2026-01-01", fim: null, ativo: true });
+    const ef = INICIO.efeito(d, "2026-04-01", 200000);
+    perto(ef.mes.depois.previsao, 200000 * 1.01 + 6200, "6. abr rende 1% sobre o início novo");
+    perto(ef.ate.depois - ef.ate.antes, (200000 - ef.mes.antes.saldoInicial) * Math.pow(1.01, 9),
+          "6. a diferença do início rende até dez");
+  }
+
+  // --- 7. fora do horizonte
+  igual(INICIO.efeito(base(), "2027-01-01", 1), null, "7. mês fora do horizonte → null");
+
+  // --- 8. sobra mensal alem do plano
+  {
+    // apurados: jan +1.000 acima da previsao, fev +500, mar em cima, abr +1.000
+    const apurar = d => {
+      const r = { "2026-01-01": 107200, "2026-02-01": 112900, "2026-03-01": 118600, "2026-04-01": 125800 };
+      for (const c in r) d.meses[c] = Object.assign({}, d.meses[c], { realizado_override: r[c] });
+      return d;
+    };
+    // a conta de antes: no mes ancorado, a propria diferenca; nos outros, a variacao da diferenca
+    const antiga = (p, meses) => {
+      const out = [];
+      for (let i = 1; i < p.length; i++){
+        const m = p[i], a = p[i-1];
+        if (m.aberto || a.aberto) continue;
+        const anc = meses[m.competencia] && meses[m.competencia].saldo_inicial_override != null;
+        out.push(anc ? m.diferenca : m.diferenca - a.diferenca);
+      }
+      return out;
+    };
+
+    lista(INICIO.sobras(MOTOR.projetar(apurar(base()))), [-500, -500, 1000], "8. sem âncora");
+
+    const d2 = apurar(base());
+    d2.meses["2026-03-01"].saldo_inicial_override = 112900;
+    const p2 = MOTOR.projetar(d2);
+    lista(INICIO.sobras(p2), [-500, -500, 1000], "8. âncora no apurado do mês anterior: mesmo resultado");
+    lista(INICIO.sobras(p2), antiga(p2, d2.meses), "8. ... e igual à conta antiga");
+
+    const d3 = apurar(base());
+    d3.meses["2026-03-01"].saldo_inicial_override = 90000;
+    lista(INICIO.sobras(MOTOR.projetar(d3)), [-500, -500, 1000], "8. início livre (90.000) não mexe na sobra");
+
+    const d4 = apurar(base());
+    d4.meses["2026-02-01"].realizado_override = null;
+    lista(INICIO.sobras(MOTOR.projetar(d4)), [1000], "8. fev em aberto: só abr entra");
+  }
+
+  // --- 9. o campo do inicio so aceita numero: o parseNum do app le o comeco
+  //        ("12abc" vira 12, "200 mil" vira 200) e gravaria um valor que a
+  //        pessoa nao digitou
+  if (ok(typeof INICIO.textoNumerico === "function", "9. INICIO.textoNumerico existe")){
+    for (const t of ["500.000", "500.000,00", "R$ 500.000", " R$ 1.300 ", "1300", "-1000", "0"])
+      ok(INICIO.textoNumerico(t) === true, `9. "${t}" é número`);
+    for (const t of ["12abc", "200 mil", "5OO.000", "1e999", "", "  ", "R$", "-", ",", ".", null, undefined])
+      ok(INICIO.textoNumerico(t) === false, `9. ${JSON.stringify(t)} não é número`);
+  }
+
+  fim();
+})().catch(e => { ok(false, "erro: " + e.message); fim(); });
+</script>
