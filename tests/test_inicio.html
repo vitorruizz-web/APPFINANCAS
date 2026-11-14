@@ -131,8 +131,11 @@ function base(){
     d.categorias.push({ id: "ren", nome: "Rendimentos", tipo: "receita" });
     d.regras.push({ category_id: "ren", tipo: "pct_saldo", percentual: 0.01, inicio: "2026-01-01", fim: null, ativo: true });
     const ef = INICIO.efeito(d, "2026-04-01", 200000);
+    // calculado a mao: cada mes rende 1% do inicio e sobra 6.200
+    // jan 100.000 -> fev 107.200 -> mar 114.472 -> abr 121.816,72
+    perto(ef.mes.antes.saldoInicial, 121816.72, "6. abr começava com 121.816,72 (1% ao mês desde jan)");
     perto(ef.mes.depois.previsao, 200000 * 1.01 + 6200, "6. abr rende 1% sobre o início novo");
-    perto(ef.ate.depois - ef.ate.antes, (200000 - ef.mes.antes.saldoInicial) * Math.pow(1.01, 9),
+    perto(ef.ate.depois - ef.ate.antes, (200000 - 121816.72) * Math.pow(1.01, 9),
           "6. a diferença do início rende até dez");
   }
 

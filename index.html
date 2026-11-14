@@ -3874,7 +3874,7 @@ function painelMes(m, info){
     // o saldo inicial abre a folha do inicio do mes, a mesma do botao "Inicio do mes"
     '<div class="pe"><button class="lnk" id="m-ini" title="Mudar o início do mês">saldo inicial <b>' +
       esc(fmt(m.saldoInicial)) + '</b>' +
-      (vazio(info.saldo_inicial_override) ? "" : ' <span class="d3">(fixado)</span>') + '</button>' +
+      (INICIO.fixado(info) ? ' <span class="d3">(fixado)</span>' : "") + '</button>' +
     '<span>receitas <b class="pos">' + esc(fmtn(m.receitas)) + '</b></span>' +
     '<span>saídas <b class="neg">' + esc(fmtn(m.saidas)) + '</b></span></div></div>';
 }
@@ -4045,6 +4045,8 @@ async function repetirValor(catId, valor){
 // deste mes e a dos seguintes, ate o proximo mes que tambem tenha inicio
 // fixado; "Voltar a encadear" devolve o inicio a previsao do mes anterior. A
 // previa sai de INICIO.efeito -- a mesma conta do motor, sem gravar nada.
+// A gravacao passa por umaVez (o mesmo trinco das simulacoes): enquanto grava,
+// a folha nao fecha (x, fundo, Esc, Voltar) e um segundo toque so avisa.
 function folhaInicio(){
   if (bloqueadoPeloDisfarce()) return;          // o valor na tela e falso: nem abre
   const comp = mesAtual, m = mesProj(comp);
@@ -4054,10 +4056,13 @@ function folhaInicio(){
   const primeiro = estado.competencias[0] === comp;   // nao tem mes anterior para encadear
   const ant = primeiro ? null : mesProj(somaMes(comp, -1));
   const apurado = (ant && !ant.aberto) ? ant.realizado : null;
+  const maiuscula = s => s.charAt(0).toUpperCase() + s.slice(1);
   // o valor sem arredondar enquanto o campo mostrar o texto dele: o inicio de
   // hoje (com centavos so na tela) ou o apurado do atalho
   let exato = m.saldoInicial;
-  let ocupado = false;
+  // "Voltar a encadear" pede confirmacao: o 1o toque mostra o efeito na previa,
+  // o 2o grava. Mexer no campo ou no atalho desiste.
+  let soltando = false;
 
   const origem = fixado ? ", um valor fixado"
     : (ant ? ", que vem da previsão de " + rotulo(ant.competencia) : "");
@@ -4068,13 +4073,18 @@ function folhaInicio(){
     '<label class="f">Começa com<input id="i-valor" inputmode="decimal" value="' + esc(fmtn(m.saldoInicial)) + '"></label>' +
     (apurado !== null
       ? '<button class="btn mini plain" id="i-apurado" style="margin-top:8px">Usar o apurado de ' +
-        rotulo(ant.competencia) + ' (' + esc(fmt(apurado)) + ')</button>' : '') +
+        rotulo(ant.competencia) + ' (' + esc(fmt(apurado)) + ')</button>'
+      // o atalho so existe com o mes anterior fechado: dizer por que ele nao esta aqui
+      : (ant ? '<div class="d3 t11" style="margin-top:8px">Quando ' + rotulo(ant.competencia) +
+          ' fechar, aparece aqui o atalho para usar o apurado dele.</div>' : '')) +
     '<div id="i-previa"></div>' +
     '<div class="acoes"><button class="btn pri" id="i-ok">Salvar início</button>' +
       (fixado && !primeiro ? '<button class="btn plain" id="i-solta">Voltar a encadear</button>' : '') +
       '<button class="btn plain" id="i-cancel">Cancelar</button></div>',
     () => {
       const inp = document.getElementById("i-valor");
+      const solta = document.getElementById("i-solta");
+      const botoes = Array.from(document.querySelectorAll("#sheet .acoes button, #i-apurado"));
       const lido = () => {
         if (exato !== null && inp.value === fmtn(exato)) return exato;
         exato = null;
@@ -4084,63 +4094,87 @@ function folhaInicio(){
       };
       const previa = () => {
         const el = document.getElementById("i-previa");
-        const v = lido();
-        if (v === null){
+        const v = soltando ? null : lido();
+        if (!soltando && v === null){
           el.innerHTML = '<div class="nota fria" style="margin-top:18px">Digite o valor com que o mês começa.</div>';
           return;
         }
         // a menos de meio centavo do inicio de hoje e o proprio inicio de hoje:
         // a previa mostra os valores atuais, sem seta
-        const igual = Math.abs(v - m.saldoInicial) < 0.005;
-        const ef = INICIO.efeito(dadosMotor(), comp, igual ? m.saldoInicial : v);
+        const igual = !soltando && Math.abs(v - m.saldoInicial) < 0.005;
+        const ef = INICIO.efeito(dadosMotor(), comp, soltando ? null : (igual ? m.saldoInicial : v));
         if (!ef){ el.innerHTML = ""; return; }
         const linha = (rot, a, b) => (Math.abs(b - a) < 0.005)
           ? '<div><span>' + rot + '</span><span>' + esc(fmt(a)) + '</span></div>'
           : '<div><span>' + rot + '</span><span>' + esc(fmt(a)) + ' → <b class="' + (b > a ? "pos" : "neg") + '">' +
             esc(fmt(b)) + '</b></span></div>';
+        // no ultimo mes do horizonte, sem outro fixado a frente, a previsao do mes e o fim do plano
+        const fimAqui = ef.ate.comp === comp && !ef.proxFixado;
         // o valor lido vem primeiro: um numero mal digitado aparece aqui antes de gravar
         let h = '<div class="tot">' + linha("Começa com", ef.mes.antes.saldoInicial, ef.mes.depois.saldoInicial) +
-          linha("Previsão de " + rotulo(comp), ef.mes.antes.previsao, ef.mes.depois.previsao);
+          linha("Previsão de " + rotulo(comp) + (fimAqui ? " · fim do plano" : ""), ef.mes.antes.previsao, ef.mes.depois.previsao);
         if (ef.ate.comp !== comp)
           h += linha(rotulo(ef.ate.comp) + (ef.proxFixado ? "" : " · fim do plano"), ef.ate.antes, ef.ate.depois);
         h += '</div>';
-        if (ef.proxFixado)
-          h += '<div class="nota fria" style="margin-top:14px">' + rotuloL(ef.proxFixado) +
+        if (soltando)
+          h += '<div class="nota fria" style="margin-top:14px">O início volta a vir da previsão de ' +
+            rotulo(ant.competencia) + ' e o valor fixado, <b>' + esc(fmt(m.saldoInicial)) + '</b>, deixa de valer. ' +
+            'Toque em “Confirmar” para gravar.</div>';
+        // o aviso so interessa quando ha mudanca: sem ela, nada vai ate o mes fixado
+        if (ef.proxFixado && !igual)
+          h += '<div class="nota fria" style="margin-top:14px">' + maiuscula(rotuloL(ef.proxFixado)) +
             ' também tem início fixado, então a mudança vale ' +
             (ef.ate.comp === comp ? 'só para ' + rotulo(comp) : 'até ' + rotulo(ef.ate.comp)) +
             '. Para ela seguir adiante, abra ' + rotulo(ef.proxFixado) + ' e use “Voltar a encadear”.</div>';
         el.innerHTML = h;
       };
-      const travar = sim => document.querySelectorAll("#sheet .acoes button, #i-apurado")
-        .forEach(b => { b.disabled = sim; });
-      // so fecha e avisa se gravou: no modo discreto, sem conexao ou com erro o
-      // salvar ja avisou e a folha fica aberta com o valor digitado
-      const gravar = async (valor, msg) => {
-        if (ocupado) return;
-        ocupado = true; travar(true);
+      const desistir = () => { soltando = false; if (solta) solta.textContent = "Voltar a encadear"; };
+      // enquanto grava, nada na folha mexe: botoes, atalho e o campo (que ainda
+      // receberia Enter -- por isso salvarInicio tambem confere simOcupado)
+      const travar = sim => { botoes.forEach(b => { b.disabled = sim; }); inp.readOnly = sim; };
+      // So fecha e avisa se gravou. Sem gravar, o salvar ja avisou (modo discreto,
+      // sem conexao, erro de rede) -- menos quando o servidor responde sem a linha.
+      const gravar = (valor, msg) => umaVez(async () => {
+        travar(true);
         try {
-          if (!(await definirMes(comp, { saldo_inicial_override: valor }))) return;
-          fecharFolha(); render(); toast(msg); tremer();
+          if (!(await definirMes(comp, { saldo_inicial_override: valor }))){
+            if (!disfarce && !dadosTravados) toast("Não gravou — tente de novo");
+            return;
+          }
+          // umaVez nao deixa a folha fechar durante a gravacao; mesmo assim, so
+          // fecha se ela ainda for esta
+          if (document.getElementById("i-valor") === inp) fecharFolha();
+          render(); toast(msg); tremer();
         } catch(e){ /* o salvar ja mostrou "Não gravou" */ }
-        finally { ocupado = false; travar(false); }
-      };
+        finally { travar(false); }
+      });
       const salvarInicio = () => {
+        if (simOcupado){ toast("Gravando… aguarde"); return; }
+        if (soltando){ desistir(); previa(); }
         const v = lido();
         if (v === null){ toast("Digite o valor com que o mês começa"); return; }
-        if (Math.abs(v - m.saldoInicial) < 0.005){ fecharFolha(); toast("Nada mudou"); return; }
+        if (Math.abs(v - m.saldoInicial) < 0.005){
+          fecharFolha();
+          toast(fixado || !ant ? "Nada mudou"
+            : "Nada mudou: " + rotulo(comp) + " continua vindo da previsão de " + rotulo(ant.competencia));
+          return;
+        }
         gravar(v, "Início de " + rotulo(comp) + " = " + fmt(v));
       };
 
-      inp.addEventListener("input", previa);
+      inp.addEventListener("input", () => { if (soltando) desistir(); previa(); });
       inp.addEventListener("focus", () => inp.select());
       inp.addEventListener("keydown", ev => { if (ev.key === "Enter"){ ev.preventDefault(); salvarInicio(); } });
       document.getElementById("i-ok").onclick = salvarInicio;
       document.getElementById("i-cancel").onclick = fecharFolha;
-      const solta = document.getElementById("i-solta");
-      if (solta) solta.onclick = () =>
-        gravar(null, "Início de " + rotulo(comp) + " volta a vir da previsão de " + rotulo(ant.competencia));
+      if (solta) solta.onclick = () => {
+        if (!soltando){ soltando = true; solta.textContent = "Confirmar: voltar a encadear"; previa(); return; }
+        // o valor fixado vai no aviso: e o unico lugar em que ele ainda aparece
+        gravar(null, "Início de " + rotulo(comp) + " volta a vir da previsão de " + rotulo(ant.competencia) +
+          " (era " + fmt(m.saldoInicial) + ")");
+      };
       const ap = document.getElementById("i-apurado");
-      if (ap) ap.onclick = () => { exato = apurado; inp.value = fmtn(apurado); previa(); };
+      if (ap) ap.onclick = () => { desistir(); exato = apurado; inp.value = fmtn(apurado); previa(); };
       previa();
       // no celular o teclado cobriria a previa: o foco automatico fica so no desktop
       if (matchMedia("(pointer:fine)").matches) inp.focus();
@@ -4156,7 +4190,12 @@ function folhaNota(info){
     () => {
       document.getElementById("cancel").onclick = fecharFolha;
       document.getElementById("ok").onclick = async () => {
-        await definirMes(mesAtual, { obs: document.getElementById("n-obs").value || null });
+        // so fecha e diz "Nota salva" se gravou: sem conexao (ou com erro) o
+        // salvar ja avisou e a folha fica aberta com o texto digitado
+        let ok = false;
+        try { ok = await definirMes(mesAtual, { obs: document.getElementById("n-obs").value || null }); }
+        catch(e){ return; }
+        if (!ok){ if (!disfarce && !dadosTravados) toast("Não gravou — tente de novo"); return; }
         fecharFolha(); render(); toast("Nota salva");
       };
     });
