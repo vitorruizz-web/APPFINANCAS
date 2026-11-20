@@ -4,7 +4,7 @@ PWA de planejamento financeiro pessoal. Projeta o patrimônio mês a mês e põe
 realizado ao lado do previsto.
 
 - **App:** `index.html` (arquivo único) + `manifest.json` + `sw.js`
-- **Banco:** Supabase, 11 tabelas `fin_*`, RLS `auth.uid() = user_id` em todas
+- **Banco:** Supabase, 12 tabelas `fin_*`, RLS `auth.uid() = user_id` em todas
 - **Motor de projeção:** o bloco `/*<motor>*/` do `index.html` — função pura,
   testada contra os 48 meses da planilha original em `tests/test_motor.html`
 - **Agregações por conta:** o bloco `/*<contas>*/` — composição, variação e série
@@ -171,6 +171,38 @@ XP e no BTG soma junto. Cálculo em `VENC.porInstituicao`.
   em tempos. *Juntar* e *Separar* na tela ficam em `settings.venc.fgcJuntar` (sem migração).
 - Letra Financeira e LIG não têm FGC: ficam fora da soma, com aviso.
 
+**Período** (quarta chave da aba): o que **venceu** e o que foi **aplicado** num intervalo de meses
+(De/até pela grade de meses, ou os atalhos este ano · ano passado · últimos 12 · próximos 12 meses),
+lado a lado — para ver se o dinheiro que volta está sendo reaplicado a uma taxa melhor. Cálculo em
+`VENC.periodo`.
+
+- **Vencimentos**: todo título (posição + guardados) com vencimento no período, pelo que cai na conta
+  (líquido; juros mensais = principal + último juro — os juros do meio ficam no Calendário).
+  **Aplicações**: todo título com data de aplicação no período, pelo valor aplicado, à taxa da compra.
+  Título sem data ou valor de aplicação (planilha sem essas colunas) fica fora das aplicações, com aviso.
+- **Taxas** de cada lado, ponderadas pelo valor: por indexador, a taxa contratada média (pré em % a.a.,
+  pós em % do CDI, CDI + spread); juntando todos, o **equivalente em % do CDI** — cada título traduzido
+  pelo CDI da vida dele (o que valeu no passado, a curva das Premissas no futuro). Diferença
+  aplicações − vencimentos em pontos. LCI/LCA entram pela taxa contratada, sem ajuste do IR.
+- Tabelas: Comparação (por indexador), Mês a mês, Vencimentos do período e Aplicações do período. O
+  Excel da aba, nesta visão, leva as quatro do período escolhido (taxa em `0,00%`) e a coluna
+  "Observações". O período escolhido fica só no aparelho (`localStorage`).
+- **Observações nas células**: tocar em qualquer célula das quatro tabelas abre a folha para anotar do
+  que se trata; a célula anotada ganha uma marca no canto (o texto aparece ao passar o mouse). Ficam em
+  `fin_notas` (migração 009), pela chave tabela|linha|coluna (`VENC.chaveNota`; o título pelo id do
+  Open Finance ou nome + vencimento + taxa, `VENC.linhaNota`). Sem a migração o app abre igual e avisa;
+  no modo discreto ficam escondidas.
+- **Mês parcial**: antes de `settings.venc.vencidosDesde` (abaixo) o app pode não ter guardado tudo o que
+  venceu ou foi aplicado — o valor é "pelo menos isso".
+
+**O que vence fica guardado** (desde 20/11/2026): toda atualização da posição — planilha ou Open
+Finance — guarda como linha com `resgate` o título da posição anterior que venceu até a data nova e
+não veio nela (`VENC.guardarVencidos`, em `gravarPosicao`), com o saldo e a data da última posição em
+que apareceu; antes, a planilha nova descartava o que venceu. O marco `settings.venc.vencidosDesde`
+(gravado uma vez, na primeira atualização depois disso: o mês seguinte ao da posição anterior, ou o que
+o histórico do Open Finance garante — `VENC.completoDesde`) diz a partir de quando o histórico está
+completo.
+
 O cálculo mora no bloco `/*<vencimentos>*/` do `index.html` (função pura: dias úteis
 ANBIMA, IR regressivo, curva do CDI, projeção, leitura da planilha) e o leitor de
 arquivo no bloco `/*<xlsx>*/` (ZIP + `DecompressionStream` + `DOMParser`, sem
@@ -293,6 +325,7 @@ do repositório** (`.gitignore`): o repo é público e não guarda dado financei
 | `db/006_cdbs.sql` | `fin_cdbs` (posição de CDBs da aba Vencimentos) + RLS |
 | `db/007_cdbs_resgate.sql` | `fin_cdbs.resgate`: títulos que já venceram, guardados para o rendimento do passado |
 | `db/008_simulacoes.sql` | `fin_simulations` (simulações: alterações por cima do plano e o registro para desfazer) + RLS |
+| `db/009_notas.sql` | `fin_notas` (observações nas células do resumo por período) + RLS |
 | `db/seed.sql` | os 4 anos da planilha (gerado, fora do git) |
 
 A proteção do dado é **RLS + cadastro de novos usuários desligado** no painel do

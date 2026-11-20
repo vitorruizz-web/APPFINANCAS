@@ -94,7 +94,7 @@ MOCK = r"""
         // merge-duplicates: substitui quem tem a mesma chave natural
         const chaves = { fin_plan:["competencia","category_id"], fin_months:["competencia"],
                          fin_balances:["competencia","account_id"], fin_categories:["nome"],
-                         fin_accounts:["nome"], fin_settings:["user_id"] }[tabela];
+                         fin_accounts:["nome"], fin_settings:["user_id"], fin_notas:["chave"] }[tabela];
         if (chaves){
           const j = DADOS[tabela].findIndex(x => chaves.every(k => x[k] === l[k]));
           if (j >= 0){ novo.id = DADOS[tabela][j].id; DADOS[tabela][j] = novo; return novo; }

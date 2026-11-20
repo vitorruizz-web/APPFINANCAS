@@ -832,6 +832,168 @@ function fim(){
   igual(i8.semTaxa, 1, "sem a curva do CDI: conta os pos-fixados parados");
   perto(i8.grupos[0].titulos.find(x => x.cdb === fc).noVenc, 1000, "...que ficam no valor de hoje", 1e-9);
 
+  // ------------------------------------------ guardar o que vence (resumo por periodo)
+  const GV = V.guardarVencidos;
+  const ga1 = { nome:"CDB ALFA - JAN/2027", indexador:"pre", taxa:0.12, vencimento:"2027-01-15", saldo_liquido:1000, data_posicao:"2026-12-01" };
+  const ga2 = { nome:"CDB BETA - MAR/2027", indexador:"cdi", taxa:1.1, vencimento:"2027-03-10", saldo_liquido:2000, data_posicao:"2026-12-01" };
+  const gg0 = { nome:"CDB GAMA - OUT/2026", indexador:"pre", taxa:0.11, vencimento:"2026-10-13", saldo_liquido:1500,
+                data_posicao:"2026-07-01", resgate:"2026-10-13" };
+  igual(GV([ga2], [], [ga1, ga2], "2027-02-01").map(c => [c.nome, c.resgate, c.saldo_liquido, c.data_posicao]),
+        [["CDB ALFA - JAN/2027", "2027-01-15", 1000, "2026-12-01"]],
+        "venceu ate a data nova e nao veio: guarda com resgate = vencimento, o resto intacto");
+  ok(ga1.resgate === undefined, "...em copia: a linha da posicao antiga nao muda");
+  igual(GV([], [], [ga1, ga2], "2027-01-14").length, 0, "o que ainda nao venceu na data nova nao e guardado (vendido ou fora da planilha)");
+  igual(GV([ga2], [gg0], [ga1, ga2], "2027-02-01").map(c => c.nome), ["CDB GAMA - OUT/2026", "CDB ALFA - JAN/2027"],
+        "o que ja estava guardado continua, e o vencido novo entra");
+  igual(GV([ga1, ga2], [], [ga1, ga2], "2027-02-01").length, 0, "veio na posicao nova: nao duplica");
+  igual(GV([ga1], [Object.assign({}, ga1, { resgate:"2027-01-15" })], [], "2026-12-01").length, 0,
+        "planilha antiga reimportada: o guardado que voltou a estar vivo sai (a posicao manda)");
+  const ga1b = Object.assign({}, ga1, { saldo_liquido: 500 });
+  igual(GV([], [], [ga1, ga1b], "2027-02-01").length, 2, "dois lotes do mesmo CDB vencem: os dois guardados");
+  igual(GV([ga1], [], [ga1, ga1b], "2027-02-01").length, 1, "...um deles na posicao nova: guarda so o outro");
+  const gp1 = Object.assign({}, ga1, { externo_id:"x1", origem:"pluggy" });
+  igual(GV([Object.assign({}, gp1, { resgate:"2027-01-15", saldo_liquido:0 })], [], [gp1], "2027-02-01").length, 0,
+        "Open Finance: o mesmo id ja veio como resgatado -- nao duplica");
+  igual(GV([gp1], [], [Object.assign({}, gp1, { externo_id:"x2" })], "2027-02-01").length, 1,
+        "ids diferentes sao titulos diferentes, mesmo com o mesmo nome");
+
+  const CD = V.completoDesde;
+  igual(CD("2026-05", "2026-11-20", null, false), "2026-05", "com o marco gravado, vale o marco");
+  igual(CD(null, "2026-11-20", null, false), "2026-12", "sem marco: completo a partir do mes seguinte ao da posicao");
+  igual(CD(null, "2026-11-20", { faltam: 2, faltamAte: "2026-06-10", horizonte: "2025-12-01" }, true), "2026-07",
+        "Open Finance: depois do ultimo que faltou e do horizonte");
+  igual(CD(null, "2026-11-20", { faltam: 0, faltamAte: null, horizonte: "2026-02-03" }, true), "2026-03",
+        "...sem falta, depois do horizonte");
+  igual(CD(null, "2026-11-20", { faltam: 2, faltamAte: "2026-06-10", horizonte: "2025-12-01" }, false), "2026-12",
+        "posicao de planilha: o historico do Open Finance nao vale");
+  igual(CD(null, null, null, false), null, "sem posicao nem historico: nulo");
+
+  // ------------------------------------------ resumo por periodo (venceu x aplicado)
+  const PER = V.periodo, HJP = d("2026-11-20");
+  const ctxP = extra => Object.assign({ posicao: HJP, hoje: HJP,
+    degraus: V.curvaCDI({ selic: 13.75, cdi: 13.65 }, "hoje", HJP), irPresumido: 0.15 }, extra || {});
+  // diario e pctPre vem do bloco da taxa media (CDI parado em 13,65%)
+  const pv1 = { nome:"LCI ALFA", indexador:"pre", taxa:0.10, vencimento:"2026-12-15", saldo_liquido:1000, data_posicao:"2026-11-20",
+                isento_ir:true, data_aplicacao:"2026-06-15", valor_aplicado:950 };
+  const pv2 = { nome:"CDB BETA", indexador:"cdi", taxa:1.1, vencimento:"2027-10-20", saldo_liquido:3100, data_posicao:"2026-11-20",
+                data_aplicacao:"2026-10-20", valor_aplicado:2950 };
+  const pr1 = { nome:"CDB GAMA", indexador:"pre", taxa:0.12, vencimento:"2026-08-17", saldo_liquido:0, data_posicao:"2026-08-17",
+                data_aplicacao:"2025-08-15", valor_aplicado:2000, resgate:"2026-08-17", origem:"pluggy" };
+  const pr2 = { nome:"CDB DELTA", indexador:"cdi", taxa:1.0, vencimento:"2026-09-15", saldo_liquido:0, data_posicao:"2026-09-15",
+                data_aplicacao:"2026-03-16", valor_aplicado:1000, valor_bruto:null, resgate:"2026-09-15", origem:"pluggy" };
+  const pr3 = { nome:"CDB EPS", indexador:"pre", taxa:0.11, vencimento:"2026-10-13", saldo_liquido:1500, data_posicao:"2026-07-01",
+                resgate:"2026-10-13" };
+  const P26 = PER([pv1, pv2], [pr1, pr2, pr3], ctxP(), { de:"2026-01", ate:"2026-12", completoDesde:"2026-09" });
+  const lin = (lado, nome) => P26.titulos[lado].find(t => t.cdb.nome === nome);
+  igual(P26.titulos.venceu.map(t => t.cdb.nome), ["CDB GAMA", "CDB DELTA", "CDB EPS", "LCI ALFA"],
+        "vencimentos do ano em ordem de data: tres guardados e um vivo");
+  igual(P26.titulos.aplicado.map(t => t.cdb.nome), ["CDB DELTA", "LCI ALFA", "CDB BETA"],
+        "aplicacoes do ano em ordem de data (a de 2025 fica fora)");
+  igual([P26.venceu.n, P26.aplicado.n, P26.semData], [4, 3, 1], "4 vencimentos, 3 aplicacoes, 1 titulo sem data de compra");
+  const brG = 2000 * Math.pow(1.12, du("2025-08-15", "2026-08-17") / 252);
+  perto(lin("venceu", "CDB GAMA").valor, brG - (brG - 2000) * V.aliquotaIR(V.proxUtil(d("2026-08-17")) - d("2025-08-15")),
+        "guardado do Open Finance: o vencimento sai da compra, menos o IR da faixa", 1e-6);
+  perto(lin("venceu", "CDB DELTA").bruto, 1000 * Math.pow(1 + diario, du("2026-03-16", "2026-09-15")),
+        "guardado no CDI sem bruto: aplicado x CDI da compra ao vencimento (nunca negativo)", 1e-6);
+  const brE = 1500 * Math.pow(1.11, du("2026-07-01", "2026-10-13") / 252);
+  perto(lin("venceu", "CDB EPS").valor, brE - (brE - 1500) * 0.15, "guardado da planilha: projeta do saldo da ultima posicao, IR presumido", 1e-6);
+  perto(lin("venceu", "LCI ALFA").valor, 1000 * Math.pow(1.10, du("2026-11-20", "2026-12-15") / 252), "vivo e isento: cai o bruto", 1e-6);
+  ok(lin("venceu", "CDB GAMA").guardado && !lin("venceu", "LCI ALFA").guardado, "marca quem veio dos guardados");
+  perto(P26.venceu.valor, P26.titulos.venceu.reduce((s, t) => s + t.valor, 0), "total dos vencimentos = soma das linhas", 1e-9);
+  perto(P26.aplicado.valor, 950 + 2950 + 1000, "total aplicado = soma do valor aplicado", 1e-9);
+  igual(P26.aplicado.porTipo.map(g => [g.tipo, g.n, g.valor]), [["cdi", 2, 3950], ["pre", 1, 950]], "aplicacoes por indexador, na ordem cdi, pre");
+  perto(P26.aplicado.porTipo[0].taxa, (2950 * 1.1 + 1000 * 1.0) / 3950, "% do CDI medio das aplicacoes, ponderado pelo aplicado", 1e-12);
+  const vG = lin("venceu", "CDB GAMA").valor, vE = lin("venceu", "CDB EPS").valor, vA = lin("venceu", "LCI ALFA").valor;
+  perto(P26.venceu.porTipo.find(g => g.tipo === "pre").taxa, (vG * 0.12 + vE * 0.11 + vA * 0.10) / (vG + vE + vA),
+        "prefixado medio dos vencimentos, ponderado pelo que caiu na conta", 1e-12);
+  perto(lin("aplicado", "CDB BETA").equivCDI, 1.1, "CDI puro: o equivalente e o proprio percentual", 1e-9);
+  perto(lin("aplicado", "LCI ALFA").equivCDI, pctPre(0.10), "prefixado traduzido para % do CDI", 1e-9);
+  perto(P26.aplicado.equivCDI, (2950 * 1.1 + 1000 * 1.0 + 950 * pctPre(0.10)) / 4900, "equivalente do lado: media ponderada", 1e-9);
+  const pm = k => P26.meses.find(m => m.mes === k);
+  igual(P26.meses.length, 12, "um registro por mes do periodo, mesmo vazio");
+  igual(P26.meses.filter(m => m.parcial).map(m => m.mes),
+        ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"], "parcial antes do completoDesde");
+  ok(P26.parcial, "...e o periodo avisa que tem mes parcial");
+  igual([pm("2026-08").venceu.n, pm("2026-10").venceu.n, pm("2026-10").aplicado.n, pm("2026-11").venceu.n, pm("2026-11").venceu.equivCDI],
+        [1, 1, 1, 0, null], "cada titulo no mes da propria data; mes vazio sem taxa");
+  const Pinv = PER([pv1, pv2], [pr1, pr2, pr3], ctxP(), { de:"2026-12", ate:"2026-01" });
+  igual([Pinv.de, Pinv.ate, Pinv.venceu.n], ["2026-01", "2026-12", 4], "De depois de Ate: troca os dois");
+  const P0 = PER([], [], ctxP(), { de:"2030-01", ate:"2030-03" });
+  igual([P0.venceu.valor, P0.venceu.n, P0.venceu.equivCDI, P0.aplicado.porTipo.length, P0.meses.length, P0.parcial],
+        [0, 0, null, 0, 3, false], "periodo vazio: zeros e nulos, sem divisao por zero");
+  const Pnc = PER([pv2], [], ctxP({ degraus: null }), { de:"2026-01", ate:"2027-12" });
+  igual([Pnc.aplicado.equivCDI, Pnc.aplicado.semEquiv], [null, 1], "sem a curva do CDI: equivalente nulo, contado em semEquiv");
+  const pjm = { nome:"CDB JM", indexador:"pre", taxa:0.12, vencimento:"2027-03-10", saldo_liquido:1000, data_posicao:"2026-11-20",
+                juros_mensais:true, data_aplicacao:"2026-03-10", valor_aplicado:1000 };
+  const evj = V.projetar(pjm, ctxP()).eventos;
+  perto(PER([pjm], [], ctxP(), { de:"2027-03", ate:"2027-03" }).titulos.venceu[0].valor, evj[evj.length - 1].liquido,
+        "juros mensais: vence o principal + ultimo juro (os do meio ficam no Calendario)", 1e-9);
+  const AP = V.atalhoPeriodo;
+  igual([AP("ano", "2026-11"), AP("ant", "2026-11"), AP("u12", "2026-11"), AP("p12", "2026-11")],
+        [["2026-01", "2026-12"], ["2025-01", "2025-12"], ["2025-12", "2026-11"], ["2026-11", "2027-10"]],
+        "atalhos do periodo a partir de nov/2026: este ano, ano passado, ultimos e proximos 12 meses");
+  igual([AP("u12", "2026-01"), AP("p12", "2026-12")], [["2025-02", "2026-01"], ["2026-12", "2027-11"]],
+        "atalhos que atravessam a virada do ano");
+
+  // ------------------------------------------ observacoes nas celulas
+  const LN = V.linhaNota, CN = V.chaveNota;
+  igual(LN({ externo_id:"x9", nome:"CDB A", vencimento:"2027-01-15", taxa:0.12 }), "id:x9", "titulo do Open Finance: pelo id, que nao muda");
+  igual(LN(ga1), LN(Object.assign({}, ga1, { saldo_liquido: 1, data_posicao: "2027-01-01" })),
+        "planilha: o saldo e a data da posicao nova nao mudam a chave da linha");
+  ok(LN(ga1) !== LN(ga2), "titulos diferentes, linhas diferentes");
+  igual(CN("mes", "2026-10", "venc"), "mes|2026-10|venc", "chave = tabela|linha|coluna");
+  ok(CN("venc", LN(ga1), "taxa") !== CN("apl", LN(ga1), "taxa"), "a mesma linha em tabelas diferentes sao celulas diferentes");
+
+  // ------------------------------------------ revisao final do resumo por periodo
+  // gemea entre fontes (planilha <-> Open Finance) e reconexao do Open Finance (ids novos)
+  const gPl = { nome:"CDB BANCO ZETA - MAR/2026", indexador:"pre", taxa:0.148, vencimento:"2026-03-16",
+                saldo_liquido:900, data_posicao:"2026-01-05", resgate:"2026-03-16" };
+  const gOf = { nome:"CDB ZETA S.A.", emissor:"BCO ZETA S.A.", indexador:"pre", taxa:0.148037, vencimento:"2026-03-16",
+                saldo_liquido:0, data_posicao:"2026-03-16", resgate:"2026-03-16", externo_id:"of1", origem:"pluggy",
+                data_aplicacao:"2025-03-14", valor_aplicado:800 };
+  igual(GV([gOf], [gPl], [], "2026-11-19").length, 0,
+        "planilha -> Open Finance: o guardado da planilha e o resgatado do OF sao o mesmo titulo (emissor, vencimento, taxa perto)");
+  igual(GV([gPl], [gOf], [], "2026-11-19").length, 0, "...e no sentido contrario");
+  igual(GV([Object.assign({}, gOf, { nome:"CDB OMEGA", emissor:"BANCO OMEGA", externo_id:"of2" })], [gPl], [], "2026-11-19").length, 1,
+        "emissor diferente nao e gemeo");
+  igual(GV([Object.assign({}, gOf, { taxa:0.152, externo_id:"of3" })], [gPl], [], "2026-11-19").length, 1,
+        "taxa longe (0,4 ponto) nao e gemea");
+  igual(GV([Object.assign({}, gOf, { externo_id:"of9" })], [gOf], [], "2026-11-19").length, 0,
+        "reconexao do Open Finance (id novo, mesma compra): nao duplica");
+  igual(GV([Object.assign({}, gOf, { externo_id:"of10", data_aplicacao:"2025-06-02", valor_aplicado:500 })], [gOf], [], "2026-11-19").length, 1,
+        "ids diferentes e compras diferentes: lotes diferentes, os dois ficam");
+  // "paga juros todo mes" nao se perde quando o titulo vence
+  const vivoJM = { nome:"CDB JM2", indexador:"pre", taxa:0.12, vencimento:"2026-10-05", saldo_liquido:1000, data_posicao:"2026-09-01",
+                   externo_id:"jm1", origem:"pluggy", juros_mensais:true, data_aplicacao:"2025-10-03", valor_aplicado:1000 };
+  const resgSemJM = Object.assign({}, vivoJM, { juros_mensais:false, saldo_liquido:0, data_posicao:"2026-10-05", resgate:"2026-10-05" });
+  GV([resgSemJM], [], [vivoJM], "2026-11-19");
+  ok(resgSemJM.juros_mensais === true, "o resgatado que consome o vivo pelo id herda 'paga juros todo mes'");
+  ok(typeof V.comJurosMensais === "function" &&
+     igual.length && JSON.stringify(V.comJurosMensais([{ externo_id:"a", juros_mensais:false }, { externo_id:"b", juros_mensais:true },
+       { nome:"sem id" }], { a:true, b:false }).map(c => !!c.juros_mensais)) === "[true,false,false]",
+     "a marca manual de juros mensais vale por cima, pelo id (vivos e guardados)");
+  // guardado com saldo observado parte do saldo da ultima posicao, nao da compra
+  const gObs = { nome:"CDB OBS", indexador:"cdi", taxa:1.1, vencimento:"2026-10-20", saldo_liquido:2100, valor_bruto:2200,
+                 data_posicao:"2026-08-03", data_aplicacao:"2025-10-20", valor_aplicado:2000, resgate:"2026-10-20",
+                 externo_id:"o1", origem:"pluggy" };
+  const evObs = V.projetar(gObs, ctxP()).eventos;
+  perto(PER([], [gObs], ctxP(), { de:"2026-10", ate:"2026-10" }).titulos.venceu[0].valor, evObs[evObs.length - 1].liquido,
+        "guardado com saldo observado projeta do saldo da ultima posicao", 1e-6);
+  // grupo de valor zero: a taxa e a media simples da contratada, nunca nula
+  const gZero = { nome:"CDB ZERO", indexador:"pre", taxa:0.11, vencimento:"2026-07-15", saldo_liquido:0, data_posicao:"2026-07-15",
+                  resgate:"2026-07-15" };
+  igual(PER([], [gZero], ctxP(), { de:"2026-07", ate:"2026-07" }).venceu.porTipo.map(g => [g.tipo, g.n, g.taxa === null ? null : +g.taxa.toFixed(6)]),
+        [["pre", 1, 0.11]], "grupo de valor zero: taxa contratada pela media simples (nunca nula)");
+  // corretora que respondeu so com vencidos tambem respondeu: nao mantem os vivos antigos dela
+  const antigosOF = [{ instituicao:"XP", origem:"pluggy", externo_id:"x1" }, { instituicao:"BTG", origem:"pluggy", externo_id:"b1" },
+                     { instituicao:"BTG", origem:"pluggy", externo_id:"b2" }, { origem:"planilha", nome:"P" }];
+  ok(typeof V.mantidosSemResposta === "function" &&
+     JSON.stringify(V.mantidosSemResposta(antigosOF, { cdbs: [{ instituicao:"XP" }], resgatados: [{ instituicao:"BTG" }] })) === "[]",
+     "corretora que respondeu so com vencidos: nao mantem os vivos antigos dela (o mesmo titulo vivo e vencido contava 2x)");
+  ok(typeof V.mantidosSemResposta === "function" &&
+     JSON.stringify(V.mantidosSemResposta(antigosOF, { cdbs: [{ instituicao:"XP" }], resgatados: [] }).map(c => c.externo_id)) === '["b1","b2"]',
+     "corretora que nao respondeu: mantem a posicao anterior dela");
+
   // ==MAIS_TESTES==
 
   fim();
