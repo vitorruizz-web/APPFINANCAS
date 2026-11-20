@@ -649,6 +649,16 @@ table.per-t tr.tot td{color:var(--ink);font-weight:500;border-top:1px solid var(
 /* observacao na celula: toque abre a folha; a marca e um canto em sand (a 1a coluna ja e
    sticky, que tambem posiciona o ::after) */
 table.per-t td[data-nota]{cursor:pointer}
+/* drill-down da tabela Mes a mes: a 1a coluna abre os titulos do mes logo abaixo; o detalhe
+   ocupa a linha inteira e fica preso a esquerda ao rolar a tabela de lado */
+table.per-t td.per-drill{cursor:pointer}
+table.per-t td.per-drill .seta{display:inline-block;width:1.1em;color:var(--ink-3)}
+table.per-t td.per-drill:focus-visible{outline:2px solid var(--steel);outline-offset:-2px}
+table.per-t tr.det td{position:static;border-right:0;background:var(--surface);padding:2px 11px 8px;
+  text-align:left;white-space:normal}
+table.per-t tr.det .det-box{position:sticky;left:11px;max-width:calc(100vw - 64px)}
+table.per-t tr.det .det-g{font-size:12px;color:var(--ink-3);margin:10px 0 0}
+table.per-t tr.det .rrow:last-child{border-bottom:0}
 table.per-t td.tem-nota:not(:first-child){position:relative}
 table.per-t td.tem-nota::after{content:"";position:absolute;top:0;right:0;border-style:solid;
   border-width:0 8px 8px 0;border-color:transparent var(--sand) transparent transparent}
@@ -2438,6 +2448,12 @@ window.VENC = (function () {
     if (k === "p12") return [mes, soma(mes, 11)];
     return [a + "-01", a + "-12"];
   }
+  // Os titulos de um mes do resumo (o drill-down da tabela Mes a mes): os que venceram e os
+  // que foram aplicados naquele mes ("AAAA-MM"), na ordem das listas do periodo.
+  function titulosDoMes(r, mes) {
+    const doMes = l => iso(l.dia).slice(0, 7) === mes, t = (r && r.titulos) || {};
+    return { venceu: (t.venceu || []).filter(doMes), aplicado: (t.aplicado || []).filter(doMes) };
+  }
   // Observacao numa celula do resumo por periodo: a chave e tabela|linha|coluna. A
   // linha de um titulo e o id do Open Finance, ou nome + vencimento + taxa -- nada
   // que mude quando a posicao se atualiza (o saldo e a data mudam; a chave, nao).
@@ -2445,7 +2461,8 @@ window.VENC = (function () {
   const chaveNota = (tabela, linha, coluna) => tabela + "|" + linha + "|" + coluna;
 
   return { dn, iso, dow, dataBR, pascoa, feriados, ehUtil, proxUtil, du, aliquotaIR,
-           guardarVencidos, completoDesde, periodo, atalhoPeriodo, linhaNota, chaveNota, comJurosMensais, mantidosSemResposta,
+           guardarVencidos, completoDesde, periodo, atalhoPeriodo, titulosDoMes, linhaNota, chaveNota, comJurosMensais,
+           mantidosSemResposta,
            diaBrasilia, taxaPluggy, dePluggy, lerPluggy, rendimentoMensal, taxaMedia, problemasConexao,
            FGC, CONGLOMERADOS, chaveEmissor, raizEmissor, nomeEmissor, cobertoFGC, grupoEmissor, porInstituicao,
            dataReuniao, curvaCDI, cdiEm, fator, projetar, datasCupom, agenda,
@@ -5970,6 +5987,7 @@ function blocoTaxaMedia(){
 // se o dinheiro que volta esta sendo reaplicado a uma taxa melhor. O periodo escolhido
 // fica so neste aparelho (localStorage): e conveniencia de tela, nao dado.
 let perDe = null, perAte = null, perCache = null;
+const perMesAberto = new Set();          // meses com o detalhe aberto na tabela Mes a mes
 try {
   const p = JSON.parse(localStorage.getItem("fin_venc_periodo") || "null");
   if (p && /^\d{4}-\d{2}$/.test(p.de) && /^\d{4}-\d{2}$/.test(p.ate)){ perDe = p.de; perAte = p.ate; }
@@ -6069,20 +6087,41 @@ function tabelaMesesPer(r, mesH){
   let h = '<thead><tr><th>Mês</th><th class="colsep">Vencimentos</th><th>% do CDI</th>' +
     '<th class="colsep">Aplicações</th><th>% do CDI</th><th class="colsep">Diferença</th></tr></thead><tbody>';
   const K = (linha, col) => VENC.chaveNota("mes", linha, col);
-  for (const m of r.meses)
+  for (const m of r.meses){
+    // a 1a coluna abre o detalhe do mes (titulo a titulo, logo abaixo); as outras celulas
+    // continuam abrindo a observacao
+    const tem = m.venceu.n + m.aplicado.n > 0, aberto = tem && perMesAberto.has(m.mes);
+    const rot = rotulo(m.mes) + (m.parcial ? ' <small class="abr">parcial</small>' : '');
     h += '<tr' + (m.mes === mesH ? ' class="agora"' : '') + '>' +
-      tdN(K(m.mes, "mes"), "", rotulo(m.mes) + (m.parcial ? ' <small class="abr">parcial</small>' : '')) +
+      (tem ? '<td class="per-drill" data-drill="' + m.mes + '" role="button" tabindex="0" aria-expanded="' + aberto + '">' +
+               '<span class="seta">' + (aberto ? "▾" : "▸") + '</span>' + rot + '</td>'
+           : '<td>' + rot + '</td>') +
       tdV(K(m.mes, "venc"), m.venceu.valor, "colsep") + tdCDI(K(m.mes, "venctx"), m.venceu.equivCDI) +
       tdV(K(m.mes, "apl"), m.aplicado.valor, "colsep") + tdCDI(K(m.mes, "apltx"), m.aplicado.equivCDI) +
       tdDif(K(m.mes, "dif"), difDe(m.aplicado.equivCDI, m.venceu.equivCDI), 1) + '</tr>';
+    if (aberto) h += '<tr class="det"><td colspan="6"><div class="det-box">' + detalheMesPer(r, m.mes) + '</div></td></tr>';
+  }
   // a linha do total depende do periodo: a observacao fica presa a ele
   const T = "tot:" + r.de + ":" + r.ate;
-  h += '<tr class="tot">' + tdN(K(T, "mes"), "", "Período") +
+  h += '<tr class="tot"><td>Período</td>' +
     tdV(K(T, "venc"), r.venceu.valor, "colsep") + tdCDI(K(T, "venctx"), r.venceu.equivCDI) +
     tdV(K(T, "apl"), r.aplicado.valor, "colsep") + tdCDI(K(T, "apltx"), r.aplicado.equivCDI) +
     tdDif(K(T, "dif"), difDe(r.aplicado.equivCDI, r.venceu.equivCDI), 1) + '</tr>';
   return '<div class="hdr"><h2>Mês a mês</h2><span class="aux">taxa equivalente em % do CDI</span></div>' +
     '<div class="tabwrap"><table class="plano per-t">' + h + '</tbody></table></div>';
+}
+// O detalhe de um mes da tabela Mes a mes: titulo a titulo, com a data, a corretora, a
+// taxa contratada e o equivalente em % do CDI -- os que venceram e os que foram aplicados.
+function detalheMesPer(r, mes){
+  const t = VENC.titulosDoMes(r, mes), hoje = VENC.dn(hojeISO());
+  const linha = (l, venc) => { const c = l.cdb;
+    return '<div class="rrow"><span class="vr-nm">' + esc(c.nome) + '</span><span class="vr-v">' + esc(fmt(l.valor)) + '</span>' +
+      '<span class="vr-sub">' + [diaBR(l.dia).slice(0, 5), corretoraCurta(c), descTaxa(c)].filter(Boolean).map(esc).join(" · ") +
+        (venc && l.dia > hoje ? ' · <em>a vencer</em>' : '') + '</span>' +
+      '<span class="vr-sub r">' + (l.equivCDI === null ? "—" : pctTxt(l.equivCDI * 100, 1) + " do CDI") + '</span></div>'; };
+  const grupo = (tit, ls, venc) => ls.length
+    ? '<div class="det-g">' + tit + ' · ' + nTit(ls.length) + '</div>' + ls.map(l => linha(l, venc)).join("") : "";
+  return grupo("Vencimentos — o que caiu na conta", t.venceu, true) + grupo("Aplicações — o valor aplicado", t.aplicado, false);
 }
 function tabelaTitPer(linhas, lado, hoje){
   const venc = lado === "venc", tit = venc ? "Vencimentos do período" : "Aplicações do período";
@@ -6108,7 +6147,9 @@ function ondeDaCelula(td){
   const th = tab.querySelectorAll("thead th")[i], wrap = tab.closest(".tabwrap");
   const h2 = wrap && wrap.previousElementSibling ? wrap.previousElementSibling.querySelector("h2") : null;
   const cel = tr.children[tab.classList.contains("per-tit") ? 1 : 0];
-  const linha = cel && cel.firstChild ? String(cel.firstChild.textContent).trim() : "";
+  // o primeiro texto de verdade da celula (pula a seta do drill-down e o "parcial")
+  const txt = cel ? Array.prototype.find.call(cel.childNodes, n => n.nodeType === 3 && n.textContent.trim()) : null;
+  const linha = txt ? txt.textContent.trim() : "";
   return [h2 ? h2.textContent : "", linha, th ? th.textContent : ""].filter(Boolean).join(" · ");
 }
 // Grava (ou apaga, com o texto vazio) a observacao de uma celula. Devolve se gravou de
@@ -6584,6 +6625,15 @@ function ligarAcoesVenc(el){
   });
   el.querySelectorAll("table.per-t td[data-nota]").forEach(td =>
     td.onclick = () => folhaNotaCelula(td.dataset.nota, ondeDaCelula(td)));
+  el.querySelectorAll("table.per-t td[data-drill]").forEach(td => {
+    const vira = () => {
+      const k = td.dataset.drill;
+      if (perMesAberto.has(k)) perMesAberto.delete(k); else perMesAberto.add(k);
+      render();
+    };
+    td.onclick = vira;
+    td.onkeydown = ev => { if (ev.key === "Enter" || ev.key === " "){ ev.preventDefault(); vira(); } };
+  });
   el.querySelectorAll(".irow").forEach(b => b.onclick = () => { instAberta = instAberta === b.dataset.g ? null : b.dataset.g; render(); });
   el.querySelectorAll(".i-juntar").forEach(s => s.onchange = () => { if (s.value) juntarInst(s.dataset.g, s.value); });
   el.querySelectorAll(".i-separar").forEach(b => b.onclick = () => {

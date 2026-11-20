@@ -184,6 +184,9 @@ lado a lado — para ver se o dinheiro que volta está sendo reaplicado a uma ta
   pós em % do CDI, CDI + spread); juntando todos, o **equivalente em % do CDI** — cada título traduzido
   pelo CDI da vida dele (o que valeu no passado, a curva das Premissas no futuro). Diferença
   aplicações − vencimentos em pontos. LCI/LCA entram pela taxa contratada, sem ajuste do IR.
+- Na tabela Mês a mês, tocar no mês (a 1ª coluna, com a seta) abre logo abaixo os títulos daquele mês, um a
+  um — os que venceram e os que foram aplicados, com a data, a corretora, a taxa contratada e o equivalente em
+  % do CDI (`VENC.titulosDoMes`); as outras células seguem abrindo a observação.
 - Tabelas: Comparação (por indexador), Mês a mês, Vencimentos do período e Aplicações do período. O
   Excel da aba, nesta visão, leva as quatro do período escolhido (taxa em `0,00%`) e a coluna
   "Observações". O período escolhido fica só no aparelho (`localStorage`).

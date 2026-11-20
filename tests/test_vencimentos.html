@@ -934,6 +934,13 @@ function fim(){
         "atalhos do periodo a partir de nov/2026: este ano, ano passado, ultimos e proximos 12 meses");
   igual([AP("u12", "2026-01"), AP("p12", "2026-12")], [["2025-02", "2026-01"], ["2026-12", "2027-11"]],
         "atalhos que atravessam a virada do ano");
+  // drill-down da tabela Mes a mes: os titulos de cada lado naquele mes
+  const TDM = V.titulosDoMes;
+  ok(typeof TDM === "function" && JSON.stringify(["venceu", "aplicado"].map(k => TDM(P26, "2026-10")[k].map(l => l.cdb.nome))) ===
+     JSON.stringify([["CDB EPS"], ["CDB BETA"]]), "drill-down de out/2026: o que venceu e o que foi aplicado no mes");
+  ok(typeof TDM === "function" && TDM(P26, "2026-11").venceu.length === 0 && TDM(P26, "2026-11").aplicado.length === 0,
+     "mes sem titulos: listas vazias");
+  ok(typeof TDM === "function" && TDM(null, "2026-10").venceu.length === 0, "sem resumo: listas vazias, sem erro");
 
   // ------------------------------------------ observacoes nas celulas
   const LN = V.linhaNota, CN = V.chaveNota;
