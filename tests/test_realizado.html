@@ -1,0 +1,61 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>teste das despesas realizadas</title>
+<style>body{font:13px ui-monospace,Consolas,monospace;background:#111;color:#ddd;padding:16px}
+pre{white-space:pre-wrap}</style>
+<pre id="out">rodando...</pre>
+<script>
+// Testa o bloco /*<realizado>*/ do index.html (REALIZADO): o total de despesas
+// realizado de cada mes contra as Saidas previstas do motor, e o acumulado do ano
+// so dos meses lancados. So dado INVENTADO -- o repositorio e publico.
+const log = []; let falhas = 0;
+function ok(cond, msg){ log.push((cond ? "PASS  " : "FALHA ") + msg); if(!cond) falhas++; return cond; }
+function perto(a, b, msg){
+  ok(typeof a === "number" && Math.abs(a - b) < 0.01, `${msg} (obtido ${a}, esperado ${b})`);
+}
+function igual(a, b, msg){
+  ok(JSON.stringify(a) === JSON.stringify(b), `${msg} (obtido ${JSON.stringify(a)}, esperado ${JSON.stringify(b)})`);
+}
+function lista(a, b, msg){
+  ok(Array.isArray(a) && a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 0.01),
+     `${msg} (obtido ${JSON.stringify(a)}, esperado ${JSON.stringify(b)})`);
+}
+function fim(){
+  document.getElementById("out").textContent =
+    log.join("\n") + `\n\n=== ${falhas === 0 ? "TUDO PASSOU" : falhas + " FALHA(S)"} === (${log.length} asserções)`;
+}
+
+(async () => {
+  // cache-buster: sem ele o navegador serve a copia anterior do index.html
+  const html = await (await fetch("../index.html?v=" + Date.now())).text();
+  const m = html.match(/\/\*<realizado>\*\/([\s\S]*?)\/\*<\/realizado>\*\//);
+  if (!ok(!!m, "bloco <realizado> encontrado no index.html")) return fim();
+  (0, eval)(m[1]);
+  if (!ok(!!window.REALIZADO && typeof REALIZADO.comparaSaidas === "function", "REALIZADO.comparaSaidas existe")) return fim();
+
+  const R = window.REALIZADO;
+  const proj = [{ competencia:"2025-12-01", saidas:9999 }, { competencia:"2026-01-01", saidas:1010 },
+                { competencia:"2026-02-01", saidas:2020 }, { competencia:"2026-03-01", saidas:1530 },
+                { competencia:"2027-01-01", saidas:777 }];
+  const meses = { "2026-01-01": { saidas_realizadas: 1111 }, "2026-02-01": { saidas_realizadas: null },
+                  "2026-03-01": { saidas_realizadas: "1224" }, "2025-12-01": { saidas_realizadas: 5 } };
+  const c = R.comparaSaidas(proj, meses, "2026");
+  igual(c.linhas.map(l => l.comp), ["2026-01-01", "2026-02-01", "2026-03-01"], "so os meses do ano escolhido, em ordem");
+  lista(c.linhas.map(l => l.previsto), [1010, 2020, 1530], "previsto = as Saidas do motor");
+  igual(c.linhas.map(l => l.realizado), [1111, null, 1224], "realizado digitado; vazio = null; texto do banco vira numero");
+  lista([c.linhas[0].dif, c.linhas[2].dif], [101, -306], "diferenca = realizado - previsto");
+  igual(c.linhas[1].dif, null, "mes sem realizado: sem diferenca");
+  lista([c.linhas[0].pct, c.linhas[2].pct], [0.1, -0.2], "% = realizado / previsto - 1");
+  igual(c.lancados, 2, "dois meses lancados");
+  lista([c.previsto, c.realizado, c.dif], [2540, 2335, -205], "acumulado so dos meses lancados (igual com igual)");
+  perto(c.pct, 2335 / 2540 - 1, "% do acumulado");
+  const z = R.comparaSaidas(proj, { "2026-01-01": { saidas_realizadas: 0 } }, "2026");
+  igual([z.linhas[0].realizado, z.lancados], [0, 1], "zero digitado e lancado (nao e vazio)");
+  const v = R.comparaSaidas(proj, {}, "2026");
+  igual([v.lancados, v.previsto, v.realizado, v.dif, v.pct], [0, 0, 0, null, null], "nada lancado: zeros e nulos, sem divisao por zero");
+  igual(R.comparaSaidas([{ competencia:"2026-05-01", saidas:0 }], { "2026-05-01": { saidas_realizadas: 50 } }, "2026").linhas[0].pct,
+        null, "previsto zero: sem %");
+
+  fim();
+})().catch(e => { ok(false, "erro: " + e.message); fim(); });
+</script>

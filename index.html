@@ -413,6 +413,13 @@ span.cel{border-color:transparent;background:none}
   border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s}
 .subnav button:hover{color:var(--ink-2)}
 .subnav button.on{color:var(--ink);border-bottom-color:var(--ink);font-weight:500}
+/* barra de sub-abas que rola (nao cabe na largura): degrade na borda onde ha mais */
+.subnav.rola{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
+.subnav.rola.ini{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
+  mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+.subnav.rola.fim{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px);
+  mask-image:linear-gradient(90deg,transparent,#000 28px)}
 @media (pointer:coarse){ .subnav button{padding:14px 0 12px} }
 
 /* o navegador de mes fica preso abaixo do cabecalho: a lista do mes e longa e
@@ -1037,6 +1044,34 @@ window.INICIO = (function () {
            textoNumerico: textoNumerico };
 })();
 /*</inicio>*/
+
+/*<realizado>*/
+// ============================================================
+// DESPESAS REALIZADAS x PLANO (aba Plano -> Realizado). O total geral de despesas
+// de cada mes, digitado (fin_months.saidas_realizadas), contra as Saidas previstas
+// do motor (com os compromissos). So comparacao: nao entra na projecao. O acumulado
+// do ano soma so os meses lancados -- igual com igual. Testado em
+// tests/test_realizado.html.
+// ============================================================
+window.REALIZADO = (function () {
+  const num = v => v === null || v === undefined || v === "" || isNaN(+v) ? null : +v;
+  function comparaSaidas(proj, meses, ano) {
+    const linhas = (proj || []).filter(m => String(m.competencia).slice(0, 4) === String(ano)).map(m => {
+      const previsto = +m.saidas || 0;
+      const realizado = num(((meses || {})[m.competencia] || {}).saidas_realizadas);
+      return { comp: m.competencia, previsto: previsto, realizado: realizado,
+               dif: realizado === null ? null : realizado - previsto,
+               pct: realizado === null || !previsto ? null : realizado / previsto - 1 };
+    });
+    const lanc = linhas.filter(l => l.realizado !== null);
+    const previsto = lanc.reduce((s, l) => s + l.previsto, 0), realizado = lanc.reduce((s, l) => s + l.realizado, 0);
+    return { linhas: linhas, lancados: lanc.length, previsto: previsto, realizado: realizado,
+             dif: lanc.length ? realizado - previsto : null,
+             pct: lanc.length && previsto ? realizado / previsto - 1 : null };
+  }
+  return { comparaSaidas: comparaSaidas };
+})();
+/*</realizado>*/
 
 /*<contas>*/
 // ============================================================
@@ -3693,7 +3728,29 @@ const subnavCarteira = ativa =>
   subnav([["patrimonio","Contas"],["vencimentos","Vencimentos"],["dividendos","Dividendos"]], ativa, "ir", "Carteira");
 function ligarSubnav(){
   document.querySelectorAll("main section.on .subnav button[data-ir]").forEach(b => b.onclick = () => irPara(b.dataset.ir));
+  marcarRolagemSubnav();
 }
+// Sub-abas que nao cabem na largura (o Plano tem cinco): a barra rola de lado, sem barra de
+// rolagem visivel -- um degrade na borda diz que ha mais, e a sub-aba aberta entra na tela.
+function marcarRolagemSubnav(){
+  document.querySelectorAll("main section.on .subnav").forEach(sn => {
+    const ajusta = () => {
+      const rola = sn.scrollWidth > sn.clientWidth + 1;
+      sn.classList.toggle("rola", rola);
+      sn.classList.toggle("ini", rola && sn.scrollLeft <= 1);
+      sn.classList.toggle("fim", rola && sn.scrollLeft + sn.clientWidth >= sn.scrollWidth - 2);
+    };
+    const on = sn.querySelector("button.on");
+    if (on && sn.scrollWidth > sn.clientWidth + 1){
+      const r = on.getBoundingClientRect(), s = sn.getBoundingClientRect();
+      if (r.right > s.right) sn.scrollLeft += r.right - s.right + 28;
+      else if (r.left < s.left) sn.scrollLeft -= s.left - r.left + 28;
+    }
+    ajusta();
+    sn.onscroll = ajusta;
+  });
+}
+window.addEventListener("resize", () => marcarRolagemSubnav());
 // exportar e a ultima coisa de cada pagina, sempre com a mesma cara e no mesmo lugar
 const rodapeExcel = x =>
   '<div class="rodape-aba"><button class="btn mini plain xls" data-x="' + x + '">Exportar esta aba para Excel</button></div>';
@@ -3727,6 +3784,9 @@ function ligarExcel(){
     if (q === "resumo")     exportarXLSX([abaResumo], "Financas resumo " + anoSel);
     else if (q === "mes")   exportarXLSX([abaMes], "Financas " + rotulo(mesAtual).replace("/","-"));
     else if (q === "patrimonio") exportarXLSX([abaPatrimonio, abaContasMes], "Financas patrimonio");
+    // na sub-aba Realizado sai a tabela do ano aberto (o que a tela mostra)
+    else if (q === "plano" && planoAba === "realizado")
+      exportarXLSX([abaRealizado], "Financas despesas realizadas " + anoRealizado());
     else if (q === "plano") exportarXLSX([abaPlano], "Financas plano");
     else if (q === "dividendos") exportarXLSX([abaDividendos], "Financas dividendos");
     // na visao Periodo sai o periodo escolhido (o que a tela mostra); nas outras, como sempre
@@ -3736,7 +3796,7 @@ function ligarExcel(){
     }
     else if (q === "vencimentos") exportarXLSX([abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencInstituicoes, abaVencCDBs],
                                                "Financas vencimentos");
-    else exportarXLSX([abaPlano, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos,
+    else exportarXLSX([abaPlano, abaRealizado, abaResumo, abaMes, abaPatrimonio, abaContasMes, abaCompromissos,
                       abaVencCalendario, abaVencMeses, abaVencRendimento, abaVencInstituicoes, abaVencCDBs,
                       abaDividendos], "Financas completo");
   });
@@ -7228,18 +7288,20 @@ function colunasPlano(modo){
   }
   return out;
 }
-// A aba Plano tem quatro visoes (sub-abas): a tabela, os compromissos
-// parcelados, as regras e as simulacoes. So em memoria: cada sessao comeca
-// na tabela, que e o que se abre para olhar.
+// A aba Plano tem cinco visoes (sub-abas): a tabela, o realizado das despesas,
+// os compromissos parcelados, as regras e as simulacoes. So em memoria: cada
+// sessao comeca na tabela, que e o que se abre para olhar.
 let planoAba = "tabela";
 function renderPlano(){
   const el = document.getElementById("s-plano");
   if (!estado.categorias.length){ el.innerHTML = avisoTravado() + semDados(); return; }
   if (simAberta) return renderSimulacao(el);
-  const sub = subnav([["tabela","Tabela"],["compromissos","Compromissos"],["regras","Regras"],["simulacoes","Simulações"]],
-                     planoAba, "sub", "Plano");
+  const sub = subnav([["tabela","Tabela"],["realizado","Realizado"],["compromissos","Compromissos"],["regras","Regras"],
+                      ["simulacoes","Simulações"]], planoAba, "sub", "Plano");
   let corpo;
-  if (planoAba === "compromissos"){
+  if (planoAba === "realizado"){
+    corpo = blocoRealizado() + rodapeExcel("plano");
+  } else if (planoAba === "compromissos"){
     corpo = '<div class="hdr"><h2>Compromissos parcelados</h2><span class="aux">somam por cima do plano</span></div>' +
       '<div class="rule"></div>' +
       '<div class="acoes topo"><button class="btn" id="novo-comp">Novo compromisso</button></div>' + listaCompromissos();
@@ -7254,12 +7316,13 @@ function renderPlano(){
   }
 
   // a tabela rola por dentro: sem guardar a posicao, todo redesenho (gravar uma
-  // celula, a sincronizacao em segundo plano) a devolveria para o primeiro mes
-  const caixa = document.getElementById("plano-tab");
-  const rolagem = caixa ? [caixa.scrollLeft, caixa.scrollTop] : null;
+  // celula, a sincronizacao em segundo plano) a devolveria para o primeiro mes --
+  // vale para a Tabela e para o Realizado
+  const caixa = document.querySelector("#plano-tab, #real-tab");
+  const rolagem = caixa ? { id: caixa.id, x: caixa.scrollLeft, y: caixa.scrollTop } : null;
   el.innerHTML = avisoTravado() + sub + corpo;
-  const c = document.getElementById("plano-tab");
-  if (rolagem && c){ c.scrollLeft = rolagem[0]; c.scrollTop = rolagem[1]; }
+  const c = rolagem && document.getElementById(rolagem.id);
+  if (c){ c.scrollLeft = rolagem.x; c.scrollTop = rolagem.y; }
 
   el.querySelectorAll(".subnav button[data-sub]").forEach(b => b.onclick = () => {
     planoAba = b.dataset.sub; render(); window.scrollTo(0, 0);
@@ -7278,12 +7341,142 @@ function renderPlano(){
     });
   }
   if (planoAba === "simulacoes") ligarSimulacoes(el);
+  if (planoAba === "realizado"){
+    el.querySelectorAll("#seg-real-ano button").forEach(b => b.onclick = () => { realAno = b.dataset.a; render(); });
+    el.querySelectorAll("#real-tab td.ed").forEach(td => td.onclick = () => editarRealizado(td));
+    sondarRealizado();
+  }
   liga("novo-comp", () => folhaCompromisso(null));
   el.querySelectorAll(".ed-comp").forEach(b =>
     b.onclick = () => folhaCompromisso(estado.parcelas.find(p => p.id === b.dataset.id)));
   liga("nova-regra", () => folhaRegra(null));
   el.querySelectorAll(".ed-regra").forEach(b =>
     b.onclick = () => folhaRegra(estado.regras.find(r => r.id === b.dataset.id)));
+}
+// ------------------------------------------------------------ despesas realizadas
+// Sub-aba Realizado: o total geral de despesas de cada mes, digitado, contra as Saidas
+// previstas (REALIZADO.comparaSaidas). Mora em fin_months.saidas_realizadas (migracao
+// 010), gravado pelo definirMes de sempre -- so comparacao, nao entra na projecao.
+let realAno = null, realIndisponivel = false, realSondado = false, realPendente = false;
+const realGravando = new Set();          // meses com gravacao a caminho (como divGravando)
+// Sem a migracao 010 a coluna nao existe: o PostgREST recusa (HTTP 400) quem a pede.
+async function sondarRealizado(){
+  if (realSondado) return;
+  realSondado = true;
+  try { await sbFetch("fin_months?select=saidas_realizadas&limit=1"); }
+  catch (e){
+    if (!/HTTP 400/.test(e.message)) return;
+    realIndisponivel = true;
+    if (aba === "plano" && planoAba === "realizado") render();
+  }
+}
+// o ano aberto na sub-aba: o escolhido, ou o corrente, ou o ultimo do horizonte
+function anoRealizado(){
+  const anos = SELETOR.anos(estado.competencias), anoH = compHoje().slice(0, 4);
+  if (!realAno || !anos.includes(realAno)) realAno = anos.includes(anoH) ? anoH : anos[anos.length - 1];
+  return realAno;
+}
+function blocoRealizado(){
+  const anos = SELETOR.anos(estado.competencias), mesH = compHoje();
+  const r = REALIZADO.comparaSaidas(proj, estado.meses, anoRealizado());
+  // gastou acima do plano = cor de alerta; abaixo = tiffany
+  const cor = d => d === null ? "z" : d > 0 ? "neg" : "pos";
+  const fatos = [
+    ["Previsto", esc(fmt(r.previsto)), '<small>' + (r.lancados ? "só nos meses lançados" : "nenhum mês lançado") + '</small>'],
+    ["Realizado", esc(fmt(r.realizado)), '<small>' + r.lancados + ' de ' + r.linhas.length + ' meses lançados</small>'],
+    ["Diferença", r.dif === null ? "—" : esc(fmtsin(r.dif)), r.pct === null ? '<small>realizado − previsto</small>'
+      : '<small class="' + cor(r.dif) + '">' + fmtpct(r.pct) + (r.dif > 0 ? " acima do plano" : r.dif < 0 ? " abaixo do plano" : "") + '</small>'],
+  ];
+  let h = '<thead><tr><th>Mês</th><th>Despesas previstas</th><th class="colsep">Realizadas</th><th>Diferença</th><th>%</th></tr></thead><tbody>';
+  for (const l of r.linhas){
+    // mes que ainda nao chegou nao tem despesa realizada: nao se lanca (o que ja tiver sido
+    // lancado por engano continua editavel, para apagar)
+    const fut = l.comp > mesH, edita = !fut || l.realizado !== null;
+    h += '<tr' + (l.comp === mesH ? ' class="agora"' : fut ? ' class="fut"' : '') + '><td>' + rotulo(l.comp) + '</td>' +
+      '<td>' + esc(fmtn(l.previsto)) + '</td>' +
+      (edita ? '<td class="colsep ed ' + (l.realizado === null ? "vaz" : "forte") + '" data-comp="' + l.comp + '">' +
+                 (l.realizado === null ? "—" : esc(fmtn(l.realizado))) + '</td>'
+             : '<td class="colsep z" data-comp="' + l.comp + '">·</td>') +
+      '<td class="' + cor(l.dif) + '">' + (l.dif === null ? "·" : esc(fmtsin(l.dif))) + '</td>' +
+      '<td class="' + cor(l.dif) + '">' + (l.pct === null ? "·" : fmtpct(l.pct)) + '</td></tr>';
+  }
+  // rotulo curto: a 1a coluna e presa e nao quebra linha -- um rotulo comprido empurrava
+  // "Realizadas" para fora da tela do celular (o "so os meses lancados" esta na nota)
+  h += '<tr class="tot"><td>Acumulado</td><td>' + esc(fmtn(r.previsto)) + '</td>' +
+    '<td class="colsep">' + esc(fmtn(r.realizado)) + '</td>' +
+    '<td class="' + cor(r.dif) + '">' + (r.dif === null ? "·" : esc(fmtsin(r.dif))) + '</td>' +
+    '<td class="' + cor(r.dif) + '">' + (r.pct === null ? "·" : fmtpct(r.pct)) + '</td></tr>';
+  const avisos = [realIndisponivel ? "Para lançar o realizado, rode db/010_saidas_realizadas.sql no Supabase (uma vez só)."
+      : "Toque na coluna Realizadas para digitar o total que o mês gastou (o total geral, não por categoria).",
+    "Despesas previstas = as Saídas do plano no mês, com os compromissos parcelados. É só comparação: não muda a " +
+      "projeção — o patrimônio apurado continua vindo das contas.",
+    "O acumulado soma só os meses lançados, para comparar igual com igual; mês que ainda não chegou não se lança. " +
+      "Gastou acima do plano: cor de alerta."];
+  return '<div class="hdr"><h2>Despesas: plano × realizado</h2>' +
+      (anos.length > 1 ? '<span class="seg" id="seg-real-ano">' + anos.map(a =>
+        '<button data-a="' + a + '"' + (a === realAno ? ' class="on"' : '') + '>' + a + '</button>').join("") + '</span>' : '') +
+    '</div>' +
+    '<div class="fatos">' + fatos.map(f =>
+      '<div class="fato"><div class="k">' + f[0] + '</div><div class="v">' + f[1] + f[2] + '</div></div>').join("") + '</div>' +
+    '<div class="tabwrap" id="real-tab"><table class="plano per-t real-t">' + h + '</tbody></table></div>' +
+    '<div class="nota fria">' + avisos.map(esc).join("<br>") + '</div>';
+}
+// Redesenhar com um campo aberto na tabela mataria o que se digita (o "blur" de um
+// toque em outra celula): adia, como na aba Dividendos.
+function redesenharReal(compSalvo){
+  const a = document.activeElement;
+  if (a && a.tagName === "INPUT" && a.closest("#real-tab")){ realPendente = true; return; }
+  realPendente = false;
+  if (aba !== "plano" || planoAba !== "realizado") return;
+  render();
+  const alvo = compSalvo && document.querySelector('#real-tab td.ed[data-comp="' + compSalvo + '"]');
+  if (alvo){ alvo.classList.add("salvo"); setTimeout(() => alvo.classList.remove("salvo"), 800); }
+}
+// Lancar o total do mes na celula -- o gesto da aba Dividendos: Enter ou sair do campo
+// grava, Esc cancela; vazio volta o mes a "nao lancado" (grava null).
+function editarRealizado(td){
+  if (td.querySelector("input")) return;
+  if (bloqueadoPeloDisfarce()) return;
+  if (dadosTravados){ toast("Sem conexão — nada será gravado"); return; }
+  if (realIndisponivel){ toast("Para lançar, rode db/010_saidas_realizadas.sql no Supabase"); return; }
+  const comp = td.dataset.comp;
+  if (realGravando.has(comp)){ toast("Ainda gravando " + rotulo(comp) + "…"); return; }
+  const atual = estado.meses[comp] ? estado.meses[comp].saidas_realizadas : null;
+  const antes = atual === null || atual === undefined || atual === "" ? null : +atual;
+  const textoAntes = td.textContent, classeAntes = td.className;
+  td.classList.add("editando");
+  td.innerHTML = '<input inputmode="decimal" value="' + (antes === null ? "" : fmtn(antes)) + '">';
+  const inp = td.querySelector("input");
+  inp.focus(); inp.select();
+  let feito = false;
+  const volta = () => {
+    td.className = classeAntes; td.textContent = textoAntes;
+    if (realPendente) setTimeout(redesenharReal, 0);
+  };
+  const encerra = async gravar => {
+    if (feito) return; feito = true;
+    if (!gravar) return volta();
+    // DIV.numero e nao parseNum: "1.234" digitado e mil duzentos e trinta e quatro, nao 1,234
+    const txt = inp.value.trim(), lido = txt === "" ? null : DIV.numero(txt);
+    if (txt !== "" && (lido === null || lido < 0)){ toast("Valor inválido"); return volta(); }
+    const v = lido === null ? null : Math.round(lido * 100) / 100;
+    if (v === antes) return volta();
+    // a celula mostra o novo valor ja; a memoria so muda DEPOIS do banco
+    td.className = classeAntes.replace(/\b(vaz|forte)\b/g, "").trim() + (v === null ? " vaz" : " forte");
+    td.textContent = v === null ? "—" : fmtn(v);
+    let gravou = false;
+    realGravando.add(comp);
+    try { gravou = await definirMes(comp, { saidas_realizadas: v }); if (gravou) tremer(); }
+    catch (e){
+      if (/saidas_realizadas/.test(e.message)){ realIndisponivel = true; toast("Para lançar, rode db/010_saidas_realizadas.sql no Supabase"); }
+    } finally { realGravando.delete(comp); }
+    setTimeout(() => redesenharReal(gravou ? comp : null), 0);
+  };
+  inp.addEventListener("blur", () => encerra(true));
+  inp.addEventListener("keydown", ev => {
+    if (ev.key === "Enter" || ev.key === "Tab"){ ev.preventDefault(); encerra(true); }
+    else if (ev.key === "Escape"){ ev.preventDefault(); encerra(false); }
+  });
 }
 // A tabela do plano: um mes por linha; nas colunas os totais, os grupos ou as
 // categorias (so este ultimo modo e editavel: um grupo soma varias categorias
@@ -8851,6 +9044,19 @@ function abaPlano(){
               m.aberto ? null : M(m.diferenca),
               m.aberto ? null : P(m.variacao) ]));
   return { nome: "Plano", colunas: colunas, linhas: linhas };
+}
+// a sub-aba Realizado do Plano, do ano aberto: a mesma tabela da tela
+function abaRealizado(){
+  if (!estado.competencias.length) return null;
+  const ano = anoRealizado(), r = REALIZADO.comparaSaidas(proj, estado.meses, ano);
+  const linhas = r.linhas.map(l => [T(rotulo(l.comp)), M(l.previsto), l.realizado === null ? null : M(l.realizado, true),
+    l.dif === null ? null : M(l.dif), l.pct === null ? null : P2(l.pct)]);
+  linhas.push([T("Acumulado (meses lançados)", true), M(r.previsto, true), M(r.realizado, true),
+    r.dif === null ? null : M(r.dif, true), r.pct === null ? null : P2(r.pct)]);
+  return { nome: "Despesas " + ano,
+    colunas: [{t:"Mês",largura:12},{t:"Despesas previstas",largura:18},{t:"Realizadas",largura:16},
+              {t:"Diferença",largura:15},{t:"%",largura:9}],
+    linhas: linhas };
 }
 function abaCompromissos(){
   if (!estado.parcelas.length) return null;

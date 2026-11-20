@@ -18,7 +18,7 @@ markup. **Carteira** agrupa Contas (saldo por conta e análise), Vencimentos e
 Dividendos, que continuam seções próprias por baixo (`s-patrimonio`, `s-vencimentos`,
 `s-dividendos`); o destino reabre a última sub-aba usada. O segundo nível é sempre
 uma linha de sub-abas sublinhadas no topo da página (`.subnav` — na Carteira e no
-Plano: Tabela · Compromissos · Regras · Simulações); a pílula `.seg` fica só para
+Plano: Tabela · Realizado · Compromissos · Regras · Simulações); a pílula `.seg` fica só para
 alternar **dentro** de uma seção. A ação principal de cada página fica logo abaixo
 do título, e "Exportar esta aba para Excel" é sempre a última coisa da página.
 
@@ -208,6 +208,19 @@ ANBIMA, IR regressivo, curva do CDI, projeção, leitura da planilha) e o leitor
 arquivo no bloco `/*<xlsx>*/` (ZIP + `DecompressionStream` + `DOMParser`, sem
 biblioteca).
 
+## Despesas realizadas (Plano → Realizado)
+
+A sub-aba **Realizado** compara, mês a mês do ano escolhido, as **Despesas previstas** (as Saídas
+do plano, com os compromissos parcelados) com o **total geral** que o mês gastou de fato, digitado
+na célula ("1.234" = mil duzentos e trinta e quatro; vazio volta o mês a "não lançado"). Mostra a diferença em R$
+e em % — acima do plano na cor de alerta — e o acumulado do ano **só dos meses lançados**, para
+comparar igual com igual. O Excel da sub-aba leva a mesma tabela.
+
+O número mora em `fin_months.saidas_realizadas` (migração 010), gravado pelo `definirMes` de
+sempre; sem a migração, a sub-aba avisa e não grava. É só comparação: não muda a projeção (o
+patrimônio apurado continua vindo das contas). Cálculo no bloco `/*<realizado>*/`
+(`REALIZADO.comparaSaidas`), testado em `tests/test_realizado.html`.
+
 ## Simulações
 
 Na aba **Plano**, *Nova simulação* abre um "e se…" que **não mexe no plano**: uma
@@ -326,6 +339,7 @@ do repositório** (`.gitignore`): o repo é público e não guarda dado financei
 | `db/007_cdbs_resgate.sql` | `fin_cdbs.resgate`: títulos que já venceram, guardados para o rendimento do passado |
 | `db/008_simulacoes.sql` | `fin_simulations` (simulações: alterações por cima do plano e o registro para desfazer) + RLS |
 | `db/009_notas.sql` | `fin_notas` (observações nas células do resumo por período) + RLS |
+| `db/010_saidas_realizadas.sql` | `fin_months.saidas_realizadas`: o total de despesas realizado no mês (Plano → Realizado) |
 | `db/seed.sql` | os 4 anos da planilha (gerado, fora do git) |
 
 A proteção do dado é **RLS + cadastro de novos usuários desligado** no painel do
