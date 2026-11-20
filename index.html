@@ -659,6 +659,7 @@ table.per-t tr.det td{position:static;border-right:0;background:var(--surface);p
 table.per-t tr.det .det-box{position:sticky;left:11px;max-width:calc(100vw - 64px)}
 table.per-t tr.det .det-g{font-size:12px;color:var(--ink-3);margin:10px 0 0}
 table.per-t tr.det .rrow:last-child{border-bottom:0}
+.nota.per-ler{margin-top:10px;line-height:1.6}
 table.per-t td.tem-nota:not(:first-child){position:relative}
 table.per-t td.tem-nota::after{content:"";position:absolute;top:0;right:0;border-style:solid;
   border-width:0 8px 8px 0;border-color:transparent var(--sand) transparent transparent}
@@ -6057,7 +6058,7 @@ function blocoPeriodo(hoje){
     h += '<div class="vazio">Nada venceu nem foi aplicado de ' + rotuloL(r.de) + ' a ' + rotuloL(r.ate) + '.</div>';
   else h += tabelaCmpPer(r) + tabelaMesesPer(r, mesH) +
     tabelaTitPer(r.titulos.venceu, "venc", hoje) + tabelaTitPer(r.titulos.aplicado, "apl", hoje);
-  return h + '<div class="nota fria">' + avisosPeriodo(r, completo).map(esc).join("<br>") + '</div>';
+  return h + '<div class="nota fria">' + avisosPeriodo(r, completo).map(esc).join("<br>") + '</div>' + comoLerPeriodo();
 }
 // por indexador: a taxa contratada media de cada lado (como esta no papel) e, no fim,
 // todos juntos no equivalente em % do CDI
@@ -6204,16 +6205,13 @@ function folhaNotaCelula(chave, onde){
 function avisosPeriodo(r, completo){
   const av = [notasIndisponivel ? "Para anotar nas células, rode db/009_notas.sql no Supabase (uma vez só)."
     : disfarce ? "Modo discreto: as observações das células ficam escondidas."
-    : "Toque numa célula para anotar do que se trata; a marca no canto mostra onde há observação."];
+    : "Na tabela Mês a mês, toque no mês (▸) para ver os títulos dele; nas outras células, toque para anotar do que se " +
+      "trata — a marca no canto mostra onde há observação."];
   if (r.parcial && completo) av.push("Meses marcados “parcial” (antes de " + rotuloL(completo) + "): o app pode não ter " +
     "guardado tudo o que venceu ou foi aplicado nessa época — o valor é “pelo menos isso”. Daqui em diante, toda " +
     "atualização da posição guarda o que vence.");
   if (r.semData) av.push(nTit(r.semData) + (r.semData === 1 ? " não traz" : " não trazem") + " a data ou o valor de " +
     "aplicação (planilha sem essas colunas) e " + (r.semData === 1 ? "fica" : "ficam") + " fora das aplicações.");
-  av.push("Vencimentos: o que cai na conta, já sem IR (juros mensais: principal + último juro; os juros do meio estão no " +
-    "Calendário). Aplicações: o valor aplicado, à taxa da compra.");
-  av.push("Taxa média ponderada pelo valor de cada título. O “% do CDI” traduz cada título para o CDI na vida dele — o que " +
-    "valeu (Banco Central) no passado e a curva das Premissas no futuro. LCI e LCA entram pela taxa contratada, sem ajuste do IR.");
   const ini = r.titulos.venceu.concat(r.titulos.aplicado).map(l => l.cdb.data_aplicacao || l.cdb.data_posicao)
     .filter(Boolean).sort()[0];
   if (ini && (!taxas || !taxas.historicoDesde || ini < taxas.historicoDesde))
@@ -6221,6 +6219,30 @@ function avisosPeriodo(r, completo){
       "é aproximado. Toque em Atualizar, em Premissas.");
   return av;
 }
+// Como ler as tabelas do periodo: a explicacao fica na propria tela (pedido do Vitor), no pe
+// da visao, depois dos avisos. Texto fixo -- nada vindo do banco.
+const COMO_LER_PERIODO = [
+  ["Vencimentos", "o que caiu na conta com os títulos que venceram no mês, já sem o IR (juros mensais: principal + " +
+    "último juro; os juros dos meses do meio estão no Calendário)."],
+  ["Aplicações", "o valor aplicado nos títulos comprados no mês (pela data da compra), à taxa que você pegou na compra."],
+  ["% do CDI", "a taxa média de cada lado, ponderada pelo valor de cada título e traduzida para % do CDI, para pôr " +
+    "prefixado e pós-fixado na mesma régua: o pós-fixado fica com o próprio percentual (105% do CDI = 105%); o " +
+    "prefixado vira quanto a taxa dele equivale ao CDI na vida do título — o CDI que valeu no passado e a curva das " +
+    "Premissas no futuro (ex.: 12% a.a. num período de CDI perto de 14,5% dá cerca de 84% do CDI)."],
+  ["Diferença", "% do CDI das aplicações − % do CDI dos vencimentos, em pontos. Positiva (verde) = reaplicou a uma taxa " +
+    "melhor do que a do dinheiro que venceu; negativa = pior; “·” = faltou um dos lados naquele mês. A linha Período faz " +
+    "a mesma conta com o período inteiro."],
+  ["Meses diferentes", "para saber se as compras de um mês saíram melhores que as de outro (ex.: outubro × novembro), " +
+    "compare o % do CDI da coluna Aplicações de cada mês — a Diferença só compara o que venceu com o que foi aplicado no " +
+    "mesmo mês. O mês em curso ainda está aberto (só as compras até hoje); tocar no mês mostra a taxa de cada título."],
+  ["Cuidados", "compara taxas, não valores (dá para aplicar menos do que venceu e ainda assim melhorar a taxa); o dinheiro " +
+    "que vence num mês pode ser reaplicado no outro — a linha Período e a tabela Comparação dão o quadro todo; na " +
+    "Comparação cada tipo aparece pela taxa do papel (pré contra pré em % a.a.); um prefixado antigo pode parecer bom " +
+    "em % do CDI só porque o CDI da época era baixo; LCI e LCA entram pela taxa contratada, sem descontar a vantagem do " +
+    "IR, e parecem piores do que são; mês “parcial” é “pelo menos isso”."],
+];
+const comoLerPeriodo = () => '<div class="nota fria per-ler"><b>Como ler as tabelas</b>' +
+  COMO_LER_PERIODO.map(x => '<br><b>' + x[0] + ':</b> ' + esc(x[1])).join("") + '</div>';
 // A grade de meses para o comeco ou o fim do periodo: os anos que os dados cobrem, um a
 // mais de cada lado. A logica da grade e a do SELETOR (testada).
 function folhaMesPeriodo(qual){
