@@ -6046,10 +6046,12 @@ function blocoPeriodo(hoje){
   const parc = r.parcial ? ' · <span class="abr">parcial</span>' : '';
   const dT = difDe(r.aplicado.equivCDI, r.venceu.equivCDI);
   const fatos = [
-    ["Vencimentos", esc(fmt(r.venceu.valor)), '<small>' + nTit(r.venceu.n) + parc + '</small>'],
+    // o valor dos vencimentos e o que caiu na conta (sem o IR); as taxas, as contratadas (antes do IR):
+    // a tela diz os dois, lado a lado (pergunta do Vitor, 20/11/2026)
+    ["Vencimentos", esc(fmt(r.venceu.valor)), '<small>' + nTit(r.venceu.n) + (r.venceu.n ? ' · já sem o IR' : '') + parc + '</small>'],
     ["Aplicações", esc(fmt(r.aplicado.valor)), '<small>' + nTit(r.aplicado.n) + parc + '</small>'],
-    ["Taxa dos vencimentos", cdiTxt(r.venceu.equivCDI), '<small>equivalente, ponderada pelo valor</small>'],
-    ["Taxa das aplicações", cdiTxt(r.aplicado.equivCDI), dT === null ? '<small>equivalente, ponderada pelo valor</small>'
+    ["Taxa dos vencimentos", cdiTxt(r.venceu.equivCDI), '<small>antes do IR, ponderada pelo valor</small>'],
+    ["Taxa das aplicações", cdiTxt(r.aplicado.equivCDI), dT === null ? '<small>antes do IR, ponderada pelo valor</small>'
       : '<small class="' + (dT >= 0 ? "pos" : "neg") + '">' + esc(ppTxt(dT, 1)) + ' sobre os vencimentos</small>'],
   ];
   let h = sel + '<div class="fatos">' + fatos.map(f =>
@@ -6081,7 +6083,7 @@ function tabelaCmpPer(r){
     tdV(K("todos", "venc"), r.venceu.valor, "colsep") + eq(K("todos", "venctx"), r.venceu.equivCDI) +
     tdV(K("todos", "apl"), r.aplicado.valor, "colsep") + eq(K("todos", "apltx"), r.aplicado.equivCDI) +
     tdDif(K("todos", "dif"), difDe(r.aplicado.equivCDI, r.venceu.equivCDI), 1) + '</tr>';
-  return '<div class="hdr"><h2>Comparação</h2><span class="aux">taxa média ponderada pelo valor</span></div>' +
+  return '<div class="hdr"><h2>Comparação</h2><span class="aux">taxas antes do IR, média ponderada pelo valor</span></div>' +
     '<div class="tabwrap"><table class="plano per-t">' + h + '</tbody></table></div>';
 }
 function tabelaMesesPer(r, mesH){
@@ -6108,7 +6110,7 @@ function tabelaMesesPer(r, mesH){
     tdV(K(T, "venc"), r.venceu.valor, "colsep") + tdCDI(K(T, "venctx"), r.venceu.equivCDI) +
     tdV(K(T, "apl"), r.aplicado.valor, "colsep") + tdCDI(K(T, "apltx"), r.aplicado.equivCDI) +
     tdDif(K(T, "dif"), difDe(r.aplicado.equivCDI, r.venceu.equivCDI), 1) + '</tr>';
-  return '<div class="hdr"><h2>Mês a mês</h2><span class="aux">taxa equivalente em % do CDI</span></div>' +
+  return '<div class="hdr"><h2>Mês a mês</h2><span class="aux">taxa em % do CDI, antes do IR · vencimentos já sem o IR</span></div>' +
     '<div class="tabwrap"><table class="plano per-t">' + h + '</tbody></table></div>';
 }
 // O detalhe de um mes da tabela Mes a mes: titulo a titulo, com a data, a corretora, a
@@ -6223,12 +6225,14 @@ function avisosPeriodo(r, completo){
 // da visao, depois dos avisos. Texto fixo -- nada vindo do banco.
 const COMO_LER_PERIODO = [
   ["Vencimentos", "o que caiu na conta com os títulos que venceram no mês, já sem o IR (juros mensais: principal + " +
-    "último juro; os juros dos meses do meio estão no Calendário)."],
+    "último juro; os juros dos meses do meio estão no Calendário). O IR sai só deste valor em R$, não da taxa."],
   ["Aplicações", "o valor aplicado nos títulos comprados no mês (pela data da compra), à taxa que você pegou na compra."],
-  ["% do CDI", "a taxa média de cada lado, ponderada pelo valor de cada título e traduzida para % do CDI, para pôr " +
-    "prefixado e pós-fixado na mesma régua: o pós-fixado fica com o próprio percentual (105% do CDI = 105%); o " +
+  ["% do CDI", "a taxa contratada, antes do IR, nos dois lados — a mesma conta das taxas que você contrata hoje (um " +
+    "CDB de 110% do CDI aparece como 110%). É a média de cada lado, ponderada pelo valor de cada título e traduzida " +
+    "para % do CDI, para pôr prefixado e pós-fixado na mesma régua: o pós-fixado fica com o próprio percentual; o " +
     "prefixado vira quanto a taxa dele equivale ao CDI na vida do título — o CDI que valeu no passado e a curva das " +
-    "Premissas no futuro (ex.: 12% a.a. num período de CDI perto de 14,5% dá cerca de 84% do CDI)."],
+    "Premissas no futuro (ex.: 12% a.a. num período de CDI perto de 14,5% dá cerca de 84% do CDI). O IR só entra no " +
+    "peso: cada vencimento pesa pelo que caiu na conta, o que mexe na média em centésimos de ponto."],
   ["Diferença", "% do CDI das aplicações − % do CDI dos vencimentos, em pontos. Positiva (verde) = reaplicou a uma taxa " +
     "melhor do que a do dinheiro que venceu; negativa = pior; “·” = faltou um dos lados naquele mês. A linha Período faz " +
     "a mesma conta com o período inteiro."],
@@ -6872,8 +6876,9 @@ function abaPerComparacao(){
     M(r.aplicado.valor, true), N(r.aplicado.n), P2(r.aplicado.equivCDI), P2dif(r.aplicado.equivCDI, r.venceu.equivCDI),
     T(notasDaLinha("cmp", L("todos"), cols))]);
   return { nome: "Comparação",
-    colunas: [{t:"Indexador",largura:28},{t:"Vencimentos",largura:16},{t:"Nº",largura:6},{t:"Taxa média",largura:12},
-              {t:"Aplicações",largura:16},{t:"Nº",largura:6},{t:"Taxa média",largura:12},{t:"Diferença",largura:11}, OBS_COL],
+    colunas: [{t:"Indexador",largura:28},{t:"Vencimentos (sem o IR)",largura:21},{t:"Nº",largura:6},
+              {t:"Taxa média (antes do IR)",largura:22},{t:"Aplicações",largura:16},{t:"Nº",largura:6},
+              {t:"Taxa média (antes do IR)",largura:22},{t:"Diferença",largura:11}, OBS_COL],
     linhas: linhas };
 }
 function abaPerMeses(){
@@ -6888,9 +6893,9 @@ function abaPerMeses(){
     P2(r.venceu.equivCDI), M(r.aplicado.valor, true), N(r.aplicado.n), P2(r.aplicado.equivCDI),
     P2dif(r.aplicado.equivCDI, r.venceu.equivCDI), T(notasDaLinha("mes", "tot:" + r.de + ":" + r.ate, cols))]);
   return { nome: "Mês a mês",
-    colunas: [{t:"Mês",largura:10},{t:"Situação",largura:11},{t:"Vencimentos",largura:16},{t:"Nº",largura:6},
-              {t:"% do CDI",largura:10},{t:"Aplicações",largura:16},{t:"Nº",largura:6},{t:"% do CDI",largura:10},
-              {t:"Diferença",largura:11}, OBS_COL],
+    colunas: [{t:"Mês",largura:10},{t:"Situação",largura:11},{t:"Vencimentos (sem o IR)",largura:21},{t:"Nº",largura:6},
+              {t:"% do CDI (antes do IR)",largura:21},{t:"Aplicações",largura:16},{t:"Nº",largura:6},
+              {t:"% do CDI (antes do IR)",largura:21},{t:"Diferença",largura:11}, OBS_COL],
     linhas: linhas };
 }
 function abaPerVencimentos(){
